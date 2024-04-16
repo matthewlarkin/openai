@@ -31,7 +31,8 @@ UPDATED=0
 
 	# check if each dep is installed
 	for dep in "${BREW_DEPS[@]}"; do
-		if ! [ -x "$(command -v "$dep")" ]; then
+		if ! command -v "$dep" > /dev/null; then
+			echo "$dep not found, updating brew and installing $dep"
 			[[ $UPDATED -eq 0 ]] && brew update && UPDATED=1
 			brew install "$dep"
 		fi
@@ -65,7 +66,7 @@ UPDATED=0
 		# SQLPage
 		[[ "$dep" == "sqlpage" ]] && {
 			[[ -x "$(command -v sqlpage)" ]] || {
-				sudo curl -sL -O https://github.com/lovasoa/SQLpage/releases/download/v0.19.1/sqlpage-linux.tgz
+				sudo curl -sL -O https://github.com/lovasoa/SQLpage/releases/download/v0.20.2/sqlpage-linux.tgz
 				sudo tar -xzf sqlpage-linux.tgz && sudo rm sqlpage-linux.tgz
 				sudo mv sqlpage.bin /usr/bin/sqlpage
 				sudo chmod 750 /usr/bin/sqlpage
