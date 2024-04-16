@@ -38,7 +38,7 @@ case $command in
     # ========================================================================
     video-to-mp3)
 
-        output="./tmp/$(openssl rand -hex 8).mp3"
+        output="$BARE_DIR/$(openssl rand -hex 8).mp3"
 		suppress_process=true
 		suppress_output=true
 
