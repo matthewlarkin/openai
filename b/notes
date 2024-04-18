@@ -114,14 +114,21 @@ case $command in
         notebook="home"
 		title="$1"
         declare -a content=()
-        while getopts "T:C:t:EP:N:F:f:" opt; do
+        while getopts "T:C:t:EP:F:f:" opt; do
             case $opt in
-                T ) title=$OPTARG ;;
+				T ) 
+					IFS=':' read -ra TITLE_PARTS <<< "$OPTARG"
+					if [ ${#TITLE_PARTS[@]} -gt 1 ]; then
+						notebook="${TITLE_PARTS[0]}"
+						title="${TITLE_PARTS[1]}"
+					else
+						title="$OPTARG"
+					fi
+					;;
                 C ) content+=("$OPTARG") ;;
                 t ) tags=$OPTARG ;;
                 E ) encrypt=$OPTARG ;;
                 P ) password=$OPTARG ;;
-                N ) notebook=$OPTARG ;;
                 F ) folder=$OPTARG ;;
                 f ) filename=$OPTARG ;;
                 \? )

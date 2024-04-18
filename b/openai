@@ -31,6 +31,8 @@ curlRequest() {
 	
 	response=$(curl "$url" "${curl_opts[@]}")
 
+	sleep 0.2
+
 	echo "$response" | jq -r '.'
 }
 
@@ -132,6 +134,124 @@ case "$command" in
 
         ;;
 
+	# ========================================================
+	assistants.list )
+
+		limit=100
+		while getopts ":JVl:" opt; do
+			case ${opt} in
+				J ) respond="as_json" ;;
+				V ) verbose=true ;;
+				l ) limit="$OPTARG" ;;
+				\? ) echo "Invalid option: -$OPTARG" >&2; return 1 ;;
+			esac
+		done
+
+		response=$(curlRequest -u "$api_url/assistants?order=desc&limit=$limit" -j)
+
+		if [[ "$verbose" == true ]]; then
+			echo "$response" | jq -r
+		elif [[ "$respond" == "as_json" ]]; then
+			echo "$response" | jq -r '[.data[] | {id: .id, title: .name, instructions: .instructions, tools: [.tools[] | .type]}]'
+		else
+			echo "$response" | jq -r '.data[] | .id + " | " + .name + " | " + .instructions'
+		fi
+		;;
+
+
+	# ========================================================
+	assistants.show )
+
+		assistant_request=$(curlRequest -u "$api_url/assistants/$1" -j)
+		assistant_id=$(echo "$assistant_request" | jq -r '.id')
+		assistant_name=$(echo "$assistant_request" | jq -r '.title')
+		instructions=$(echo "$assistant_request" | jq -r '.instructions')
+		tools=$(echo "$assistant_request" | jq -r '.tools[] | .type' | tr '\n' '|')
+
+		[[ -z "$assistant_id" ]] && b/error "Assistant not found"
+
+		if [[ "$verbose" == true ]]; then
+			echo "$assistant_request" | jq -r
+		elif [[ "$respond" == "as_json" ]]; then
+			echo "$assistant_request" | jq -r '{assistant_id: .id, tools: [.tools[] | .type]}'
+		else
+			echo "$assistant_id"
+		fi
+		;;
+
+
+	# ========================================================
+	assistants.edit )
+
+		assistant_request=$(curlRequest -u "$api_url/assistants/$1" -j)
+		assistant_id=$(echo "$assistant_request" | jq -r '.id')
+		assistant_name=$(echo "$assistant_request" | jq -r '.title')
+		instructions=$(echo "$assistant_request" | jq -r '.instructions')
+		tools=$(echo "$assistant_request" | jq -r '.tools[] | .type' | tr '\n' '|')
+
+		[[ -z "$assistant_id" ]] && b/error "Assistant not found"
+
+		# getopts -n for name, -i for instructions, -t for tools, -o for model
+		while getopts "n:i:t:oJV" opt; do
+			case ${opt} in
+				n ) assistant_name="$OPTARG" ;;
+				i ) instructions="$OPTARG" ;;
+				t ) IFS='|' read -ra tools <<< "$OPTARG" ;;
+				o ) model="$OPTARG" ;;
+				J ) respond="as_json" ;;
+				V ) verbose=true ;;
+				\? ) echo "Invalid option: -$OPTARG" >&2; return 1 ;;
+			esac
+		done
+
+		[[ -z "$assistant_name" ]] && b/error "assistant_name is required"
+
+		payload=$(jq -n --arg name "$assistant_name" --arg instructions "$instructions" --arg model "$model" --argjson tools "$(printf '%s\n' "${tools[@]}" | jq -R . | jq -s 'map({type: .})')" '{
+			instructions: $instructions,
+			name: $name,
+			model: $model
+		}')
+
+		response=$(curlRequest -u "$api_url/assistants/$assistant_id" -d "$payload" -j)
+
+		IFS="," && tools_string="${tools[*]}" && unset IFS
+		sqlite3 "$BARE_HOME/db" "UPDATE assistants SET title='$assistant_name', model='$model', tools='$tools_string', instructions='$instructions' WHERE id='$assistant_id'"
+
+		if [[ "$verbose" == true ]]; then
+			echo "$response" | jq -r
+		elif [[ "$respond" == "as_json" ]]; then
+			echo "$response" | jq -r '{assistant_id: .id, tools: [.tools[] | .type]}'
+		else
+			echo "$assistant_id"
+		fi
+		
+		;;
+
+
+	# ========================================================
+	assistants.delete )
+
+		# put stdin as positional arguments if it's not empty
+		if [[ ! -t 0 ]]; then
+			while IFS= read -r line; do
+				args+=("$line")
+			done
+			set -- "${args[@]}"
+		fi
+
+		while (( "$#" )); do
+			curl "https://api.openai.com/v1/assistants/$1" -sL \
+				-H "Content-Type: application/json" \
+				-H "Authorization: Bearer $BARE_OPENAI_API_KEY" \
+				-H "OpenAI-Beta: assistants=v2" \
+				-X DELETE > /dev/null
+
+			sqlite3 "$BARE_HOME/db" "DELETE FROM assistants WHERE id='$1'"
+
+			shift
+		done
+
+		;;
 
 
     # ========================================================

@@ -1,0 +1,74 @@
+#!/usr/bin/env bash
+source "$(dirname "${BASH_SOURCE[0]}")/../lib/init"
+
+# Function to handle cutting words from a line of text
+cut_words() {
+	local position="$1"
+	local count="$2"
+	local text="$3"
+
+	# Default to cutting the first word(s) if only a number is provided
+	if [[ "$position" =~ ^-?[0-9]+$ ]] && [[ -z "$count" ]]; then
+		count=$position
+		position="first"  # Default to 'first' if only a number is given without specifying 'first' or 'last'
+	fi
+
+	# Convert position to lower case for consistency
+	position=$(echo "$position" | tr '[:upper:]' '[:lower:]')
+
+	if [[ "$position" == "first" ]]; then
+		if [[ -z "$count" ]] || [[ "$count" == "from" ]]; then
+			echo "$text" | awk '{print $1}'
+		else
+			echo "$text" | awk -v num="$count" '{for (i=1; i<=num; i++) printf "%s ", $i; print ""}'
+		fi
+	elif [[ "$position" == "last" ]]; then
+		if [[ -z "$count" ]] || [[ "$count" == "from" ]]; then
+			echo "$text" | awk '{print $NF}'
+		else
+			echo "$text" | awk -v num="$count" '{for (i=NF-num+1; i<=NF; i++) printf "%s ", $i; print ""}'
+		fi
+	elif [[ "$position" == "number" ]]; then
+		echo "$text" | awk -v num="$count" '{print $num}'
+	elif [[ "$position" -lt 0 ]]; then
+		local total=$(echo "$text" | wc -w)
+		local start=$((total + position + 1))
+		echo "$text" | awk -v start="$start" -v total="$total" '{for (i=start; i<=total; i++) printf "%s ", $i; print ""}'
+	fi
+}
+
+# Main script execution
+if [[ "$1" =~ ^-?[0-9]+$ ]]; then
+	position="$1"
+	shift
+	if [[ "$1" =~ ^[0-9]+$ ]]; then
+		count="$1"
+		shift
+	fi
+elif [[ "$1" == "first" ]] || [[ "$1" == "last" ]] || [[ "$1" == "number" ]]; then
+	position="$1"
+	shift
+	if [[ "$1" =~ ^[0-9]+$ ]]; then
+		count="$1"
+		shift
+	fi
+fi
+
+if [[ "$1" == "from" ]]; then
+	shift
+fi
+
+if [[ -f "$1" ]]; then
+	# Argument is a file
+	while read -r line; do
+		cut_words "$position" "$count" "$line"
+	done < "$1"
+
+elif [[ -p /dev/stdin ]] || [[ -t 0 ]]; then
+	while read -r line; do
+		cut_words "$position" "$count" "$line"
+	done
+else
+	# Argument is a direct string
+	cut_words "$position" "$count" "$1"
+fi
