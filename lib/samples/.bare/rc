@@ -16,7 +16,7 @@ export BARE_ENCRYPTION_KEY="xxxxxxxxxxxxxxxx" # used in b/encrypt and b/decrypt
 export BARE_GIT_NAME="Xxxxxxx Xxxxxxxx" # for nb (note taking app)
 export BARE_GIT_EMAIL="xxxxxx@xxxxxxx.xxx" # for nb (note taking app)
 
-export BARE_BARE_OPENAI_API_KEY="xxxxxxxxxxxxxxxx" # used in b/openai
-export BARE_BARE_POSTMARK_SERVER_TOKEN="xxxxxxxxxxxxxxxx" # used in b/postmark
-export BARE_BARE_DAILY_API_KEY="xxxxxxxxxxxxxxxx" # used in b/daily
-export BARE_BARE_STRIPE_SECRET_KEY="xxxxxxxxxxxxxxxx"
+export BARE_OPENAI_API_KEY="xxxxxxxxxxxxxxxx" # used in b/openai
+export BARE_POSTMARK_SERVER_TOKEN="xxxxxxxxxxxxxxxx" # used in b/postmark
+export BARE_DAILY_API_KEY="xxxxxxxxxxxxxxxx" # used in b/daily
+export BARE_STRIPE_SECRET_KEY="xxxxxxxxxxxxxxxx"
