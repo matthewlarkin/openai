@@ -5,14 +5,4 @@ scope="$1"
 
 [[ $scope == 'list' ]] && ls "$BARE_DIR"/b/* | xargs -n 1 basename && exit 0
 
-# check if glow is installed
-if command -v glow &> /dev/null; then
-	cat "$BARE_DIR"/lib/docs/b/"$scope".md | glow
-else
-	cat "$BARE_DIR"/lib/docs/b/"$scope".md
-	if [[ "$BARE_OS" == "mac"* ]]; then
-		echo -e "\n- - -\n\n${yellow}Tip:${reset}glow is not installed. To install it, run: ${bold}brew install glow${reset}\n\n"
-	else
-		echo -e "\n- - -\n${yellow}Tip:${reset}glow is not installed. To install it, run: ${bold}sudo snap install glow${reset}"
-	fi
-fi
+cat "$BARE_DIR"/lib/docs/b/"$scope".md
