@@ -7,8 +7,12 @@ touch "$BARE_HOME/.nb/scripts/sandbox.bare"
 process_line() {
 	source "$BARE_DIR/tmp/variables" 2>/dev/null
 	source "$BARE_HOME/rc" 2>/dev/null
+	# Use eval to split the line into words
+	eval "words=($line)"
 	# Replace placeholders with variable values
 	for i in "${!words[@]}"; do
+		# Remove quotes from the argument
+		words[i]=${words[i]//\"/}
 		if [[ ${words[i]} =~ \$\((.*)\) ]]; then
 			# Detect command substitution
 			command=${BASH_REMATCH[1]}
@@ -24,8 +28,59 @@ process_line() {
 			fi
 		fi
 	done
-	# Execute the command
-	response=$(./bare "${words[@]}" 2>/dev/null)
+
+	# Check for AND keyword and split the command if found
+	and_indices=()
+	for i in "${!words[@]}"; do
+		if [[ ${words[i]} == "AND" ]]; then
+			and_indices+=($i)
+		fi
+	done
+
+	# If AND keywords were found, split the command and execute each part sequentially
+	if [[ ${#and_indices[@]} -ne 0 ]]; then
+		start_index=0
+		for and_index in "${and_indices[@]}"; do
+			command_part=("${words[@]:$start_index:$and_index-$start_index}")
+			# Check for INTO keyword and split the command if found
+			into_index=-1
+			for i in "${!command_part[@]}"; do
+				if [[ ${command_part[i]} == "INTO" ]]; then
+					into_index=$i
+					break
+				fi
+			done
+			if [[ $into_index -ne -1 ]]; then
+				# Split the command_part array into two commands
+				command1=("${command_part[@]:0:into_index}")
+				command2=("${command_part[@]:into_index+2}")
+				# Execute the first command
+				response=$(./bare "${command1[@]}" 2>/dev/null)
+				# Check the exit status of the command
+				if [[ $? -ne 0 ]]; then
+					return 1
+				fi
+				# Use the output of the first command as the argument for the second command
+				command2=("INTO" "$response" "${command2[@]}")
+				response=$(./bare "${command2[@]}" 2>/dev/null)
+			else
+				# Execute the command
+				response=$(./bare "${command_part[@]}" 2>/dev/null)
+			fi
+			# Check the exit status of the command
+			if [[ $? -eq 0 ]]; then
+				echo "$response"
+			fi
+			start_index=$((and_index + 1))
+		done
+		# Execute the last part of the command
+		command_part=("${words[@]:$start_index}")
+		response=$(./bare "${command_part[@]}" 2>/dev/null)
+	else
+		# Execute the command
+		response=$(./bare "${words[@]}" 2>/dev/null)
+	fi
+
 	# Check the exit status of the command
 	if [[ $? -eq 0 ]]; then
 		echo "$response"
