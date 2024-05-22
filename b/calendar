@@ -40,12 +40,6 @@ generate_specific_month() {
 
 # Using bash, when given no arguments, simply print the current month (using `cal`)
 if [ $# -eq 0 ]; then
-	cal | awk 'NF'
-	exit 0
-fi
-
-# When given 'highlight', print the current month with today's date highlighted
-if [ "$1" = "highlight" ]; then
 	today=$(date +%e)
 	result=$(cal | awk -v today="$today" '{ if (NF > 0) gsub(today, "\033[1;33m"today"\033[0m"); print }')
 	remove_empty_lines "$result"
