@@ -5,6 +5,11 @@ source "$(dirname "${BASH_SOURCE[0]}")/../lib/init"
 command=$1
 text=$2
 
+# If no text argument is provided, read from standard input
+if [ -z "$text" ]; then
+	read -r text
+fi
+
 case $command in
 	lowercase ) echo "$text" | tr '[:upper:]' '[:lower:]' ;;
 	uppercase ) echo "$text" | tr '[:lower:]' '[:upper:]' ;;
