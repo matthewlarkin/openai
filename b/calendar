@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+source "$(dirname "${BASH_SOURCE[0]}")/../lib/init"
+
+# Function to generate calendar
+generate_calendar() {
+	local months="$1"
+	local direction="$2"
+	local output=()
+	for ((i=0; i<$months; i++)); do
+		if [ "$direction" = "ahead" ]; then
+			output[i]=$(cal $(date -v +${i}m +%m) $(date -v +${i}m +%Y))
+		else
+			output[i]=$(cal $(date -v -${i}m +%m) $(date -v -${i}m +%Y))
+		fi
+	done
+	if [ "$direction" = "behind" ]; then
+		for ((i=${#output[@]}-1; i>=0; i--)); do
+			echo "${output[i]}"
+		done
+	else
+		for ((i=0; i<${#output[@]}; i++)); do
+			echo "${output[i]}"
+		done
+	fi
+}
+
+# Function to remove empty lines from the output
+remove_empty_lines() {
+	echo "$1" | awk 'NF > 0'
+}
+
+# Function to generate a specific month N months ahead or behind
+generate_specific_month() {
+	local offset="$1"
+	if [ "$2" = "ahead" ]; then
+		cal $(date -v +${offset}m +%m) $(date -v +${offset}m +%Y)
+	else
+		cal $(date -v -${offset}m +%m) $(date -v -${offset}m +%Y)
+	fi
+}
+
+# Using bash, when given no arguments, simply print the current month (using `cal`)
+if [ $# -eq 0 ]; then
+	result=$(cal)
+	remove_empty_lines "$result"
+	exit 0
+fi
+
+# When given 'ahead 3' or 'ahead for 3', print the next 3 months (or 4 if given '4')
+if [ "$1" = "ahead" ] && [ "$2" != "by" ]; then
+	if [[ "$2" =~ ^[0-9]+$ ]]; then
+		months=$2
+	else
+		months=${3:-1}
+	fi
+	result=$(generate_calendar "$months" "ahead")
+	remove_empty_lines "$result"
+	exit 0
+fi
+
+# When given 'behind 3' or 'behind for 3', print the previous 3 months (or 4 if given '4')
+if [ "$1" = "behind" ] && [ "$2" != "by" ]; then
+	if [[ "$2" =~ ^[0-9]+$ ]]; then
+		months=$2
+	else
+		months=${3:-1}
+	fi
+	result=$(generate_calendar "$months" "behind")
+	remove_empty_lines "$result"
+	exit 0
+fi
+
+# When given 'ahead by 3', print the specific month 3 months ahead
+if [ "$1" = "ahead" ] && [ "$2" = "by" ]; then
+	if [[ "$3" =~ ^[0-9]+$ ]]; then
+		months=$3
+	else
+		months=1
+	fi
+	result=$(generate_specific_month "$months" "ahead")
+	clean_result=$(remove_empty_lines "$result")
+	echo "$clean_result"
+	exit 0
+fi
+
+# When given 'behind by 3', print the specific month 3 months behind
+if [ "$1" = "behind" ] && [ "$2" = "by" ]; then
+	if [[ "$3" =~ ^[0-9]+$ ]]; then
+		months=$3
+	else
+		months=1
+	fi
+	result=$(generate_specific_month "$months" "behind")
+	clean_result=$(remove_empty_lines "$result")
+	echo "$clean_result"
+	exit 0
+fi
