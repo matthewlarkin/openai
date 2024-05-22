@@ -89,9 +89,9 @@ getSummary() {
 	[[ $condition == *"Fog"* ]] && emoji="🌫️ "
 	[[ $condition == *"Thunder"* ]] && emoji="⚡️ "
 	if [[ $type == "current" ]]; then
-		echo -e "$temp$temp_emoji / $emoji$condition ${directions[$wind_dir]} $wind${wind_dir:+ $wind_dir}"
+		echo -e "$temp$temp_emoji $emoji$condition ${directions[$wind_dir]} $wind${wind_dir:+ $wind_dir}"
 	else
-		echo -e "$name $temp$temp_emoji / $emoji$condition ${directions[$wind_dir]} $wind${wind_dir:+ $wind_dir}"
+		echo -e "$name $temp$temp_emoji $emoji$condition ${directions[$wind_dir]} $wind${wind_dir:+ $wind_dir}"
 	fi
 }
 
