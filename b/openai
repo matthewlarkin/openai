@@ -49,43 +49,47 @@ case "$command" in
 
 	# ========================================================
 	chat )
+			format="text"
+			message="$1"
+			assistant_prompt="${2:-You are a helpful AI assistant.}"
+			model="$default_model"
+			while getopts ":m:a:o:jsS:V" opt; do
+				case ${opt} in
+					m ) message="$OPTARG" ;;
+					a ) assistant_prompt="$OPTARG" ;;
+					o ) model="$OPTARG" ;;
+					j ) format="json_object" ;;
+					s ) consider_scripts=true ;;
+					S ) consider_script="$OPTARG" ;;
+					V ) verbose=true ;;
+					* ) echo "Invalid option: -$OPTARG" >&2; exit 1 ;;
+				esac
+			done
 
-		format="text"
-		message="$1"
-		assistant_prompt="${2:-You are a helpful AI assistant.}"
-		model="$default_model"
-		while getopts ":m:a:o:jsS:V" opt; do
-			case ${opt} in
-				m ) message="$OPTARG" ;;
-				a ) assistant_prompt="$OPTARG" ;;
-				o ) model="$OPTARG" ;;
-				j ) format="json_object" ;;
-				s ) consider_scripts=true ;;
-				S ) consider_script="$OPTARG" ;;
-				V ) verbose=true ;;
-				* ) echo "Invalid option: -$OPTARG" >&2; exit 1 ;;
-			esac
-		done
+			# If no message argument is provided, read from standard input
+			if [ -z "$message" ]; then
+				read -r message
+			fi
 
-		# check if assistant_prompt is one word and begins with "asst_"
-		if [[ $assistant_prompt =~ ^asst_ ]]; then
-			assistant_prompt=$(sqlite3 "$BARE_HOME/db" "SELECT instructions FROM assistants WHERE id='$assistant_prompt'")
-		fi
+			# check if assistant_prompt is one word and begins with "asst_"
+			if [[ $assistant_prompt =~ ^asst_ ]]; then
+				assistant_prompt=$(sqlite3 "$BARE_HOME/db" "SELECT instructions FROM assistants WHERE id='$assistant_prompt'")
+			fi
 
-		[[ -n "$consider_script" ]] && context="$(./bare interpret "$consider_script")" && assistant_prompt="$assistant_prompt -- and consider this as context: $context"
+			[[ -n "$consider_script" ]] && context="$(./bare interpret "$consider_script")" && assistant_prompt="$assistant_prompt -- and consider this as context: $context"
 
-		response=$(curlRequest -u "$api_url/chat/completions" -d "$(jq -n --arg assistant_prompt "${assistant_prompt}" --arg model "${model}" --arg content "$message" --arg format "${format}" '{
-			model: $model,
-			response_format: { "type": $format },
-			messages: [
-				{ role: "system", content: $assistant_prompt },
-				{ role: "user", content: $content }
-			]
-		}')" -j)
-		content=$(echo "$response" | jq -r '.choices[0].message.content')
+			response=$(curlRequest -u "$api_url/chat/completions" -d "$(jq -n --arg assistant_prompt "${assistant_prompt}" --arg model "${model}" --arg content "$message" --arg format "${format}" '{
+				model: $model,
+				response_format: { "type": $format },
+				messages: [
+					{ role: "system", content: $assistant_prompt },
+					{ role: "user", content: $content }
+				]
+			}')" -j)
+			content=$(echo "$response" | jq -r '.choices[0].message.content')
 
-		[[ $verbose ]] && echo "$response" | jq || echo "$content"
-		;;
+			[[ $verbose ]] && echo "$response" | jq || echo "$content"
+			;;
 
 
 
