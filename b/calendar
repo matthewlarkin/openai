@@ -1,6 +1,85 @@
 #!/usr/bin/env bash
 source "$(dirname "${BASH_SOURCE[0]}")/../lib/init"
 
+# Function to remove empty lines from the output
+remove_empty_lines() {
+	echo "$1" | awk 'NF > 0'
+}
+
+get_month_number() {
+	local month="$1"
+	case "$month" in
+		"january") echo 1 ;;
+		"february") echo 2 ;;
+		"march") echo 3 ;;
+		"april") echo 4 ;;
+		"may") echo 5 ;;
+		"june") echo 6 ;;
+		"july") echo 7 ;;
+		"august") echo 8 ;;
+		"september") echo 9 ;;
+		"october") echo 10 ;;
+		"november") echo 11 ;;
+		"december") echo 12 ;;
+		*) echo "Invalid month" ;;
+	esac
+}
+
+generate_specific_month() {
+	local months_to_target="$1"
+	local direction="$2"
+	if [[ "$OSTYPE" == "darwin"* ]]; then
+		# macOS uses BSD date
+		if [ "$direction" = "ahead" ]; then
+			cal $(date -v +"$months_to_target"m +%m) $(date -v +"$months_to_target"m +%Y)
+		elif [ "$direction" = "behind" ]; then
+			cal $(date -v -"$months_to_target"m +%m) $(date -v -"$months_to_target"m +%Y)
+		fi
+	else
+		# Assume GNU date
+		if [ "$direction" = "ahead" ]; then
+			cal $(date -d "+${months_to_target} month" +%m) $(date -d "+${months_to_target} month" +%Y)
+		elif [ "$direction" = "behind" ]; then
+			cal $(date -d "-${months_to_target} month" +%m) $(date -d "-${months_to_target} month" +%Y)
+		fi
+	fi
+}
+
+adjust_months() {
+	local base_months="$1"
+	local adjustment="$2"
+	local total_months
+
+	if [[ "$adjustment" =~ ^(\+|\-)[0-9]+$ ]]; then
+		total_months=$((base_months + adjustment))
+	elif [[ "$adjustment" =~ ^[0-9]+$ ]]; then
+		total_months=$((base_months + adjustment))
+	else
+		total_months=$base_months
+	fi
+
+	echo "$total_months"
+}
+
+# Handle direct modifiers like '+ N' or '- N'
+if [[ "$1" =~ ^(\+|\-)$ ]]; then
+	adjustment="${1}${2// /}" # Combine + or - with the number, remove spaces
+
+	if (( adjustment < 0 )); then
+		direction="behind"
+		adjustment=${adjustment#-} # Remove the negative sign
+	else
+		direction="ahead"
+	fi
+
+	months_to_target=$(adjust_months 0 "$adjustment")
+
+	result=$(generate_specific_month "$months_to_target" "$direction")
+	clean_result=$(remove_empty_lines "$result")
+	echo "$clean_result"
+	exit 0
+fi
+
 generate_calendar() {
 	local months="$1"
 	local direction="$2"
@@ -23,25 +102,22 @@ generate_calendar() {
 	done
 }
 
-# Function to remove empty lines from the output
-remove_empty_lines() {
-	echo "$1" | awk 'NF > 0'
-}
-
-# Function to generate a specific month N months ahead or behind
-generate_specific_month() {
-	local offset="$1"
-	if [ "$2" = "ahead" ]; then
-		cal $(date -v +${offset}m +%m) $(date -v +${offset}m +%Y)
-	else
-		cal $(date -v -${offset}m +%m) $(date -v -${offset}m +%Y)
-	fi
-}
-
 # Using bash, when given no arguments, simply print the current month (using `cal`)
 if [ $# -eq 0 ]; then
 	today=$(date +%e)
-	result=$(cal | awk -v today="$today" '{ if (NF > 0) gsub(today, "\033[1;33m"today"\033[0m"); print }')
+	result=$(cal)
+	remove_empty_lines "$result"
+	exit 0
+fi
+
+# When given 'for 3', print the current month and the next 2 months
+if [ "$1" = "for" ]; then
+	if [[ "$2" =~ ^[0-9]+$ ]]; then
+		months=$2
+	else
+		months=1
+	fi
+	result=$(generate_calendar "$months" "ahead")
 	remove_empty_lines "$result"
 	exit 0
 fi
@@ -70,27 +146,71 @@ if [ "$1" = "behind" ] && [ "$2" != "by" ]; then
 	exit 0
 fi
 
-# When given 'ahead by 3', print the specific month 3 months ahead
-if [ "$1" = "ahead" ] && [ "$2" = "by" ]; then
-	if [[ "$3" =~ ^[0-9]+$ ]]; then
-		months=$3
+# Handle 'this past'
+if [ "$1" = "this" ] && [ "$2" = "past" ]; then
+	# Convert the input month to lowercase
+	lowercase_month=$(echo "$3" | tr '[:upper:]' '[:lower:]')
+	# Get the month number
+	target_month=$(get_month_number "$lowercase_month")
+	current_month=$(date +%m)
+	# Calculate the offset
+	if (( target_month >= current_month )); then
+		months_to_target=$((12 + current_month - target_month))
 	else
-		months=1
+		months_to_target=$((current_month - target_month))
 	fi
-	result=$(generate_specific_month "$months" "ahead")
+
+	# Check for additional modifier
+	if [ -n "$4" ] && [[ "$4" =~ ^(\+|\-)$ ]]; then
+		adjustment="${4}${5// /}" # Combine + or - with the number, remove spaces
+		months_to_target=$(adjust_months "$months_to_target" "$adjustment")
+	fi
+
+	result=$(generate_specific_month "$months_to_target" "behind")
 	clean_result=$(remove_empty_lines "$result")
 	echo "$clean_result"
 	exit 0
 fi
 
-# When given 'behind by 3', print the specific month 3 months behind
-if [ "$1" = "behind" ] && [ "$2" = "by" ]; then
-	if [[ "$3" =~ ^[0-9]+$ ]]; then
-		months=$3
+# Handle 'this coming'
+if [ "$1" = "this" ] && [ "$2" = "coming" ]; then
+	# Convert the input month to lowercase
+	lowercase_month=$(echo "$3" | tr '[:upper:]' '[:lower:]')
+	# Get the month number
+	target_month=$(get_month_number "$lowercase_month")
+	current_month=$(date +%m)
+	# Calculate the offset
+	if (( target_month > current_month )); then
+		months_to_target=$((target_month - current_month))
 	else
-		months=1
+		months_to_target=$((12 + target_month - current_month))
 	fi
-	result=$(generate_specific_month "$months" "behind")
+
+	# Check for additional modifier
+	if [ -n "$4" ] && [[ "$4" =~ ^(\+|\-)$ ]]; then
+		adjustment="${4}${5// /}" # Combine + or - with the number, remove spaces
+		months_to_target=$(adjust_months "$months_to_target" "$adjustment")
+	fi
+
+	result=$(generate_specific_month "$months_to_target" "ahead")
+	clean_result=$(remove_empty_lines "$result")
+	echo "$clean_result"
+	exit 0
+fi
+
+# Handle direct modifiers like '+ N' or '- N'
+if [[ "$1" =~ ^(\+|\-)$ ]]; then
+	adjustment="${1}${2// /}" # Combine + or - with the number, remove spaces
+
+	if (( adjustment < 0 )); then
+		direction="behind"
+	else
+		direction="ahead"
+	fi
+
+	months_to_target=$(adjust_months 0 "$adjustment")
+
+	result=$(generate_specific_month "$months_to_target" "$direction")
 	clean_result=$(remove_empty_lines "$result")
 	echo "$clean_result"
 	exit 0
