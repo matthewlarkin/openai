@@ -14,9 +14,9 @@ get_coordinates() {
 	local type=$2
 
 	if [[ $type == "city" ]]; then
-		curl -s "https://nominatim.openstreetmap.org/search?format=json&q=$location" | jq -r '.[0].lat + "," + .[0].lon' | awk -F, '{printf "%.2f,%.2f\n", $1, $2}'
+		curl -s "https://nominatim.openstreetmap.org/search?format=json&q=$location" | jq -r '.[0].lat + "," + .[0].lon' | awk -F, '{printf "%.4f,%.4f\n", $1, $2}'
 	else
-		curl -s "https://ipinfo.io/$location" | jq -r '.loc' | awk -F, '{printf "%.2f,%.2f\n", $1, $2}'
+		curl -s "https://ipinfo.io/$location" | jq -r '.loc' | awk -F, '{printf "%.4f,%.4f\n", $1, $2}'
 	fi
 }
 
