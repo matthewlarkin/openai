@@ -9,7 +9,9 @@ if [[ $# -gt 0 ]]; then
 	if [[ -e "b/$1" ]]; then
 		scope="$1" && shift
 		"b/$scope" "$@" && exit 0
+	else
+		echo "$@" && exit 0
 	fi
-
-	echo "$@" && exit 0
+else
+	b/interpret -I;
 fi
