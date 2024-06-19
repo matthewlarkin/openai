@@ -1,7 +1,0 @@
-#!/usr/bin/env bash
-source "$(dirname "${BASH_SOURCE[0]}")/../lib/init"
-
-desc="$1"
-argument="$2"
-
-printf "\n❌ ${red}$desc${reset}: $argument\n\n" && exit 1

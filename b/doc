@@ -1,8 +1,0 @@
-#!/usr/bin/env bash
-source "$(dirname "${BASH_SOURCE[0]}")/../lib/init"
-
-scope="$1"
-
-[[ $scope == 'list' ]] && ls "$BARE_DIR"/b/* | xargs -n 1 basename && exit 0
-
-cat "$BARE_DIR"/lib/docs/b/"$scope".md

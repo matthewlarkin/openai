@@ -1,6 +1,0 @@
-#!/usr/bin/env bash
-source "$(dirname "${BASH_SOURCE[0]}")/../lib/init"
-
-[[ -z "$1" ]] && echo "No file specified" && exit 1
-
-find "$1" -printf "%s\n" | awk '{print $5}'
