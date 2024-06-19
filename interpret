@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+
+# Check if a file argument is provided
+if [ $# -eq 0 ]; then
+	echo "Usage: ./interpret <script-name>"
+	exit 1
+fi
+
+bare_script_name="$1" && shift
+
+# take the content of the given file, prepend "#!/usr/bin/env bash" and then execute
+sed "1s/^/#!\/usr/bin\/env bash\nexport PATH=\"$PATH:.\"\n/" .scripts/"$bare_script_name".bare | bash

@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+
+# Usage: ./media merge 100 "file1.mp4" "file2.mp4" "output.mp4"
+
+# Check if the first argument is "merge"
+if [ "$1" != "merge" ]; then
+	echo "The first argument must be 'merge'"
+	exit 1
+fi
+
+# Get the delay, input files, and output file from the arguments
+shift
+delay=$1
+shift
+input_files=("${@:1:$#-1}")
+output_file="${!#}"
+
+# Create a temporary file list
+temp_file=$(mktemp)
+
+# Create a black video clip of a certain duration
+black_clip=$(mktemp -t tmp.XXXXXXXXXX).mp4
+ffmpeg -loop 1 -i "$BARE_DIR/.assets/black.png" -c:v libx264 -t $((delay/1000)) -pix_fmt yuv420p "$black_clip"
+
+for file in "${input_files[@]}"; do
+	# Convert relative paths to absolute paths
+	abs_path=$(realpath "$file")
+	echo "file '$abs_path'" >> "$temp_file"
+	echo "file '$black_clip'" >> "$temp_file"
+done
+
+# Check the type of the first input file
+file_type=$(file --mime-type -b "${input_files[0]}")
+
+# Run the ffmpeg command
+if [[ $file_type == audio/* ]]; then
+	# If it's an audio file, concatenate the files with the silent audio file in between
+	ffmpeg -f concat -safe 0 -i "$temp_file" -c:a libmp3lame -q:a 2 "${output_file}"
+elif [[ $file_type == video/* ]]; then
+	# If it's a video file, concatenate the files with the black video clip in between
+	ffmpeg -f concat -safe 0 -i "$temp_file" -c copy "${output_file}"
+else
+	echo "Unsupported file type: $file_type"
+	exit 1
+fi
+
+# Remove the temporary files
+rm "$temp_file"
+rm "$black_clip"

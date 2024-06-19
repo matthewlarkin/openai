@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+
+./deps jq
+
+# getopts for sending email via postmark, -T for to, -S for subject, -B for body, -c for cc, -a for attachment, -b for bcc, -f for from, -n for from name, -r for reply to, -B for batch file
+
+while getopts ":T:S:B:c:a:b:F:n:r:B:" opt; do
+  case $opt in
+	T) TO=$OPTARG ;;
+	S) SUBJECT=$OPTARG ;;
+	B) BODY=$OPTARG ;;
+	c) CC=$OPTARG ;;
+	a) ATTACHMENT=$OPTARG ;;
+	b) BCC=$OPTARG ;;
+	F) FROM=$OPTARG ;;
+	n) FROM_NAME=$OPTARG ;;
+	r) REPLY_TO=$OPTARG ;;
+	B) BATCH_FILE=$OPTARG ;;
+	\?) echo "Invalid option: -$OPTARG" >&2 ;;
+  esac
+done
+
+if [[ -n "$BATCH_FILE" ]]; then
+	# Batch mode
+	JSON_PAYLOAD='{"Messages":['
+	while IFS=, read -r to subject body; do
+		JSON_PAYLOAD+='{"From":"'$FROM'","To":"'$to'","Subject":"'$subject'","TextBody":"'$body'"},'
+	done < "$BATCH_FILE"
+	JSON_PAYLOAD=${JSON_PAYLOAD%,}
+	JSON_PAYLOAD+=']}'
+	curl -X POST "https://api.postmarkapp.com/email/batch" \
+		-H "Accept: application/json" \
+		-H "Content-Type: application/json" \
+		-H "X-Postmark-Server-Token: $POSTMARK_API_TOKEN" \
+		-d "$JSON_PAYLOAD"
+else
+	# Single email mode
+	[[ -z "$TO" ]] && echo "No recipient specified, use -T to specify a recipient" && exit 1
+	[[ -z "$SUBJECT" ]] && echo "No subject specified, use -S to specify a subject" && exit 1
+	[[ -z "$BODY" ]] && echo "No body specified, use -B to specify a body" && exit 1
+	[[ -z "$FROM" ]] && echo "No from specified, use -f to specify a from" && exit 1
+
+	payload=$(jq -n \
+		--arg from "$FROM" \
+		--arg to "$TO" \
+		--arg subject "$SUBJECT" \
+		--arg body "$BODY" \
+		--arg cc "$CC" \
+		--arg bcc "$BCC" \
+		--arg replyTo "$REPLY_TO" \
+		'{
+			"From": $from,
+			"To": $to,
+			"Subject": $subject,
+			"HtmlBody": $body,
+			"Cc": $cc,
+			"Bcc": $bcc,
+			"ReplyTo": $replyTo
+		}'
+	)
+
+	response=$(curl -X POST \
+		https://api.postmarkapp.com/email \
+		-H "Accept: application/json" \
+		-H "Content-Type: application/json" \
+		-H "X-Postmark-Server-Token: $POSTMARK_API_TOKEN" \
+		-d "$payload"
+	)
+
+	echo "$response"
+fi

@@ -1,0 +1,54 @@
+#!/usr/bin/env bash
+
+./deps ffmpeg openssl
+
+# Default values
+speed_factor=${1:-'0.5'}
+input_file="$2"
+output_file=${3:-"downloads/$(openssl rand -hex 16).mp3"}
+
+if [ -z "$input_file" ]; then
+	echo "Error: Input file is not provided" >&2
+	exit 1
+fi
+
+# Parse command line options
+while getopts s:i:o: option
+do
+	case "${option}"
+	in
+		s) speed_factor=${OPTARG};;
+		i) input_file=${OPTARG};;
+		o) output_file=${OPTARG};;
+		\?) echo "Usage: $0 [-s speed_factor] [-i input_file] [-o output_file]" >&2
+			exit 1;;
+	esac
+done
+
+# Get the extension of the source file
+extension="${input_file##*.}"
+
+# Determine if the input file is a video file
+is_video=$(ffprobe -v error -select_streams v:0 -show_entries stream=codec_name -of default=noprint_wrappers=1:nokey=1 "$input_file")
+
+# If the speed factor is negative, slow down the audio and video
+if (( $(echo "$speed_factor < 0" | bc -l) )); then
+	speed_factor=${speed_factor#-} # Remove the negative sign
+	if [ -z "$is_video" ]; then
+		ffmpeg -y -loglevel panic -i "$input_file" -filter:a "atempo=$speed_factor" "$output_file"
+	else
+		ffmpeg -y -loglevel panic -i "$input_file" -filter:v "setpts=$speed_factor*PTS" -filter:a "atempo=$speed_factor" "$output_file"
+	fi
+# If the speed factor is positive, speed up the audio and video
+elif (( $(echo "$speed_factor > 0" | bc -l) )); then
+	if [ -z "$is_video" ]; then
+		ffmpeg -y -loglevel panic -i "$input_file" -filter:a "atempo=$speed_factor" "$output_file"
+	else
+		ffmpeg -y -loglevel panic -i "$input_file" -filter:v "setpts=1/$speed_factor*PTS" -filter:a "atempo=$speed_factor" "$output_file"
+	fi
+else
+	echo "Error: Speed factor must be non-zero" >&2
+	exit 1
+fi
+
+echo "$output_file"

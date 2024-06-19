@@ -1,0 +1,13 @@
+#!/usr/bin/env bash
+
+# Get the command and length
+command=$1
+length=${2:-16}
+
+[[ ! $length =~ ^[0-9]+$ ]] && echo "Invalid length: $length. Must be a positive integer." && exit 1;
+
+case $command in
+	string ) LC_ALL=C tr -dc 'a-zA-Z0-9' < /dev/urandom | head -c "$length"; echo ;;
+	number ) LC_ALL=C tr -dc '0-9' < /dev/urandom | head -c "$length"; echo ;;
+	* ) echo "Invalid command: $command" && exit 1 ;;
+esac

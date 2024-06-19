@@ -1,0 +1,178 @@
+#!/usr/bin/env bash
+
+if [ -z "$OPENAI_API_KEY" ]; then
+	echo "OPENAI_API_KEY is not defined"
+	exit 1
+fi
+
+./deps curl jq openssl
+
+case "$1" in 
+
+	"chat" )
+
+		model=${OPENAI_DEFAULT_MODEL:-'gpt-3.5-turbo'}
+		system_prompt='You are a helpful assistant, answering succintly without going into lots of detail, unless you are asked to. Do not make things up if you do not know the answer.'
+		user_messages=()
+		assistant_messages=()
+
+		# If $2 is set, add it as the first user message
+		if [ -n "$2" ]; then
+			user_messages+=("$2")
+		fi
+
+		shift
+		while getopts "m:s:u:a:M:" opt; do
+			case $opt in
+				m ) model=$OPTARG ;;
+				s ) system_prompt=$OPTARG ;;
+				u ) user_messages+=("$OPTARG") ;;
+				a ) assistant_messages+=("$OPTARG") ;;
+				M ) messages=$(echo "$OPTARG" | jq -c .) ;;
+				\? ) echo "Invalid option: $OPTARG" >&2 && exit 1 ;;
+				: ) echo "Option -$OPTARG requires an argument." >&2 && exit 1 ;;
+			esac
+		done
+
+		if [ -z "$messages" ]; then
+			messages='[
+			  {
+				"role": "system",
+				"content": "'"$system_prompt"'"
+			  }'
+
+			for i in "${!user_messages[@]}"; do
+				messages+=',{
+					"role": "user",
+					"content": "'"${user_messages[$i]}"'"
+				  }'
+				if [ "$i" -lt ${#assistant_messages[@]} ]; then
+					messages+=',{
+						"role": "assistant",
+						"content": "'"${assistant_messages[$i]}"'"
+					  }'
+				fi
+			done
+
+			messages+=']'
+		fi
+
+		response=$(curl -s https://api.openai.com/v1/chat/completions \
+			-H "Content-Type: application/json" \
+			-H "Authorization: Bearer $OPENAI_API_KEY" \
+			-d '{
+			"model": "'"$model"'",
+			"messages": '"$messages"'
+		}');
+		echo "$response" | jq -r '.choices[0].message.content'
+		;;
+
+
+	"voice" )
+	
+		shift
+		model='tts-1'
+		voice='alloy'
+		response_format='mp3'
+		speed=1
+
+		# If $1 is set, use it as the input
+		if [ -n "$1" ]; then
+			input="$1"
+		else
+			input='Today is a wonderful day to build something people love!'
+		fi
+
+		output="$(openssl rand -hex 16).mp3"
+
+		while getopts "m:i:v:f:s:o:" opt; do
+			case $opt in
+				m ) model=$OPTARG ;;
+				i ) input=$OPTARG ;;
+				v ) voice=$OPTARG ;;
+				f ) response_format=$OPTARG ;;
+				s ) speed=$OPTARG ;;
+				o ) output=$OPTARG ;;
+				\? ) echo "Invalid option: $OPTARG" >&2 && exit 1 ;;
+				: ) echo "Option -$OPTARG requires an argument." >&2 && exit 1 ;;
+			esac
+		done
+
+		curl -s https://api.openai.com/v1/audio/speech \
+			-H "Authorization: Bearer $OPENAI_API_KEY" \
+			-H "Content-Type: application/json" \
+			-d '{
+				"model": "'"$model"'",
+				"input": "'"$input"'",
+				"voice": "'"$voice"'",
+				"response_format": "'"$response_format"'",
+				"speed": "'"$speed"'"
+			}' \
+			--output "downloads/$output"
+
+		# Check if the file was created and is not empty
+		if [ ! -s "downloads/$output" ]; then
+			echo "Error: File $output was not created or is empty" >&2
+			exit 1
+		fi
+
+		echo "downloads/$output"
+
+		;;
+	"listen" )
+
+		# Coming soon. OpenAI only accepts text and image as of now.
+
+		;;
+
+
+	"transcribe" )
+
+		shift
+		model='whisper-1'
+		language='en'
+		prompt=''
+		response_format='json'
+		temperature=0
+		timestamp_granularities='segment'
+		file="$1"
+
+		while getopts "m:l:p:f:t:g:i:" opt; do
+			case $opt in
+				m ) model=$OPTARG ;;
+				l ) language=$OPTARG ;;
+				p ) prompt=$OPTARG ;;
+				f ) response_format=$OPTARG ;;
+				t ) temperature=$OPTARG ;;
+				g ) timestamp_granularities=$OPTARG ;;
+				i ) file=$OPTARG ;;
+				\? ) echo "Invalid option: $OPTARG" >&2 && exit 1 ;;
+				: ) echo "Option -$OPTARG requires an argument." >&2 && exit 1 ;;
+			esac
+		done
+
+		if [ -z "$file" ]; then
+			echo "Error: No file provided" >&2
+			exit 1
+		fi
+
+		response=$(curl -s https://api.openai.com/v1/audio/transcriptions \
+			-H "Authorization: Bearer $OPENAI_API_KEY" \
+			-H "Content-Type: multipart/form-data" \
+			-F file="@$file" \
+			-F model="$model" \
+			-F language="$language" \
+			-F prompt="$prompt" \
+			-F response_format="$response_format" \
+			-F temperature="$temperature" \
+			-F timestamp_granularities="$timestamp_granularities")
+
+		# Extract the text property from the JSON response and print it
+		echo "$response" | jq -r '.text'
+		;;
+
+	* )
+		echo "Invalid argument"
+		exit 1
+		;;
+esac

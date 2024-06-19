@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+
+location=$(./codec url.encode "$(./geo "$1")");
+
+# Fetch the weather data based on the requested type
+case "$2" in
+	today )
+		curl -s "wttr.in/$location?uQTF1" | sed -n '/┌─────────────┐/,/└─────────────┘/p'
+		echo "└──────────────────────────────┴──────────────────────────────┴──────────────────────────────┴──────────────────────────────┘"
+		;;
+	tomorrow )
+		curl -s "wttr.in/$location?uQTF2" | sed -n '/┌─────────────┐/,/└─────────────┘/p' | tail -n 9
+		echo "└──────────────────────────────┴──────────────────────────────┴──────────────────────────────┴──────────────────────────────┘"
+		;;
+	forecast ) curl -s "wttr.in/$location?uQTF3" | sed -n '/┌─────────────┐/,/└─────────────┘/p' ;;
+	* ) curl -s "wttr.in/$location?uQTF" | head -n 6 | tail -n +2 ;;
+esac
+
+exit 0
