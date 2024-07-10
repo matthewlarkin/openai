@@ -2,7 +2,12 @@
 
 ./deps jq
 
+# expects variables: POSTMARK_API_TOKEN, 
+
 # getopts for sending email via postmark, -T for to, -S for subject, -B for body, -c for cc, -a for attachment, -b for bcc, -f for from, -n for from name, -r for reply to, -B for batch file
+
+# set default from to BARE_EMAIL_FROM
+FROM=$BARE_EMAIL_FROM
 
 while getopts ":T:S:B:c:a:b:F:n:r:B:" opt; do
   case $opt in
@@ -15,17 +20,17 @@ while getopts ":T:S:B:c:a:b:F:n:r:B:" opt; do
 	F) FROM=$OPTARG ;;
 	n) FROM_NAME=$OPTARG ;;
 	r) REPLY_TO=$OPTARG ;;
-	B) BATCH_FILE=$OPTARG ;;
+	m) multi=$OPTARG ;;
 	\?) echo "Invalid option: -$OPTARG" >&2 ;;
   esac
 done
 
-if [[ -n "$BATCH_FILE" ]]; then
+if [[ -n "$multi" ]]; then
 	# Batch mode
 	JSON_PAYLOAD='{"Messages":['
 	while IFS=, read -r to subject body; do
 		JSON_PAYLOAD+='{"From":"'$FROM'","To":"'$to'","Subject":"'$subject'","TextBody":"'$body'"},'
-	done < "$BATCH_FILE"
+	done < "$multi"
 	JSON_PAYLOAD=${JSON_PAYLOAD%,}
 	JSON_PAYLOAD+=']}'
 	curl -X POST "https://api.postmarkapp.com/email/batch" \
