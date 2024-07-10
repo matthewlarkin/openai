@@ -1,0 +1,61 @@
+#!/bin/bash
+
+./deps magick
+
+command="$1" && shift;
+
+case "$command" in
+
+	crop )
+	
+		image="$1"
+		aspect_ratio="${2:-3:2}"
+		focal_orientation="${3:-center}"
+		overwrite_mode="$4"
+
+		# Validate aspect ratio format (e.g., 16:9)
+		if ! [[ $aspect_ratio =~ ^[0-9]+:[0-9]+$ ]]; then
+			echo "Aspect ratio must be in the format W:H (e.g., 16:9)"
+			exit 1
+		fi
+
+		# Validate focal orientation
+		case $focal_orientation in
+			north|south|east|west|center|northwest|northeast|southwest|southeast) ;;
+			*) echo "Focal orientation must be one of: north, south, east, west, center, northwest, northeast, southwest, southeast" && exit 1 ;;
+		esac
+
+		# Generate a semantic file name
+		output_filename="${image%.*}_${aspect_ratio//:/x}_${focal_orientation}.${image##*.}"
+
+		# Check if file exists and overwrite mode is not set to "overwrite"
+		[ -f "$output_filename" ] && [ "$overwrite_mode" != "overwrite" ] && exit 0
+
+		# Determine new dimensions and crop position based on aspect ratio and focal orientation
+		case $focal_orientation in
+			northwest) gravity="NorthWest" ;;
+			north) gravity="North" ;;
+			northeast) gravity="NorthEast" ;;
+			west) gravity="West" ;;
+			center) gravity="Center" ;;
+			east) gravity="East" ;;
+			southwest) gravity="SouthWest" ;;
+			south) gravity="South" ;;
+			southeast) gravity="SouthEast" ;;
+		esac
+
+		# Crop image using ImageMagick's convert tool
+		magick "$image" -gravity "$gravity" -crop "$aspect_ratio" +repage "$output_filename" && echo "$output_filename" && exit 0 || echo "Failed to process $image" && exit 1;
+
+		;; # pending
+
+	blur ) ;; # pending
+	convert ) ;; # pending
+	geo ) ;; # pending
+	describe ) ;; # pending
+	resize ) ;; # pending
+	rotate ) ;; # pending
+	thumbnail ) ;; # pending
+	* ) echo "Invalid command: $command" && exit 1 ;;
+
+esac
