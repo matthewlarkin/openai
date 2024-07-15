@@ -145,7 +145,7 @@ case "$1" in
 		response_format='json'
 		temperature=0
 		timestamp_granularities='segment'
-		file="$1"
+		file="$1" && shift
 
 		while [[ "$#" -gt 0 ]]; do
 			case $1 in
@@ -155,7 +155,6 @@ case "$1" in
 				--response_format) response_format="$2"; shift ;;
 				--temperature) temperature="$2"; shift ;;
 				--timestamp_granularities) timestamp_granularities="$2"; shift ;;
-				--file) file="$2"; shift ;;
 				*) echo "Invalid option: $1" >&2 && exit 1 ;;
 			esac
 			shift
