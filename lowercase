@@ -1,3 +1,11 @@
 #!/usr/bin/env bash
 
-echo "$1" | tr '[:upper:]' '[:lower:]'
+# Check if there is an argument provided
+if [ $# -gt 0 ]; then
+	echo "$1" | tr '[:upper:]' '[:lower:]'
+else
+	# Read from stdin
+	while IFS= read -r line; do
+		echo "$line" | tr '[:upper:]' '[:lower:]'
+	done
+fi
