@@ -8,13 +8,13 @@ Bare is a collection of bash scripts designed to simplify workflow management. T
 ## OpenAI ##
 
 ./bare openai chat "Hello there, how are you?"
-# >> Hello! How can I assist you today?
+# Hello! How can I assist you today?
 
 ./bare openai chat "What is the capital of TN?" | ./bare openai voice
-# >> ./.downloads/QLJ58WmzrFArulMJ6fme9faqolCx96Mu.mp3 (audio file answering the question)
+# ./.downloads/QLJ58WmzrFArulMJ6fme9faqolCx96Mu.mp3 (audio file answering the question)
 
 ./bare openai transcribe ./.downloads/QLJ58WmzrFArulMJ6fme9faqolCx96Mu.mp3
-# >> The capital of TN is Nashville.
+# The capital of TN is Nashville.
 
 
 # - - - - -
@@ -23,7 +23,7 @@ Bare is a collection of bash scripts designed to simplify workflow management. T
 ## Codec ##
 
 ./bare codec url.encode "Hello! How can I assist you today?"
-# >> Hello%21%20How%20can%20I%20assist%20you%20today%3F%0A
+# Hello%21%20How%20can%20I%20assist%20you%20today%3F%0A
 
 
 # - - - - -
