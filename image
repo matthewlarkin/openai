@@ -47,15 +47,82 @@ case "$command" in
 		# Crop image using ImageMagick's convert tool
 		magick "$image" -gravity "$gravity" -crop "$aspect_ratio" +repage "$output_filename" && echo "$output_filename" && exit 0 || echo "Failed to process $image" && exit 1;
 
-		;; # pending
+		;;
 
-	blur ) ;; # pending
-	convert ) ;; # pending
+
+	convert )
+
+		# cases: png-to-jpg, heic-to-jpg, jpg-to-webp, png-to-webp, heic-to-webp
+
+		case "$1" in
+			png-to-jpg | png-to-webp | heic-to-jpg | heic-to-webp | jpg-to-webp )
+				if [ -z "$2" ]; then
+					image=$(cat)
+				else
+					image="$2"
+				fi
+				output_extension=${1#*-to-}
+				output_filename="${image%.*}.$output_extension"
+				magick "$image" "$output_filename" && echo "$output_filename" && exit 0 || echo "Failed to process $image" && exit 1
+				;;
+			*)
+				echo "Invalid conversion: $1" && exit 1
+				;;
+		esac
+	
+		;;
+
+
+	resize )
+		
+		# Simple usage message
+		usage() {
+		  echo "Usage: $0 <image_path> <height>"
+		  exit 1
+		}
+		
+		# Check for correct number of arguments
+		[ "$#" -eq 2 ] || usage
+		
+		image="$1"
+		height="$2"
+		output_filename="${image%.*}_resized.${image##*.}"
+		
+		# Exit if input file doesn't exist
+		[ -f "$image" ] || { echo "Error: File '$image' not found."; exit 1; }
+		
+		# Extract the file extension
+		extension="${image##*.}"
+		
+		# Extract the base name without the extension
+		base_name="${image%.*}"
+		
+		# Create a more semantic output filename that includes the target height
+		output_filename="${base_name}_${height}px.${extension}"
+		
+		# Resize image and handle success or failure
+		if magick "$image" -resize x"$height" "$output_filename"; then
+		  echo "$output_filename"
+		else
+		  echo "Failed to process $image"
+		  exit 1
+		fi
+
+		;;
+
+
+	thumbnail )
+
+		image="$1"
+		./bare image resize "$image" 300
+
+		;;
+
 	geo ) ;; # pending
 	describe ) ;; # pending
-	resize ) ;; # pending
 	rotate ) ;; # pending
-	thumbnail ) ;; # pending
+	blur ) ;; # pending
+
 	* ) echo "Invalid command: $command" && exit 1 ;;
 
 esac
