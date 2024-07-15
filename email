@@ -9,19 +9,19 @@
 # set default from to BARE_EMAIL_FROM
 FROM=$BARE_EMAIL_FROM
 
-while getopts ":T:S:B:c:a:b:F:n:r:B:" opt; do
-  case $opt in
-	T) TO=$OPTARG ;;
-	S) SUBJECT=$OPTARG ;;
-	B) BODY=$OPTARG ;;
-	c) CC=$OPTARG ;;
-	a) ATTACHMENT=$OPTARG ;;
-	b) BCC=$OPTARG ;;
-	F) FROM=$OPTARG ;;
-	n) FROM_NAME=$OPTARG ;;
-	r) REPLY_TO=$OPTARG ;;
-	m) multi=$OPTARG ;;
-	\?) echo "Invalid option: -$OPTARG" >&2 ;;
+while [[ $# -gt 0 ]]; do
+  case $1 in
+	--to) TO="$2" && shift 2 ;;
+	--subject) SUBJECT="$2" && shift 2 ;;
+	--body) BODY="$2" && shift 2 ;;
+	--cc) CC="$2" && shift 2 ;;
+	--attachment) ATTACHMENT="$2" && shift 2 ;;
+	--bcc) BCC="$2" && shift 2 ;;
+	--from) FROM="$2" && shift 2 ;;
+	--from-name) FROM_NAME="$2" && shift 2 ;;
+	--reply-to) REPLY_TO="$2" && shift 2 ;;
+	--multi) multi="$2" && shift 2 ;;
+	*) echo "Invalid option: $1" && exit 1 ;;
   esac
 done
 
@@ -33,11 +33,7 @@ if [[ -n "$multi" ]]; then
 	done < "$multi"
 	JSON_PAYLOAD=${JSON_PAYLOAD%,}
 	JSON_PAYLOAD+=']}'
-	curl -X POST "https://api.postmarkapp.com/email/batch" \
-		-H "Accept: application/json" \
-		-H "Content-Type: application/json" \
-		-H "X-Postmark-Server-Token: $POSTMARK_API_TOKEN" \
-		-d "$JSON_PAYLOAD"
+	./bare request "https://api.postmarkapp.com/batch" --json "$JSON_PAYLOAD" --headers "X-Postmark-Server-Token: $POSTMARK_API_TOKEN"
 else
 	# Single email mode
 	[[ -z "$TO" ]] && echo "No recipient specified, use -T to specify a recipient" && exit 1
@@ -64,13 +60,8 @@ else
 		}'
 	)
 
-	response=$(curl -X POST \
-		https://api.postmarkapp.com/email \
-		-H "Accept: application/json" \
-		-H "Content-Type: application/json" \
-		-H "X-Postmark-Server-Token: $POSTMARK_API_TOKEN" \
-		-d "$payload"
-	)
+	./bare request https://api.postmarkapp.com/email \
+		--json "$payload" \
+		--header "X-Postmark-Server-Token: $POSTMARK_API_TOKEN" | jq -r '.MessageID'
 
-	echo "$response"
 fi
