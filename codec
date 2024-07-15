@@ -4,32 +4,18 @@
 
 scope="$1" && shift
 
-# Initialize a variable to indicate whether input should be read from a file
 read_from_file=false
 input=""
 
-# Check for the --file option
-if [[ "$1" == "--file" ]]; then
-    read_from_file=true
-    shift # Remove --file from arguments
-fi
+[[ "$1" == "--file" ]] && read_from_file=true && shift
 
-# Read input based on the presence of the --file option
 if $read_from_file; then
-    # Ensure a filename is provided
-    if [[ -z "$1" ]]; then
-        echo "No file specified."
-        exit 1
-    fi
-    # Read input from the specified file
+    [[ -z "$1" ]] && echo "No file specified." && exit 1
     input="$(cat "$1")"
 else
-    # Check if data is being piped into stdin
     if [ -t 0 ]; then
-        # No data piped in, use the first argument as input
         input="$1"
     else
-        # Data is being piped in, read stdin into a variable
         input="$(cat)"
     fi
 fi
@@ -43,7 +29,6 @@ case $scope in
 
 	form-url.encode )
 		if [[ -n "$input" ]]; then
-			# Convert JSON to form-url-encoded string
 			encoded=$(echo "$input" | jq -r 'to_entries | map("\(.key)=\(.value|@uri)") | join("&")')
 			echo "$encoded"
 		else
