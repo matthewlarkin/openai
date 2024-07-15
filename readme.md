@@ -25,6 +25,11 @@ Bare is a collection of bash scripts designed to simplify workflow management. T
 ./bare codec url.encode "Hello! How can I assist you today?"
 # Hello%21%20How%20can%20I%20assist%20you%20today%3F%0A
 
+./bare codec form-data.encode '{"user" : {"first_name" : "Matthew", "last_name" : "Larkin"}}'
+# user=%7B%22first_name%22%3A%22Matthew%22%2C%22last_name%22%3A%22Larkin%22%7D
+
+./bare codec form-data.decode 'user=%7B%22first_name%22%3A%22Matthew%22%2C%22last_name%22%3A%22Larkin%22%7D'
+
 
 # - - - - -
 
