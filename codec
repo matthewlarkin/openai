@@ -3,7 +3,36 @@
 ./deps jq xxd php awk perl
 
 scope="$1" && shift
-input="${1:-$(</dev/stdin)}"
+
+# Initialize a variable to indicate whether input should be read from a file
+read_from_file=false
+input=""
+
+# Check for the --file option
+if [[ "$1" == "--file" ]]; then
+    read_from_file=true
+    shift # Remove --file from arguments
+fi
+
+# Read input based on the presence of the --file option
+if $read_from_file; then
+    # Ensure a filename is provided
+    if [[ -z "$1" ]]; then
+        echo "No file specified."
+        exit 1
+    fi
+    # Read input from the specified file
+    input="$(cat "$1")"
+else
+    # Check if data is being piped into stdin
+    if [ -t 0 ]; then
+        # No data piped in, use the first argument as input
+        input="$1"
+    else
+        # Data is being piped in, read stdin into a variable
+        input="$(cat)"
+    fi
+fi
 
 case $scope in
 
@@ -13,38 +42,19 @@ case $scope in
 	url.decode ) echo "$input" | perl -pe 's/%([0-9a-f]{2})/sprintf("%s", pack("H2",$1))/eig' ;;
 
 	form-url.encode )
-		input="$1"
-		# Check if input starts with '@' indicating a file
-		if [[ $input == @* ]]; then
-			# Remove '@' at the beginning to get the file path
-			file_path="${input:1}"
-			# Read content from the file
-			json_data=$(cat "$file_path")
+		if [[ -n "$input" ]]; then
+			# Convert JSON to form-url-encoded string
+			encoded=$(echo "$input" | jq -r 'to_entries | map("\(.key)=\(.value|@uri)") | join("&")')
+			echo "$encoded"
 		else
-			json_data="$input"
+			echo "No input provided."
 		fi
-		echo "$json_data" | jq -r '@uri'
 		;;
 
 	form-url.decode )
-		input="$1"
-	
-		# Check if input starts with '@' indicating a file
-		if [[ $input == @* ]]; then
-			# Remove '@' at the beginning to get the file path
-			file_path="${input:1}"
-			# Read content from the file
-			url_encoded_data=$(cat "$file_path")
-		else
-			url_encoded_data="$input"
-		fi
-	
-		# URL-decode the input data
-		decoded_data=$(printf '%b' "${url_encoded_data//%/\\x}")
-	
-		# Output the decoded data
+		decoded_data=$(printf '%b' "${input//%/\\x}")
 		echo "$decoded_data" | jq .
-	;;
+		;;
 
 	base64.encode ) echo "$input" | jq -s -R -r @base64 ;;
 	base64.decode ) echo "$input" | perl -MMIME::Base64 -ne 'print decode_base64($_)' ;;
