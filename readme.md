@@ -16,14 +16,18 @@ Bare is a collection of bash scripts designed to simplify workflow management. T
 ./bare openai transcribe ./.downloads/QLJ58WmzrFArulMJ6fme9faqolCx96Mu.mp3
 # >> The capital of TN is Nashville.
 
+
 # - - - - -
+
 
 ## Codec ##
 
 ./bare codec url.encode "Hello! How can I assist you today?"
 # >> Hello%21%20How%20can%20I%20assist%20you%20today%3F%0A
 
+
 # - - - - -
+
 
 ## Email ##
 
