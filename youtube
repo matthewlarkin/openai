@@ -1,0 +1,116 @@
+#!/usr/bin/env bash
+
+./deps yt-dlp
+
+command="$1"
+url="$2"
+quality="720" # Default quality for videos
+format="mp4" # Default format for videos
+thumbnail_quality="0" # Default quality for thumbnails (0 for default hd)
+
+# Ensure .downloads directory exists
+mkdir -p ./.downloads
+
+# Function to download video
+download_video() {
+	random_filename=$(./bare random string 32).$format
+	output_path="./.downloads/$random_filename"
+	if [[ "$format" == "mp3" ]]; then
+		yt-dlp --no-part -x --audio-format mp3 -o "$output_path" "$url" 2>/dev/null
+	else
+		yt-dlp --no-part -S "height:${quality}" -o "$output_path" "$url" 2>/dev/null
+	fi
+	if [ -f "$output_path" ]; then
+		echo "$output_path"
+	else
+		echo "Error downloading video" && exit 1
+	fi
+}
+
+# Function to extract YouTube video ID
+extract_id() {
+	echo "$url" | awk -F'[?&/=]' '{
+		for(i=1;i<=NF;i++) {
+			if ($i == "v") {
+				print $(i+1);
+				exit
+			}
+			if ($i == "embed" || $i == "shorts" || $i == "youtu.be") {
+				print $(i+1);
+				exit
+			}
+		}
+	}'
+}
+
+
+# Function to download thumbnail
+download_thumbnail() {
+	video_id=$(extract_id)
+	case "$thumbnail_quality" in
+		"md")
+			thumbnail_url="https://i.ytimg.com/vi/${video_id}/mqdefault.jpg"
+			;;
+		"max")
+			thumbnail_url="https://i.ytimg.com/vi/${video_id}/maxresdefault.jpg"
+			;;
+		*)
+			thumbnail_url="https://i.ytimg.com/vi/${video_id}/hqdefault.jpg"
+			;;
+	esac
+	random_filename=$(./bare random string 32).jpg
+	output_path="./.downloads/$random_filename"
+	curl -sL "$thumbnail_url" -o "$output_path"
+	echo "$output_path"
+}
+
+case "$command" in
+	download)
+		shift 2 # Remove the first two arguments
+		while [[ "$#" -gt 0 ]]; do
+			case "$1" in
+				--quality)
+					quality="$2"
+					shift 2
+					;;
+				--mp3)
+					format="mp3"
+					shift
+					;;
+				*)
+					echo "Unknown option: $1" >&2
+					exit 1
+					;;
+			esac
+		done
+		download_video
+		;;
+	id)
+		extract_id
+		;;
+	thumbnail)
+		shift 2 # Remove the first two arguments
+		while [[ "$#" -gt 0 ]]; do
+			case "$1" in
+				--md)
+					thumbnail_quality="md"
+					shift
+					;;
+				--max)
+					thumbnail_quality="max"
+					shift
+					;;
+				*)
+					echo "Unknown option: $1" >&2
+					exit 1
+					;;
+			esac
+		done
+		download_thumbnail
+		;;
+	*)
+		echo "Unknown command: $command" >&2
+		exit 1
+		;;
+esac
+
