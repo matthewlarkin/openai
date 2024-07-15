@@ -37,8 +37,21 @@ case $scope in
 		;;
 
 	form-url.decode )
-		decoded_data=$(printf '%b' "${input//%/\\x}")
-		echo "$decoded_data" | jq .
+		declare -A params=()
+	
+		IFS='&' read -ra key_value_pairs <<< "$input"
+	
+		for key_value_pair in "${key_value_pairs[@]}"; do
+			IFS='=' read -r key value <<< "$key_value_pair"
+	
+			decoded_key=$(printf '%b' "${key//%/\\x}")
+			decoded_value=$(printf '%b' "${value//%/\\x}")
+	
+			params["$decoded_key"]="$decoded_value"
+		done
+	
+		json_object=$(jq -n --argjson args "$(jq -n "${params[@]}")" '$args')
+		echo "$json_object"
 		;;
 
 	base64.encode ) echo "$input" | jq -s -R -r @base64 ;;
