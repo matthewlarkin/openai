@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+
+method="$1" && shift
+scope="$1" && shift
+
