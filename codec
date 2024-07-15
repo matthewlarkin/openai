@@ -12,6 +12,40 @@ case $scope in
 	url.encode ) echo "$input" | jq -s -R -r @uri ;;
 	url.decode ) echo "$input" | perl -pe 's/%([0-9a-f]{2})/sprintf("%s", pack("H2",$1))/eig' ;;
 
+	form-url.encode )
+		input="$1"
+		# Check if input starts with '@' indicating a file
+		if [[ $input == @* ]]; then
+			# Remove '@' at the beginning to get the file path
+			file_path="${input:1}"
+			# Read content from the file
+			json_data=$(cat "$file_path")
+		else
+			json_data="$input"
+		fi
+		echo "$json_data" | jq -r '@uri'
+		;;
+
+	form-url.decode )
+		input="$1"
+	
+		# Check if input starts with '@' indicating a file
+		if [[ $input == @* ]]; then
+			# Remove '@' at the beginning to get the file path
+			file_path="${input:1}"
+			# Read content from the file
+			url_encoded_data=$(cat "$file_path")
+		else
+			url_encoded_data="$input"
+		fi
+	
+		# URL-decode the input data
+		decoded_data=$(printf '%b' "${url_encoded_data//%/\\x}")
+	
+		# Output the decoded data
+		echo "$decoded_data" | jq .
+	;;
+
 	base64.encode ) echo "$input" | jq -s -R -r @base64 ;;
 	base64.decode ) echo "$input" | perl -MMIME::Base64 -ne 'print decode_base64($_)' ;;
 
