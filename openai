@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 
-if [ -z "$OPENAI_API_KEY" ]; then
-	echo "OPENAI_API_KEY is not defined"
-	exit 1
-fi
+[ -z "$OPENAI_API_KEY" ] && {
+	echo "OPENAI_API_KEY is not defined";
+	exit 1;
+}
 
 ./deps curl jq openssl
 
@@ -11,27 +11,34 @@ case "$1" in
 
 	"chat" )
 
+		shift
 		model=${OPENAI_DEFAULT_MODEL:-'gpt-3.5-turbo'}
-		system_prompt='You are a helpful assistant, answering succintly without going into lots of detail, unless you are asked to. Do not make things up if you do not know the answer.'
+		system_prompt='You are a helpful assistant, answering succintly without going into lots of detail, unless you are asked to. Do not make things up if you do not know the answer. And write like one would speak (do not use abbreviations, wherever possible).'
 		user_messages=()
 		assistant_messages=()
 
-		# If $2 is set, add it as the first user message
-		if [ -n "$2" ]; then
-			user_messages+=("$2")
+		# If $1 is set, add it as the first user message
+		if [ -n "$1" ]; then
+			user_messages+=("$1")
+		else
+			# Read from stdin
+			while IFS= read -r line; do
+				user_messages+=("$line")
+				break  # Exit after the first line of input
+			done < /dev/stdin
 		fi
 
 		shift
-		while getopts "m:s:u:a:M:" opt; do
-			case $opt in
-				m ) model=$OPTARG ;;
-				s ) system_prompt=$OPTARG ;;
-				u ) user_messages+=("$OPTARG") ;;
-				a ) assistant_messages+=("$OPTARG") ;;
-				M ) messages=$(echo "$OPTARG" | jq -c .) ;;
-				\? ) echo "Invalid option: $OPTARG" >&2 && exit 1 ;;
-				: ) echo "Option -$OPTARG requires an argument." >&2 && exit 1 ;;
+		while [[ "$#" -gt 0 ]]; do
+			case $1 in
+				--model) model="$2"; shift ;;
+				--system_prompt) system_prompt="$2"; shift ;;
+				--user_messages) user_messages+=("$2"); shift ;;
+				--assistant_messages) assistant_messages+=("$2"); shift ;;
+				--messages) messages=$(echo "$2" | jq -c .); shift ;;
+				*) echo "Invalid option: $1" >&2 && exit 1 ;;
 			esac
+			shift
 		done
 
 		if [ -z "$messages" ]; then
@@ -69,21 +76,24 @@ case "$1" in
 
 
 	"voice" )
-	
+		
 		shift
 		model='tts-1'
 		voice='alloy'
 		response_format='mp3'
 		speed=1
-
-		# If $1 is set, use it as the input
+	
+		# Check if $1 is provided
 		if [ -n "$1" ]; then
 			input="$1"
+		elif [ -t 0 ]; then  # Check if stdin is connected to a terminal
+			echo "Error: No input provided. Please provide input as an argument or through stdin." >&2
+			exit 1
 		else
-			input='Today is a wonderful day to build something people love!'
+			read -r input
 		fi
 
-		output="$(openssl rand -hex 16).mp3"
+		output="$(./bare random string 32).mp3"
 
 		while getopts "m:i:v:f:s:o:" opt; do
 			case $opt in
@@ -108,15 +118,15 @@ case "$1" in
 				"response_format": "'"$response_format"'",
 				"speed": "'"$speed"'"
 			}' \
-			--output "downloads/$output"
+			--output "./.downloads/$output"
 
 		# Check if the file was created and is not empty
-		if [ ! -s "downloads/$output" ]; then
+		if [ ! -s "./.downloads/$output" ]; then
 			echo "Error: File $output was not created or is empty" >&2
 			exit 1
 		fi
 
-		echo "downloads/$output"
+		echo "./.downloads/$output"
 
 		;;
 	"listen" )
@@ -137,25 +147,42 @@ case "$1" in
 		timestamp_granularities='segment'
 		file="$1"
 
-		while getopts "m:l:p:f:t:g:i:" opt; do
-			case $opt in
-				m ) model=$OPTARG ;;
-				l ) language=$OPTARG ;;
-				p ) prompt=$OPTARG ;;
-				f ) response_format=$OPTARG ;;
-				t ) temperature=$OPTARG ;;
-				g ) timestamp_granularities=$OPTARG ;;
-				i ) file=$OPTARG ;;
-				\? ) echo "Invalid option: $OPTARG" >&2 && exit 1 ;;
-				: ) echo "Option -$OPTARG requires an argument." >&2 && exit 1 ;;
+		while [[ "$#" -gt 0 ]]; do
+			case $1 in
+				--model) model="$2"; shift ;;
+				--language) language="$2"; shift ;;
+				--prompt) prompt="$2"; shift ;;
+				--response_format) response_format="$2"; shift ;;
+				--temperature) temperature="$2"; shift ;;
+				--timestamp_granularities) timestamp_granularities="$2"; shift ;;
+				--file) file="$2"; shift ;;
+				*) echo "Invalid option: $1" >&2 && exit 1 ;;
 			esac
+			shift
 		done
 
 		if [ -z "$file" ]; then
-			echo "Error: No file provided" >&2
+			read -r file
+			if [ -z "$file" ]; then
+				echo "Error: No file path provided" >&2
+				exit 1
+			fi
+		fi
+		
+		if [ ! -f "$file" ]; then
+			echo "Error: File '$file' not found" >&2
 			exit 1
 		fi
 
+		# Check if the file size is greater than 20MB (20 * 1024 * 1024 bytes)
+		file_size=$(stat -f%z "$file")
+		max_size=$((20 * 1024 * 1024))
+		if [ "$file_size" -gt "$max_size" ]; then
+			echo "Warning: Files larger than 20MB are not supported. The transcription may fail." >&2
+			# Optionally, exit or continue based on your requirements
+			# exit 1
+		fi
+		
 		response=$(curl -s https://api.openai.com/v1/audio/transcriptions \
 			-H "Authorization: Bearer $OPENAI_API_KEY" \
 			-H "Content-Type: multipart/form-data" \
@@ -166,7 +193,7 @@ case "$1" in
 			-F response_format="$response_format" \
 			-F temperature="$temperature" \
 			-F timestamp_granularities="$timestamp_granularities")
-
+		
 		# Extract the text property from the JSON response and print it
 		echo "$response" | jq -r '.text'
 		;;
