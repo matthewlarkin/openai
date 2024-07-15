@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+
+./deps curl
+
+url="$1" && shift
+
+declare -a curl_cmd=("curl" "-s" "-L" "$url")
+
+# Loop through all arguments
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    
+    --json) curl_cmd+=("--json" "$2") && shift 2 ;;
+    --data) curl_cmd+=("--data" "$2") && shift 2 ;;
+    --file) curl_cmd+=("--data" "@$2") && shift 2 ;;
+
+    --header) curl_cmd+=("-H" "$2") && shift 2 ;;
+
+    --token) curl_cmd+=("-H" "Authorization: Bearer $2") && shift 2 ;;
+    --auth) curl_cmd+=("--user" "$2") && shift 2 ;;
+
+    *) echo "Unknown option: $1" && exit 1 ;;
+
+  esac
+done
+
+"${curl_cmd[@]}"
