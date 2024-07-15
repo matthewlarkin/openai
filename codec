@@ -27,7 +27,7 @@ case $scope in
 	url.encode ) echo "$input" | jq -s -R -r @uri ;;
 	url.decode ) echo "$input" | perl -pe 's/%([0-9a-f]{2})/sprintf("%s", pack("H2",$1))/eig' ;;
 
-	form-url.encode )
+	form-data.encode )
 		if [[ -n "$input" ]]; then
 			encoded=$(echo "$input" | jq -r 'to_entries | map("\(.key)=\(.value|@uri)") | join("&")')
 			echo "$encoded"
@@ -36,7 +36,7 @@ case $scope in
 		fi
 		;;
 
-	form-url.decode )
+	form-data.decode )
 		declare -A params=()
 	
 		IFS='&' read -ra key_value_pairs <<< "$input"
