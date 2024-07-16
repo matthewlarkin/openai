@@ -2,9 +2,9 @@
 
 # Check if the CSV file is provided
 script_to_call="$1"
-csv_file="$2"
+csv_file=".var/documents/$2"
 
-if [ ! -f ".var/documents/$csv_file" ]; then
+if [ ! -f "$csv_file" ]; then
 	echo "Error: $csv_file file not found"
 	exit 1
 fi
