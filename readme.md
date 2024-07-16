@@ -41,11 +41,13 @@ Bare is a collection of bash scripts designed to simplify workflow management. T
 # >> 3b78c56e-adf6-447d-b30b-f8d78ce12e20 (Postmark Email ID)
 ```
 
-## .env
-Set your `.etc/.barerc` file, and bare will source the exported variables for use through the system.
+## Run Commands
+Set your `.etc/.barerc` file, and bare will source it for use through the system.
 
 ```env
 export name="Matthew"
+export STRIPE_PUBLIC_KEY="xxxxx"
+export STRIPE_SECRET_KEY="xxxxx"
 export OPENAI_API_KEY="xxxxx-xxxx-xxxxx"
 export POSTMARK_API_TOKEN="xxxxx-xxxx-xxxxx"
 export BARE_EMAIL_FROM="matthew@groveos.com"
