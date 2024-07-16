@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+
+# Check if the CSV file is provided
+script_to_call="$1"
+csv_file="$2"
+
+if [ ! -f ".var/documents/$csv_file" ]; then
+	echo "Error: $csv_file file not found"
+	exit 1
+fi
+
+shift 2
+
+# Check if the last line of the CSV file is empty, and if not, add an empty line
+if [ -n "$(tail -c 1 "$csv_file")" ]; then
+	echo "" >> "$csv_file"
+fi
+
+# Function to clean and remove unnecessary quotes from values
+clean_value() {
+	local value="$1"
+	# Remove surrounding quotes if they exist
+	if [[ "$value" =~ ^\"(.*)\"$ ]]; then
+		value="${BASH_REMATCH[1]}"
+	fi
+	# Replace escaped quotes with a single quote
+	value="${value//\"\"/\"}"
+	echo "$value"
+}
+
+# Read the header line and convert it into an array of column names
+IFS=, read -r -a column_names < <(sed 's/"//g' "$csv_file")
+
+# Process the file starting from the second line
+tail -n +2 "$csv_file" | while IFS=, read -r -a line_values; do
+	# Skip empty lines
+	if [ -z "${line_values[0]}" ]; then
+		continue
+	fi
+
+	# Dynamically create variables for each column
+	for i in "${!column_names[@]}"; do
+		value="${line_values[$i]}"
+		clean_value=$(clean_value "$value")
+		declare "${column_names[$i]}"="$clean_value"
+	done
+
+	# Prepare the arguments for the script based on the column names
+	args=()
+	for column in "${column_names[@]}"; do
+		args+=("${!column}")
+	done
+
+	# Call the script with the dynamically determined arguments
+	./bare interpret "$script_to_call" "${args[@]}"
+done
