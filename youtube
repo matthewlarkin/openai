@@ -16,9 +16,9 @@ download_video() {
 	random_filename=$(./bare random string 32).$format
 	output_path=".var/downloads/$random_filename"
 	if [[ "$format" == "mp3" ]]; then
-		yt-dlp --no-part -x --audio-format mp3 -o "$output_path" "$url" 2>/dev/null
+		yt-dlp --no-part -x --audio-format mp3 -o "$output_path" "$url" &> /dev/null
 	else
-		yt-dlp --no-part -S "height:${quality}" -o "$output_path" "$url" 2>/dev/null
+		yt-dlp --no-part -S "height:${quality}" -o "$output_path" "$url" &> /dev/null
 	fi
 	if [ -f "$output_path" ]; then
 		echo "$output_path"
