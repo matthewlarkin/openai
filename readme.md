@@ -42,7 +42,7 @@ Bare is a collection of bash scripts designed to simplify workflow management. T
 ```
 
 ## .env
-Set your `.env` file at the root of your `bare.sh` directory, and bare will source the exported variables for use through the system.
+Set your `.etc/.barerc` file, and bare will source the exported variables for use through the system.
 
 ```env
 export name="Matthew"
