@@ -7,16 +7,16 @@
 }
 
 # Ensure script name does not contain path traversal characters
-script_name=$(basename "$1")
+script_name=$(basename "$1") && shift
 
-# Check if the script file exists in ./scripts/<script-name>.bare
-[ ! -f "./scripts/${script_name}.bare" ] && {
-	echo "Error: script file ./scripts/${script_name}.bare not found"
+# Check if the script file exists in .var/scripts/<script-name>.bare
+[ ! -f ".var/scripts/${script_name}.bare" ] && {
+	echo "Error: script file .var/scripts/${script_name}.bare not found"
 	exit 1
 }
 
 # Prepend shebang and PATH export, then execute the script
 {
 	printf '#!/usr/bin/env bash\nexport PATH="$PATH:."\n'
-	cat "./scripts/${script_name}.bare"
+	cat ".var/scripts/${script_name}.bare"
 } | bash -s -- "$@"
