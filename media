@@ -20,7 +20,7 @@ temp_file=$(mktemp)
 
 # Create a black video clip of a certain duration
 black_clip=$(mktemp -t tmp.XXXXXXXXXX).mp4
-ffmpeg -loop 1 -i "$BARE_DIR/.assets/black.png" -c:v libx264 -t $((delay/1000)) -pix_fmt yuv420p "$black_clip"
+ffmpeg -loop 1 -i "$BARE_DIR/.etc/assets/black.png" -c:v libx264 -t $((delay/1000)) -pix_fmt yuv420p "$black_clip"
 
 for file in "${input_files[@]}"; do
 	# Convert relative paths to absolute paths

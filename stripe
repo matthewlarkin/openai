@@ -1,5 +1,58 @@
 #!/usr/bin/env bash
 
-method="$1" && shift
-scope="$1" && shift
+[ -z "$STRIPE_SECRET_KEY" ] && {
+	echo "STRIPE_SECRET_KEY is not defined";
+	exit 1;
+}
 
+# Stripe API
+
+method="$1" && shift # create, list, update, archive
+scope="$1" && shift # customer(s), invoice(s), subscription(s), payments, product(s)
+
+# case in methods
+
+case "$method" in
+
+	create ) 
+
+		case "$scope" in
+
+			customer | customers )
+
+				response=$(./bare request https://api.stripe.com/v1/customers \
+					--auth "$STRIPE_SECRET_KEY:" \
+					--
+				)
+
+				;;
+
+			invoice | invoices )
+
+				;;
+
+			subscription | subscriptions )
+
+				;;
+
+			payments )
+
+				;;
+
+			product | products )
+
+				;;
+
+			* ) echo "Invalid scope: $scope" >&2 && exit 1 ;;
+
+		esac
+
+		;;
+
+	list )
+
+		;;
+
+	* ) echo "Invalid method: $method" >&2 && exit 1 ;;
+
+esac

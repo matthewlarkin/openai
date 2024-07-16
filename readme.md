@@ -11,9 +11,9 @@ Bare is a collection of bash scripts designed to simplify workflow management. T
 # Hello! How can I assist you today?
 
 ./bare openai chat "What is the capital of TN?" | ./bare openai voice
-# ./.downloads/QLJ58WmzrFArulMJ6fme9faqolCx96Mu.mp3 (audio file answering the question)
+# ./var/downloads/QLJ58WmzrFArulMJ6fme9faqolCx96Mu.mp3 (audio file answering the question)
 
-./bare openai transcribe ./.downloads/QLJ58WmzrFArulMJ6fme9faqolCx96Mu.mp3
+./bare openai transcribe ./var/downloads/QLJ58WmzrFArulMJ6fme9faqolCx96Mu.mp3
 # The capital of TN is Nashville.
 
 

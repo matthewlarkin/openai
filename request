@@ -6,21 +6,30 @@ url="$1" && shift
 
 declare -a curl_cmd=("curl" "-s" "-L" "$url")
 
+# Function to split --data into multiple -F fields
+split_data_into_form_fields() {
+  local data=$1
+  local IFS='&'
+  local key_value_pairs=("$data")
+  
+  for pair in "${key_value_pairs[@]}"; do
+	IFS='=' read -r key value <<< "$pair"
+	curl_cmd+=("-F" "$key=$value")
+  done
+}
+
 # Loop through all arguments
 while [ "$#" -gt 0 ]; do
   case "$1" in
     
-    --json) curl_cmd+=("--json" "$2") && shift 2 ;;
-    --data) curl_cmd+=("--data" "$2") && shift 2 ;;
-    --file) curl_cmd+=("--data" "@$2") && shift 2 ;;
-
-    --header) curl_cmd+=("-H" "$2") && shift 2 ;;
-
-    --token) curl_cmd+=("-H" "Authorization: Bearer $2") && shift 2 ;;
-    --auth) curl_cmd+=("--user" "$2") && shift 2 ;;
-
-    *) echo "Unknown option: $1" && exit 1 ;;
-
+	--json) curl_cmd+=("--json" "$2") && shift 2 ;;
+	--data) split_data_into_form_fields "$2" && shift 2 ;;
+	--file) curl_cmd+=("-F" "@$2") && shift 2 ;;
+	--header) curl_cmd+=("-H" "$2") && shift 2 ;;
+	--token) curl_cmd+=("-H" "Authorization: Bearer $2") && shift 2 ;;
+	--auth) curl_cmd+=("--user" "$2") && shift 2 ;;
+	*) echo "Unknown option: $1" && exit 1 ;;
+    
   esac
 done
 

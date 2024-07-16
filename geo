@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 ./deps curl jq
-touch .cache/geo.txt
+touch .var/cache/geo.txt
 
 format_location() {
 	if [[ -z $1 ]]; then
@@ -20,9 +20,9 @@ get_coordinates() {
 	local coordinates
 
 	# Check if the location is in the geo.txt file
-	if grep -q "^$location " .cache/geo.txt; then
+	if grep -q "^$location " .var/cache/geo.txt; then
 		# If the location is in the file, get the coordinates from the file
-		coordinates=$(grep "^$location " .cache/geo.txt | cut -d ' ' -f 2)
+		coordinates=$(grep "^$location " .var/cache/geo.txt | cut -d ' ' -f 2)
 	else
 		# If the location is not in the file, fetch the coordinates from the API
 		if [[ $type == "city" ]]; then
@@ -32,7 +32,7 @@ get_coordinates() {
 		fi
 
 		# Add the location and coordinates to the geo.txt file
-		echo "$location $coordinates" >> .cache/geo.txt
+		echo "$location $coordinates" >> .var/cache/geo.txt
 	fi
 
 	# Format the coordinates to the requested number of decimal places

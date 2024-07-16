@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 
+
+
 # Source the .env file
-if [ -f .env ]; then
-	source .env
+if [ -f .etc/.env ]; then
+	source .etc/.env
 fi
 
 # Temporarily add ./ to PATH

@@ -118,15 +118,15 @@ case "$1" in
 				"response_format": "'"$response_format"'",
 				"speed": "'"$speed"'"
 			}' \
-			--output "./.downloads/$output"
+			--output "./var/downloads/$output"
 
 		# Check if the file was created and is not empty
-		if [ ! -s "./.downloads/$output" ]; then
+		if [ ! -s "./var/downloads/$output" ]; then
 			echo "Error: File $output was not created or is empty" >&2
 			exit 1
 		fi
 
-		echo "./.downloads/$output"
+		echo "./var/downloads/$output"
 
 		;;
 	"listen" )
