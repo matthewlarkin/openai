@@ -13,5 +13,3 @@ case "$2" in
 	forecast ) curl -s "wttr.in/$location?uQTF3" | sed -n '/┌─────────────┐/,/└─────────────┘/p' ;;
 	* ) curl -s "wttr.in/$location?uQTF" | head -n 5 ;;
 esac
-
-exit 0
