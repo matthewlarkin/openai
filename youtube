@@ -9,12 +9,12 @@ format="mp4" # Default format for videos
 thumbnail_quality="0" # Default quality for thumbnails (0 for default hd)
 
 # Ensure .downloads directory exists
-mkdir -p ./var/downloads
+mkdir -p .var/downloads
 
 # Function to download video
 download_video() {
 	random_filename=$(./bare random string 32).$format
-	output_path="./var/downloads/$random_filename"
+	output_path=".var/downloads/$random_filename"
 	if [[ "$format" == "mp3" ]]; then
 		yt-dlp --no-part -x --audio-format mp3 -o "$output_path" "$url" 2>/dev/null
 	else
@@ -59,7 +59,7 @@ download_thumbnail() {
 			;;
 	esac
 	random_filename=$(./bare random string 32).jpg
-	output_path="./var/downloads/$random_filename"
+	output_path=".var/downloads/$random_filename"
 	curl -sL "$thumbnail_url" -o "$output_path"
 	echo "$output_path"
 }

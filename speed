@@ -5,7 +5,7 @@
 # Default values
 speed_factor=${1:-'0.5'}
 input_file="$2"
-output_file=${3:-"downloads/$(openssl rand -hex 16).mp3"}
+output_file=${3:-".var/downloads/$(openssl rand -hex 16).mp3"}
 
 if [ -z "$input_file" ]; then
 	echo "Error: Input file is not provided" >&2

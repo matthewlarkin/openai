@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
-
+# Change directory to the current script's directory
+cd "$(dirname "$0")"
 
 # Source the .env file
 if [ -f .etc/.env ]; then
