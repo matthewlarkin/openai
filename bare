@@ -4,8 +4,8 @@
 cd "$(dirname "$0")"
 
 # Source the .env file
-if [ -f .etc/.env ]; then
-	source .etc/.env
+if [ -f .etc/.barerc ]; then
+	source .etc/.barerc
 fi
 
 # Temporarily add ./ to PATH
