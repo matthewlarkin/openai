@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+
+./deps cmark || exit 1
+
+# Initialize flags
+to_html=0
+inline=0
+
+# Process arguments to handle flags and content
+args=()
+for arg in "$@"; do
+	case "$arg" in
+		--to-html)
+			to_html=1
+			;;
+		--inline)
+			inline=1
+			;;
+		*)
+			args+=("$arg")
+			;;
+	esac
+done
+
+# Determine content based on inline flag
+if [[ $inline -eq 1 ]]; then
+	# Content is directly provided as an argument
+	content="${args[*]}" # Join all remaining arguments as content
+else
+	# Content is read from a file specified by the first non-flag argument
+	template=$(basename "${args[0]}")
+	content=$(< ".var/templates/$template.md")
+fi
+
+# Output content, converting to HTML if required
+if [[ $to_html -eq 1 ]]; then
+	eval "echo \"$content\"" | cmark
+else
+	eval "echo \"$content\""
+fi
