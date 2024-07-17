@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+
+# Function to capitalize words
+capitalize_words() {
+	local input="$1"
+	if [[ $all == true ]]; then
+		# Capitalize all words
+		echo "$input" | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) tolower(substr($i,2)); print}'
+	else
+		# Capitalize only the first word
+		echo "$input" | awk '{first=toupper(substr($1,1,1)) tolower(substr($1,2)); $1=""; print first $0}'
+	fi
+}
+
+# Check for --all flag among all arguments
+all=false
+for arg in "$@"; do
+	if [[ $arg == "--all" ]]; then
+		all=true
+		break
+	fi
+done
+
+# Remove the --all flag from the arguments
+args=("$@")
+for i in "${!args[@]}"; do
+	if [[ ${args[i]} == "--all" ]]; then
+		unset 'args[i]'
+		break
+	fi
+done
+
+# Check if there are arguments provided after removing --all
+if [ ${#args[@]} -gt 0 ]; then
+	# Join the remaining arguments into a single string
+	input=$(printf "%s " "${args[@]}")
+	input=${input% } # Remove trailing space
+	capitalize_words "$input"
+else
+	# Read from stdin if no arguments are provided
+	while IFS= read -r line; do
+		capitalize_words "$line"
+	done
+fi
