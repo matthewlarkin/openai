@@ -12,7 +12,7 @@ fi
 
 case $scope in
 
-	text.newlines ) echo "$input" | awk '{ printf "%s\\n", $0 }' ;;
+	text.newlines ) echo -n "$input" | awk '{printf "%s  \\n", $0}' | tr -d '\n' ;;
 
 	url.encode ) echo -n "$input" | jq -s -R -r @uri ;;
 	url.decode ) echo -n "$input" | perl -pe 'chomp; s/%([0-9a-f]{2})/sprintf("%s", pack("H2",$1))/eig' && echo "" ;;
