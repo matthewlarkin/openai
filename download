@@ -1,0 +1,15 @@
+#!/usr/bin/env bash
+
+./deps curl
+
+url="$1"
+output="${2-$(./bare random string 32)}"
+
+# if no url given
+[ -z "$url" ] {
+  echo "Usage: ./bare download URL [OUTPUT]"
+  exit 1
+}
+
+
+./bare request 
