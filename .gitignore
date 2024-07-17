@@ -1,0 +1,16 @@
+# Ignore everything
+.var
+
+# ...and theses directories
+!.var/downloads/
+!.var/documents/
+!.var/spreadsheets/
+!.var/scripts/
+!.var/templates/
+
+# ...and their .gitkeep files
+!.var/downloads/.gitkeep
+!.var/documents/.gitkeep
+!.var/spreadsheets/.gitkeep
+!.var/scripts/.gitkeep
+!.var/templates/.gitkeep
