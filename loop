@@ -1,15 +1,32 @@
 #!/usr/bin/env bash
 
-# Check if the CSV file is provided
 script_to_call="$1"
 csv_file=".var/documents/$2"
+
+# Initialize lax_mode to 0 (false)
+lax_mode=0
+
+# Check for --lax flag in the remaining arguments
+for arg in "$@"; do
+	if [[ "$arg" == "--lax" ]]; then
+		lax_mode=1
+		break
+	fi
+done
 
 if [ ! -f "$csv_file" ]; then
 	echo "Error: $csv_file file not found"
 	exit 1
 fi
 
+# Remove the first two arguments and any --lax flag
 shift 2
+args=("$@")
+for i in "${!args[@]}"; do
+	if [[ "${args[$i]}" == "--lax" ]]; then
+		unset 'args[i]'
+	fi
+done
 
 # Check if the last line of the CSV file is empty, and if not, add an empty line
 if [ -n "$(tail -c 1 "$csv_file")" ]; then
@@ -53,4 +70,9 @@ tail -n +2 "$csv_file" | while IFS=, read -r -a line_values; do
 
 	# Call the script with the dynamically determined arguments
 	./bare interpret "$script_to_call" "${args[@]}"
+
+	# If lax_mode is enabled, sleep for 0.2 seconds
+	if [[ $lax_mode -eq 1 ]]; then
+		sleep 0.2
+	fi
 done
