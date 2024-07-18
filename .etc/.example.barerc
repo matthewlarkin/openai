@@ -1,5 +1,0 @@
-export BARE_EMAIL_FROM="xxxxx@xxxxx"
-export OPENAI_API_KEY="xxxxx"
-export STRIPE_PUBLIC_KEY="xxxxx"
-export STRIPE_PRIVATE_KEY="xxxxx"
-export POSTMARK_SERVER_TOKEN="xxxxx"
