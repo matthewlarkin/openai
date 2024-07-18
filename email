@@ -7,61 +7,72 @@
 # getopts for sending email via postmark, -T for to, -S for subject, -B for body, -c for cc, -a for attachment, -b for bcc, -f for from, -n for from name, -r for reply to, -B for batch file
 
 # set default from to BARE_EMAIL_FROM
-FROM=$BARE_EMAIL_FROM
+from=$BARE_EMAIL_FROM
 
 while [[ $# -gt 0 ]]; do
   case $1 in
-	--to) TO="$2" && shift 2 ;;
-	--subject) SUBJECT="$2" && shift 2 ;;
-	--body) BODY="$2" && shift 2 ;;
-	--cc) CC="$2" && shift 2 ;;
-	--attachment) ATTACHMENT="$2" && shift 2 ;;
-	--bcc) BCC="$2" && shift 2 ;;
-	--from) FROM="$2" && shift 2 ;;
-	--from-name) FROM_NAME="$2" && shift 2 ;;
-	--reply-to) REPLY_TO="$2" && shift 2 ;;
-	--multi) multi="$2" && shift 2 ;;
+	--to) to="$2" && shift 2 ;;
+	--subject) subject="$2" && shift 2 ;;
+	--body) body="$2" && shift 2 ;;
+	--cc) cc="$2" && shift 2 ;;
+	--attachment) attachment="$2" && shift 2 ;;
+	--bcc) bcc="$2" && shift 2 ;;
+	--from) from="$2" && shift 2 ;;
+	--reply-to) reply_to="$2" && shift 2 ;;
+	--recipients) recipients="$2" && shift 2 ;;
+	--template) template="$2" && shift 2 ;;
+	--debug) debug=true && shift ;;
 	*) echo "Invalid option: $1" && exit 1 ;;
   esac
 done
 
-if [[ -n "$multi" ]]; then
-	# Batch mode
-	JSON_PAYLOAD='{"Messages":['
-	while IFS=, read -r to subject body; do
-		JSON_PAYLOAD+='{"From":"'$FROM'","To":"'$to'","Subject":"'$subject'","TextBody":"'$body'"},'
-	done < "$multi"
-	JSON_PAYLOAD=${JSON_PAYLOAD%,}
-	JSON_PAYLOAD+=']}'
-	./bare request "https://api.postmarkapp.com/batch" --json "$JSON_PAYLOAD" --headers "X-Postmark-Server-Token: $POSTMARK_API_TOKEN"
-else
-	# Single email mode
-	[[ -z "$TO" ]] && echo "No recipient specified, use -T to specify a recipient" && exit 1
-	[[ -z "$SUBJECT" ]] && echo "No subject specified, use -S to specify a subject" && exit 1
-	[[ -z "$BODY" ]] && echo "No body specified, use -B to specify a body" && exit 1
-	[[ -z "$FROM" ]] && echo "No from specified, use -f to specify a from" && exit 1
+# if .var/email/signature.md exists, append it to the end of the email body
+if [ -f ".var/email/signature.md" ]; then
+	body="$body<p>- - -</p>$(./bare render email/signature.md --to-html)"
+fi
 
-	payload=$(jq -n \
-		--arg from "$FROM" \
-		--arg to "$TO" \
-		--arg subject "$SUBJECT" \
-		--arg body "$BODY" \
-		--arg cc "$CC" \
-		--arg bcc "$BCC" \
-		--arg replyTo "$REPLY_TO" \
-		'{
-			"From": $from,
-			"To": $to,
-			"Subject": $subject,
-			"HtmlBody": $body,
-			"Cc": $cc,
-			"Bcc": $bcc,
-			"ReplyTo": $replyTo
-		}'
-	)
 
+[[ "$template" ]] && {
+	./bare email --to "$to" --cc "$cc" --bcc "$bcc" --subject "$subject" --body "$(./bare render "email/templates/$template.md" --to-html "$@")";
+} && exit 0
+
+[[ "$recipients" ]] && {
+	tmp_script="$(./bare random string)"
+	echo './bare email --to "$2" --cc "$cc" --bcc "$bcc" --subject "$subject" --body "$(./bare render "email/templates/$template.md" --to-html "$@")"' >> ".var/scripts/$tmp_script.bare"
+	./bare loop "$tmp_script" recipients
+} && exit 0
+
+# Single email mode
+[[ -z "$to" ]] && echo "No recipient specified, use -T to specify a recipient" && exit 1
+[[ -z "$subject" ]] && echo "No subject specified, use -S to specify a subject" && exit 1
+[[ -z "$body" ]] && echo "No body specified, use -B to specify a body" && exit 1
+[[ -z "$from" ]] && echo "No from specified, use -f to specify a from" && exit 1
+
+payload=$(jq -n \
+	--arg from "$from" \
+	--arg to "$to" \
+	--arg subject "$subject" \
+	--arg body "$body" \
+	--arg cc "$CC" \
+	--arg bcc "$BCC" \
+	--arg replyTo "$reply_to" \
+	'{
+		"From": $from,
+		"To": $to,
+		"Subject": $subject,
+		"HtmlBody": $body,
+		"Cc": $cc,
+		"Bcc": $bcc,
+		"ReplyTo": $reply_to
+	}'
+)
+
+if [ "$debug" ]; then
 	./bare request https://api.postmarkapp.com/email \
 		--json "$payload" \
-		--header "X-Postmark-Server-Token: $POSTMARK_API_TOKEN" | jq -r '.MessageID'
-
+		--header "X-Postmark-Server-Token: $POSTMARK_SERVER_TOKEN"
+else
+	./bare request https://api.postmarkapp.com/email \
+		--json "$payload" \
+		--header "X-Postmark-Server-Token: $POSTMARK_SERVER_TOKEN" | jq -r '.MessageID'
 fi
