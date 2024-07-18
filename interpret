@@ -1,5 +1,20 @@
 #!/usr/bin/env bash
 
+
+
+# Check if the inline script flag is provided
+if [ "$1" = "-i" ]; then
+	shift # Removes '-i'
+	script_contents="$1" # Captures the script content
+	shift # Removes the script content from arguments
+
+	# Execute the script content in a new bash shell, passing the remaining arguments
+	bash -c "$script_contents" _ "$@"
+	exit_status=$?
+
+	exit $exit_status
+fi
+
 # Check if a file argument is provided
 [ $# -eq 0 ] && {
 	echo "Usage: ./interpret <script-name>"
