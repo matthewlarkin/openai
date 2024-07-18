@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 script_to_call="$1"
-csv_file=".var/spreadsheets/$2"
+csv_file=".var/spreadsheets/$2.csv"
 
 # Initialize lax_mode to 0 (false)
 lax_mode=0
