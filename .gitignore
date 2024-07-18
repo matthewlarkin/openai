@@ -1,4 +1,4 @@
-# Ignore everything
+# Ignore user docs
 .var
 
 # ...and theses directories
