@@ -1,15 +1,71 @@
 #!/usr/bin/env bash
 
+# ideal usage
+# ./bare download https://mydownload.com/file.mp3 --title my-title --tags my-tag
+
 ./deps curl
 
-url="$1"
-output="${2-$(./bare random string 32)}"
+url="$1" && shift || { echo "Usage: ./bare download URL [OUTPUT]"; exit 1; }
 
-# if no url given
-[ -z "$url" ] {
-  echo "Usage: ./bare download URL [OUTPUT]"
-  exit 1
-}
+[ "$(./bare youtube id "$url")" = 'Invalid YouTube URL' ] && is_youtube=0 || is_youtube=1
 
+output_name="$(./bare random string 32)"
+temp_file=".var/downloads/${output_name}"
 
-./bare request 
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+	--mp3) as_mp3=1 && shift ;;
+	--thumbnail) as_thumbnail=1 && shift ;;
+	--title) title="$2" && shift 2 ;;
+	--description) description="$2" && shift 2 ;;
+	--tags) tags="$2" && shift 2 ;;
+	* ) echo "Unknown option: $1" && exit 1 ;;
+  esac
+done
+
+if [ "$is_youtube" = 1 ]; then
+
+	[ "$as_mp3" ] && ./bare youtube download "$url" --mp3 && exit 0
+	[ "$as_thumbnail" ] && ./bare youtube download "$url" --thumbnail --max && exit 0
+	./bare youtube download "$url" && exit 0
+
+else
+
+	# Download the file to a temporary location
+	./bare request "$url" --output "$temp_file"
+
+	# Determine the MIME type
+	mime_type=$(file --mime-type -b "$temp_file")
+
+	# Map MIME type to extension
+	declare -A mime_extension_map=(
+		["image/png"]="png"
+		["image/jpeg"]="jpg"
+		["image/gif"]="gif"
+		["image/webp"]="webp"
+		["audio/mpeg"]="mp3"
+		["video/mp4"]="mp4"
+		["application/pdf"]="pdf"
+		["application/json"]="json"
+		["text/markdown"]="md"
+		["text/plain"]="txt"
+		["text/csv"]="csv"
+		["application/zip"]="zip"
+		["text/html"]="html"
+	)
+
+	extension="${mime_extension_map[$mime_type]}"
+
+	if [ -z "$extension" ]; then
+	echo "Unsupported MIME type: $mime_type"
+	exit 1
+	fi
+
+	# Construct the final output file name with the correct extension
+	output_file=".var/downloads/${output_name}.${extension}"
+
+	# Rename the file
+	mv "$temp_file" "$output_file"
+
+	echo "$output_file"
+fi

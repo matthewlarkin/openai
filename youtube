@@ -8,6 +8,10 @@ quality="720" # Default quality for videos
 format="mp4" # Default format for videos
 thumbnail_quality="0" # Default quality for thumbnails (0 for default hd)
 
+if [[ ! "$url" =~ ^(https?://)?(www\.)?(m\.)?(youtube\.com|youtu\.be|youtube-nocookie\.com) ]]; then
+	echo "Invalid YouTube URL" && exit 1
+fi
+
 # Ensure .downloads directory exists
 mkdir -p .var/downloads
 
@@ -76,6 +80,26 @@ case "$command" in
 				--mp3)
 					format="mp3"
 					shift
+					;;
+				--thumbnail|--thumb)
+					shift
+					while [[ "$#" -gt 0 ]]; do
+						case "$1" in
+							--md)
+								thumbnail_quality="md"
+								shift
+								;;
+							--max)
+								thumbnail_quality="max"
+								shift
+								;;
+							*)
+								echo "Unknown option: $1" >&2
+								exit 1
+								;;
+						esac
+					done
+					download_thumbnail
 					;;
 				*)
 					echo "Unknown option: $1" >&2
