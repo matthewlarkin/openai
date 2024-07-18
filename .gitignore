@@ -14,3 +14,7 @@
 !.var/spreadsheets/.gitkeep
 !.var/scripts/.gitkeep
 !.var/templates/.gitkeep
+
+# ...and SQLPage
+!.var/www/
+!.var/www/.gitkeep
