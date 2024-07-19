@@ -1,0 +1,16 @@
+{
+	"title" : "bare",
+	"icon" : "code",
+	"image" : "",
+	"description" : "",
+	"menu_items" : [
+		{
+			"title" : "Docs",
+			"link" : "/docs/index.sql"
+		},
+		{
+			"title" : "Contact",
+			"link" : "/contact"
+		}
+	]
+}

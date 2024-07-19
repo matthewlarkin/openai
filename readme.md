@@ -1,18 +1,23 @@
-# Bare
+# `bare`
 
-Bare is a collection of bash scripts designed to simplify workflow management. These scripts are crafted to resemble natural English commands, making them more intuitive to use. Adhering to the Unix philosophy, they accept input from `stdin`, output to `stdout`, and treat plaintext as the universal interface.
+`bare` is a collection of bash scripts designed to simplify personal and small business workflows. These scripts are crafted to be easy to write and read for anyone who wants to learn *a little programming*. The syntax is intentially kept simple. More advanced users can create customer `bare` scripts using existing `bare` commands as well as any `bash` programming syntax, making the system highly extensible.
+
+Core `bare` commands are inspired by the Unix philosophy, accepting input from `stdin`, output to `stdout` wherever possible and treat text as the universal interface.
 
 ## Sample usage
 
 ```bash
 ## OpenAI ##
 
+# Basic usage: AI chat
 ./bare openai chat "Hello there, how are you?"
 # Hello! How can I assist you today?
 
-./bare openai chat "What is the capital of TN?" | ./bare openai voice
+# Advanced usage: AI assistant prompt rendering
+./bare render my-capital-assistant-prompt.md "TN" | ./bare openai chat | ./bare openai voice
 # .var/downloads/QLJ58WmzrFArulMJ6fme9faqolCx96Mu.mp3 (audio file answering the question)
 
+# Basic usage: transcribing
 ./bare openai transcribe .var/downloads/QLJ58WmzrFArulMJ6fme9faqolCx96Mu.mp3
 # The capital of TN is Nashville.
 
@@ -37,12 +42,18 @@ Bare is a collection of bash scripts designed to simplify workflow management. T
 
 ## Email ##
 
+# Basic usage: inline sending
 ./bare email --to "matthew@groveos.com" --subject "Bare suggestion" --body "Hi there, I have an idea for bare!"
-# >> 3b78c56e-adf6-447d-b30b-f8d78ce12e20 (Postmark Email ID)
+# >> wwnzz9lw-adf6-447d-b30b-slax67kzuhlo (Postmark Email ID)
+
+# Advanced usage: template rendering
+body=$(./bare render email/templates/welcome.md "John" "Nursing" "July 1, 2024" --to-html);
+email --to "jon@example.com" --subject "Welcome to the Progam!" --body "$body"
+# >> nt6i9i5j-ff41-430c-8bfd-zeb8y3dsrokk (Postmark Email ID)
 ```
 
 ## Run Commands
-Set your `.etc/.barerc` file, and bare will source it for use through the system.
+Set your `.etc/barerc` file, and bare will source it for use through the system.
 
 ```env
 export name="Matthew"
