@@ -9,5 +9,10 @@ cd "$(dirname "$0")"
 # Temporarily add ./ to PATH
 PATH="./:$PATH"
 
+mkdir -p ".var/www"
+
+# Use rsync to sync files from .lib/www to .var/www without overwriting new files in .var/www
+rsync -av --ignore-existing ".lib/www/" ".var/www/" >> /dev/null
+
 # Delegate the rest
 script_name="$1" && shift && ./"$script_name" "$@"
