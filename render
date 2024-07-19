@@ -14,23 +14,16 @@ for arg in "$@"; do
 		--to-html)
 			to_html=1 && shift
 			;;
-		--inline)
-			inline=1 && shift
-			;;
 		*)
 			args+=("$arg")
 			;;
 	esac
 done
 
-# Determine content based on inline flag
-if [[ $inline -eq 1 ]]; then
-	# Content is directly provided as an argument
-	content="${args[*]}" # Join all remaining arguments as content
-else
-	# Content is read from a file specified by the first non-flag argument
-	content=$(< "$file")
-fi
+# echo all remaining args
+set -- "${args[@]}"
+
+content=$(< "$file")
 
 # Output content, converting to HTML if required
 if [[ $to_html -eq 1 ]]; then

@@ -4,13 +4,10 @@
 cd "$(dirname "$0")"
 
 # Source the .env file
-if [ -f .etc/.barerc ]; then
-	source .etc/.barerc
-fi
+[[ -f .etc/barerc ]] && source .etc/barerc
 
 # Temporarily add ./ to PATH
 PATH="./:$PATH"
 
 # Delegate the rest
-script_name="$1" && shift
-./"$script_name" "$@"
+script_name="$1" && shift && ./"$script_name" "$@"

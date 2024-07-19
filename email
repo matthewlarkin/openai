@@ -2,60 +2,47 @@
 
 ./deps jq
 
-# expects variables: POSTMARK_API_TOKEN, 
-
-# getopts for sending email via postmark, -T for to, -S for subject, -B for body, -c for cc, -a for attachment, -b for bcc, -f for from, -n for from name, -r for reply to, -B for batch file
+[[ -z "$POSTMARK_SERVER_TOKEN" ]] && {
+	echo "POSTMARK_SERVER_TOKEN is not set"
+} && exit 1
 
 # set default from to BARE_EMAIL_FROM
 from=$BARE_EMAIL_FROM
 
 while [[ $# -gt 0 ]]; do
-  case $1 in
-	--to) to="$2" && shift 2 ;;
-	--subject) subject="$2" && shift 2 ;;
-	--body) body="$2" && shift 2 ;;
-	--cc) cc="$2" && shift 2 ;;
-	--attachment) attachment="$2" && shift 2 ;;
-	--bcc) bcc="$2" && shift 2 ;;
-	--from) from="$2" && shift 2 ;;
-	--reply-to) reply_to="$2" && shift 2 ;;
-	--recipients) recipients="$2" && shift 2 ;;
-	--template) template="$2" && shift 2 ;;
-	--debug) debug=true && shift ;;
-	*) echo "Invalid option: $1" && exit 1 ;;
-  esac
+	case $1 in
+		--to) to="$2"; shift 2 ;;
+		--subject) subject="$2"; shift 2 ;;
+		--body) body="$2"; shift 2 ;;
+		--cc) cc="$2"; shift 2 ;;
+		--attachment) attachment="$2"; shift 2 ;;
+		--bcc) bcc="$2"; shift 2 ;;
+		--from) from="$2"; shift 2 ;;
+		--reply-to) reply_to="$2"; shift 2 ;;
+		--template) template="$2"; shift 2 ;;
+		--debug) debug=true; shift ;;
+		*) break ;;
+	esac
 done
 
-# if .var/email/signature.md exists, append it to the end of the email body
-if [ -f ".var/email/signature.md" ]; then
-	body="$body<p>- - -</p>$(./bare render email/signature.md --to-html)"
-fi
-
-
-[[ "$template" ]] && {
-	./bare email --to "$to" --cc "$cc" --bcc "$bcc" --subject "$subject" --body "$(./bare render "email/templates/$template.md" --to-html "$@")";
-} && exit 0
-
-[[ "$recipients" ]] && {
-	tmp_script="$(./bare random string)"
-	echo './bare email --to "$2" --cc "$cc" --bcc "$bcc" --subject "$subject" --body "$(./bare render "email/templates/$template.md" --to-html "$@")"' >> ".var/scripts/$tmp_script.bare"
-	./bare loop "$tmp_script" recipients
-} && exit 0
+[[ -n "$template" ]] && body=$(./bare render "$template" "$@" --to-html);
 
 # Single email mode
-[[ -z "$to" ]] && echo "No recipient specified, use -T to specify a recipient" && exit 1
-[[ -z "$subject" ]] && echo "No subject specified, use -S to specify a subject" && exit 1
-[[ -z "$body" ]] && echo "No body specified, use -B to specify a body" && exit 1
-[[ -z "$from" ]] && echo "No from specified, use -f to specify a from" && exit 1
+[[ -z "$to" ]] && echo "No recipient specified, use --to to specify a recipient" && exit 1
+[[ -z "$subject" ]] && echo "No subject specified, use --subject to specify a subject" && exit 1
+[[ -z "$body" ]] && echo "No body specified, use --body to specify a body" && exit 1
+
+# if .var/email/signature.md exists, append it to the end of the email body
+[[ -f ".var/email/signature.md" ]] && body="$body<p>- - -</p>$(./bare render email/signature.md --to-html)";
 
 payload=$(jq -n \
 	--arg from "$from" \
 	--arg to "$to" \
 	--arg subject "$subject" \
 	--arg body "$body" \
-	--arg cc "$CC" \
-	--arg bcc "$BCC" \
-	--arg replyTo "$reply_to" \
+	--arg cc "$cc" \
+	--arg bcc "$bcc" \
+	--arg reply_to "$reply_to" \
 	'{
 		"From": $from,
 		"To": $to,
@@ -67,12 +54,14 @@ payload=$(jq -n \
 	}'
 )
 
-if [ "$debug" ]; then
-	./bare request https://api.postmarkapp.com/email \
-		--json "$payload" \
-		--header "X-Postmark-Server-Token: $POSTMARK_SERVER_TOKEN"
-else
-	./bare request https://api.postmarkapp.com/email \
-		--json "$payload" \
-		--header "X-Postmark-Server-Token: $POSTMARK_SERVER_TOKEN" | jq -r '.MessageID'
-fi
+response=$(./bare request https://api.postmarkapp.com/email \
+	--json "$payload" \
+	--header "X-Postmark-Server-Token: $POSTMARK_SERVER_TOKEN");
+
+# if debug
+[ "$debug" ] && {
+	echo "$response" | jq
+} && exit 0
+
+# else
+echo "$response" | jq -r '.MessageID'
