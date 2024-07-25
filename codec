@@ -4,15 +4,20 @@
 
 scope="$1" && shift
 
-if [ -t 0 ]; then
-	input="$1"
-else
-	input="$(cat)"
-fi
+input="${1:-$(cat)}"
 
 case $scope in
 
-	text.newlines ) echo -n "$input" | awk '{printf "%s  \\n", $0}' | tr -d '\n' ;;
+	# text.newlines ) echo -n "$input" | awk '{printf "%s  \\n", $0}' | tr -d '\n' ;;
+	newlines.encode )
+	  # Read input line by line, including the last line whether it ends with a newline or not
+	  while IFS= read -r line || [[ -n "$line" ]]; do
+		# Print the line with a \n at the end
+		printf '%s\\n' "$line"
+	  done <<< "$input"
+	  echo ""
+	;;
+	newlines.decode ) echo -e "$input" ;;
 
 	url.encode ) echo -n "$input" | jq -s -R -r @uri ;;
 	url.decode ) echo -n "$input" | perl -pe 'chomp; s/%([0-9a-f]{2})/sprintf("%s", pack("H2",$1))/eig' && echo "" ;;
@@ -53,11 +58,11 @@ case $scope in
 		done
 		json_object="${json_object%,}}"
 		
-		echo $json_object | jq .
+		echo $json_object | jq -cM .
 		;;
 
 	base64.encode ) echo "$input" | jq -s -R -r @base64 ;;
-	base64.decode ) echo "$input" | perl -MMIME::Base64 -ne 'print decode_base64($_)' ;;
+	base64.decode ) echo "$input" | perl -MMIME::Base64 -ne 'print decode_base64($_)';;
 
 	hex.encode ) echo "$input" | xxd -ps ;;
 	hex.decode ) echo "$input" | xxd -r -p ;;
@@ -73,3 +78,5 @@ case $scope in
 	html.decode ) echo "$input" | php -R 'echo html_entity_decode($argn, ENT_QUOTES|ENT_HTML5) . "\n";' ;;
 
 esac
+
+exit 0
