@@ -14,5 +14,17 @@ mkdir -p ".var/www"
 # Use rsync to sync files from .lib/www to .var/www without overwriting new files in .var/www
 rsync -av --ignore-existing ".lib/www/" ".var/www/" >> /dev/null
 
-# Delegate the rest
-script_name="$1" && shift && ./"$script_name" "$@"
+# Check if the -I flag is provided for interactive mode
+if [[ "$1" == "-I" ]]; then
+  shift
+  echo ""
+  echo "🧙 Entering bare interactive mode. Type 'exit' to leave."
+  echo ""
+  echo "- - - - -"
+  echo ""
+  # Start an interactive bash shell with the current environment
+  exec bash --rcfile <(echo "PS1='🐻 bare > '; source ~/.bashrc; PATH=\"$PATH\"")
+else
+  # Delegate the rest
+  script_name="$1" && shift && ./"$script_name" "$@"
+fi
