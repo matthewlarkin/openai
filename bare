@@ -2,6 +2,7 @@
 
 # Change directory to the current script's directory
 cd "$(dirname "$0")"
+touch ~/.bashrc
 
 # Source the .env file
 [[ -f .etc/barerc ]] && source .etc/barerc
