@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+
+./deps qrencode
+
+# Attempt to read from stdin, if nothing is piped in, use $1
+if [ -t 0 ]; then
+  # Terminal is attached, stdin is not redirected, use $1
+  link="$1"
+else
+  # stdin is redirected, read from stdin
+  read -r link
+fi
+
+# Validate the URL
+if [[ -z "$link" ]] || ! [[ "$link" =~ ^https:// ]]; then
+  echo "Please provide a valid URL starting with https://"
+  exit 1
+fi
+
+output=".var/downloads/$(./bare random string 30).png"
+
+qrencode -o "$output" "$link"
+
+echo "$output"
