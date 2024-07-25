@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+[ -z "$EDITOR" ] && echo "EDITOR is not set" && exit 1
+
 # Check if $1 is provided
 if [ -n "$1" ]; then
   file="$1"
