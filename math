@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+# delegate all math related problems in $1 to perl
+
+math_operation="$*"
+safe_math_operation=$(perl -e "print \"$math_operation\" =~ s/[^0-9+\-.*\/()]//gr")
+
+# Evaluate the sanitized math operation
+result=$(perl -e "print eval \"$safe_math_operation\"")
+
+echo $result
