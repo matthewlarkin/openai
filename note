@@ -2,4 +2,53 @@
 
 ./deps nb
 
-nb "$@" --no-color
+command=""
+notebook="home"
+
+# Loop through all arguments
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+	--notebook)
+	  shift
+	  notebook="$1"
+	  ;;
+	add|delete)  # Add other commands as needed
+	  command="$1"
+	  ;;
+	*)
+	  # Collect other arguments
+	  args+=("$1")
+	  ;;
+  esac
+  shift
+done
+
+case $command in
+	add )
+		output=$(echo "" | nb add "$notebook:" "${args[@]}" --no-color)
+		filename=$(echo "$output" | awk '{print $3}')
+		
+		# Check if the filename contains a colon
+		if [[ "$filename" == *:* ]]; then
+		# Replace colon with slash and prepend .var/
+		filename=$(echo "$filename" | sed 's/:/\//g')
+		dir=".var/$filename"
+		else
+			dir=".var/home/$filename"
+		fi
+		
+		echo "$dir"
+		;;
+	delete ) 
+		# check if valid file
+		if [ -f "${args[0]}" ]; then
+			echo "Delete file: ${args[0]}"
+			rm "${args[0]}"
+		else
+			echo "File not found: ${args[0]}"
+		fi
+		;;
+	* )
+		nb "${args[@]}" --no-color
+		;;
+esac
