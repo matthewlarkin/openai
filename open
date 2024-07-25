@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+# Check if $1 is provided
+if [ -n "$1" ]; then
+  file="$1"
+else
+  # Read from stdin
+  file=$(cat)
+fi
+
+"$EDITOR" "$file"
