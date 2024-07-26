@@ -22,3 +22,5 @@ select 'shell' as component,
 	'/index.js' as javascript,
 	'/assets/logo.webp' as image;
 
+select 'list' as component,
+	'Assistants' as title;

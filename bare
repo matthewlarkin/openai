@@ -4,28 +4,43 @@
 cd "$(dirname "$0")"
 touch ~/.bashrc
 
-# Source the .env file
+# Setup environment
 [[ -f .etc/barerc ]] && source .etc/barerc
-
-# Temporarily add ./ to PATH
 PATH="./:$PATH"
+export PORT=8282
+
+# initialize db if needed
+[[ ! -f .var/www/sqlpage/sqlpage.db ]] && ./bare serve --briefly
 
 mkdir -p ".var/www"
 
 # Use rsync to sync files from .lib/www to .var/www without overwriting new files in .var/www
-rsync -av --ignore-existing ".lib/www/" ".var/www/" >> /dev/null
+rsync -av ".lib/www/" ".var/www/" >> /dev/null
 
 # Check if the -I flag is provided for interactive mode
 if [[ "$1" == "-I" ]]; then
   shift
-  echo ""
-  echo "🧙 Entering bare interactive mode. Type 'exit' to leave."
-  echo ""
-  echo "- - - - -"
-  echo ""
   # Start an interactive bash shell with the current environment
-  exec bash --rcfile <(echo "PS1='🐻 bare > '; source ~/.bashrc; PATH=\"$PATH\"")
+  exec bash --rcfile <(echo "
+  PS1='🐻 bare > '
+  source ~/.bashrc
+  PATH=\"$PATH\"
+  
+  # Function to run ./bare and then the actual command
+  preexec() {
+      if [ -n \"\$BASH_COMMAND\" ]; then
+          ./bare
+          eval \"\$BASH_COMMAND\"
+          return 1  # Prevent the command from running again
+      fi
+  }
+  
+  # Trap DEBUG signal to run preexec function before each command
+  trap 'preexec' DEBUG
+  ")
 else
   # Delegate the rest
   script_name="$1" && shift && ./"$script_name" "$@"
 fi
+
+exit 0

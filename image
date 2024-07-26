@@ -55,7 +55,7 @@ case "$command" in
 		# cases: png-to-jpg, heic-to-jpg, jpg-to-webp, png-to-webp, heic-to-webp
 
 		case "$1" in
-			png-to-jpg | png-to-webp | heic-to-jpg | heic-to-webp | jpg-to-webp )
+			jpg-to-png | png-to-jpg | png-to-webp | heic-to-jpg | heic-to-webp | jpg-to-webp )
 				if [ -z "$2" ]; then
 					image=$(cat)
 				else

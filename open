@@ -2,10 +2,10 @@
 
 # Check if $1 is provided
 if [ -n "$1" ]; then
-  file="$1"
+	file="$1"
 else
-  # Read from stdin
-  file=$(cat)
+	# Read from stdin
+	file=$(cat)
 fi
 
 "$EDITOR" "$file"

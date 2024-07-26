@@ -1,0 +1,29 @@
+#!/usr/bin/env bash
+
+./deps sqlpage
+
+command="$1"
+
+case "$command" in
+
+	--briefly )
+		./bare serve > /dev/null 2>&1 &
+		service_pid=$!
+
+		# Give the service some time to start
+		sleep 0.2
+
+		if [ -n "$service_pid" ]; then
+			kill $service_pid
+			wait $service_pid 2>/dev/null
+		else
+			echo "No service running on port $PORT"
+		fi
+		;;
+
+	* )
+		cd .var/www && sqlpage
+		;;
+esac
+
+exit 0
