@@ -2,9 +2,9 @@
 
 # Change directory to the current script's directory
 cd "$(dirname "$0")"
-touch ~/.bashrc
 
 # Setup environment
+touch ~/.bashrc
 [[ -f .etc/barerc ]] && source .etc/barerc
 PATH="./:$PATH"
 export PORT=8282
@@ -12,10 +12,11 @@ export PORT=8282
 # initialize db if needed
 [[ ! -f .var/www/sqlpage/sqlpage.db ]] && ./bare serve --briefly
 
-mkdir -p ".var/www"
+# sync files from .lib/www to .var/www without overwriting new files in .var/www
+mkdir -p ".var/www" && rsync -av ".lib/www/" ".var/www/" >> /dev/null
 
-# Use rsync to sync files from .lib/www to .var/www without overwriting new files in .var/www
-rsync -av ".lib/www/" ".var/www/" >> /dev/null
+# close up shop early, if that's it
+[[ "$1" = '' ]] && exit 0
 
 # Check if the -I flag is provided for interactive mode
 if [[ "$1" == "-I" ]]; then
@@ -25,18 +26,7 @@ if [[ "$1" == "-I" ]]; then
   PS1='🐻 bare > '
   source ~/.bashrc
   PATH=\"$PATH\"
-  
-  # Function to run ./bare and then the actual command
-  preexec() {
-      if [ -n \"\$BASH_COMMAND\" ]; then
-          ./bare
-          eval \"\$BASH_COMMAND\"
-          return 1  # Prevent the command from running again
-      fi
-  }
-  
-  # Trap DEBUG signal to run preexec function before each command
-  trap 'preexec' DEBUG
+  PROMPT_COMMAND='./bare'
   ")
 else
   # Delegate the rest
