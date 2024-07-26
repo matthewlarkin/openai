@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+
+# sync files from .lib/www to .var/www without overwriting new files in .var/www
+mkdir -p ".var/www" && rsync -av ".lib/www/" ".var/www/" >> /dev/null
+
+# Assistants Sync
+
+# Collect all assistant names from the .md files
+assistant_names=()
+
+# Function to escape single quotes
+escape_single_quotes() {
+	echo "$1" | sed "s/'/''/g"
+}
+
+# Loop through each .md file in the .var/assistants directory
+for item in .var/assistants/*.md; do
+	assistant_name="${item%.md}"
+	assistant_name="${assistant_name##*/}"
+	
+	# Extract frontmatter properties
+	title=$(grep -m 1 'title:' "$item" | sed 's/title: "\(.*\)"/\1/')
+	description=$(grep -m 1 'description:' "$item" | sed 's/description: "\(.*\)"/\1/')
+	contents=$(awk 'BEGIN {found=0} /^---$/ {if (found==1) {found=2; next} found=1} found==2 {print}' "$item")
+	
+	# Escape single quotes
+	title=$(escape_single_quotes "$title")
+	description=$(escape_single_quotes "$description")
+	contents=$(escape_single_quotes "$contents")
+	
+	# Use sqlite3 parameterized query to insert or replace
+	sql <<EOF
+	BEGIN TRANSACTION;
+	INSERT OR REPLACE INTO assistants (name, description, contents) VALUES ('$assistant_name', '$description', '$contents');
+	COMMIT;
+EOF
+done
+
+# Collect all assistant names from the .md files
+assistant_names=()
+
+for item in .var/assistants/*.md; do
+	assistant_name="${item%.md}"
+	assistant_name="${assistant_name##*/}"
+	assistant_names+=("$assistant_name")
+done
+
+# Convert assistant_names array to a comma-separated string
+assistant_names_str=$(printf ", '%s'" "${assistant_names[@]}")
+assistant_names_str=${assistant_names_str:2}
+
+# Query the database for all existing assistant names
+existing_assistants=$(sql "SELECT name FROM assistants;")
+
+# Identify and print names that exist in the database but not as .md files
+for name in $existing_assistants; do
+	if [[ ! " ${assistant_names[@]} " =~ " ${name} " ]]; then
+		# write frontmatter to file (get name, description, contents from database)
+		sql "SELECT description, contents FROM assistants WHERE name = '$name';" | awk -v name="$name" '
+		BEGIN {
+			print "---"
+			print "title: \"" name "\""
+		}
+		NR == 1 {
+			print "description: \"" $0 "\""
+			print "---"
+			print ""
+		}
+		NR > 1 {
+			print $0
+		}
+		' > ".var/assistants/$name.md"
+	fi
+done
+
+# Construct SQL delete statement to remove records not in the list
+sql_delete="DELETE FROM assistants WHERE name NOT IN ($assistant_names_str);"
+
+# Execute SQL delete statement
+echo "$sql_delete" | sql

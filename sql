@@ -2,6 +2,9 @@
 
 ./deps sqlite3
 
+# initialize db if needed
+[[ ! -f .var/www/sqlpage/sqlpage.db ]] && ./bare serve --briefly
+
 while [[ "$#" -gt 0 ]]; do
   case $1 in
 	--ascii) MODE="ascii" ;;

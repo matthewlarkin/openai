@@ -8,7 +8,7 @@
 ./deps curl jq openssl
 
 # capture assistant name
-assistant_name="Default"
+assistant_name="default"
 remaining_args=()
 
 while [[ "$#" -gt 0 ]]; do
@@ -23,8 +23,7 @@ done
 set -- "${remaining_args[@]}"
 
 # set system prompt (according to assistant name)
-system_prompt="$(./sql "select contents from assistants where name = '$assistant_name';")";
-
+assistant_prompt="$(./sql "select contents from assistants where name = '$assistant_name';")";
 
 # Cycle through commands
 
@@ -33,65 +32,60 @@ case "$1" in
     "chat" )
 
         shift
-        model=${OPENAI_DEFAULT_MODEL:-'gpt-3.5-turbo'}
-        system_prompt=$system_prompt
-        user_messages=()
-        assistant_name=""
-
-        # If $1 is set, add it as the first user message
-        if [ -n "$1" ]; then
-            user_messages+=("$1")
-        else
-            # Read from stdin
-            while IFS= read -r line; do
-                user_messages+=("$line")
-                break  # Exit after the first line of input
-            done < /dev/stdin
-        fi
-
-        shift
-        while [[ "$#" -gt 0 ]]; do
-            case $1 in
-                --model) model="$2"; shift ;;
-                --system_prompt) system_prompt="$2"; shift ;;
-                --user_messages) user_messages+=("$2"); shift ;;
-                --assistant_messages) assistant_messages+=("$2"); shift ;;
-                --messages) messages=$(echo "$2" | jq -c .); shift ;;
-                *) echo "Invalid option: $1" >&2 && exit 1 ;;
-            esac
-            shift
-        done
-
-        if [ -z "$messages" ]; then
-            messages='[
-              {
-                "role": "system",
-                "content": "'"$system_prompt"'"
-              }'
-
-            for i in "${!user_messages[@]}"; do
-                messages+=',{
-                    "role": "user",
-                    "content": "'"${user_messages[$i]}"'"
-                  }'
-                if [ "$i" -lt ${#assistant_messages[@]} ]; then
-                    messages+=',{
-                        "role": "assistant",
-                        "content": "'"${assistant_messages[$i]}"'"
-                      }'
-                fi
-            done
-
-            messages+=']'
-        fi
-
-        response=$(curl -s https://api.openai.com/v1/chat/completions \
-            -H "Content-Type: application/json" \
-			-H "Authorization: Bearer $OPENAI_API_KEY" \
-            -d '{
-            "model": "'"$model"'",
-            "messages": '"$messages"'
-        }');
+		# Initialize variables
+		model=${OPENAI_DEFAULT_MODEL:-'gpt-3.5-turbo'}
+		system_prompt="$assistant_prompt"
+		user_messages=()
+		assistant_messages=()
+		
+		# Read the first user message from arguments or stdin
+		if [ -n "$1" ]; then
+			user_messages+=("$1")
+		else
+			while IFS= read -r line; do
+				user_messages+=("$line")
+				break  # Exit after the first line of input
+			done < /dev/stdin
+		fi
+		
+		# Parse command-line arguments
+		shift
+		while [[ "$#" -gt 0 ]]; do
+			case $1 in
+				--model) model="$2"; shift ;;
+				--system_prompt) system_prompt="$2"; shift ;;
+				--user_messages) user_messages+=("$2"); shift ;;
+				--assistant_messages) assistant_messages+=("$2"); shift ;;
+				--messages) messages=$(echo "$2" | jq -c .); shift ;;
+				*) echo "Invalid option: $1" >&2 && exit 1 ;;
+			esac
+			shift
+		done
+		
+		# Construct the messages array if not provided
+		if [ -z "$messages" ]; then
+			messages=$(jq -n --arg system_prompt "$system_prompt" '[
+				{
+					"role": "system",
+					"content": $system_prompt
+				}
+			]')
+		
+			for i in "${!user_messages[@]}"; do
+				messages=$(echo "$messages" | jq --arg content "${user_messages[$i]}" '. += [{"role": "user", "content": $content}]')
+				if [ "$i" -lt ${#assistant_messages[@]} ]; then
+					messages=$(echo "$messages" | jq --arg content "${assistant_messages[$i]}" '. += [{"role": "assistant", "content": $content}]')
+				fi
+			done
+		fi
+		
+		# Construct the final JSON string using jq
+		payload=$(jq -n --arg model "$model" --argjson messages "$messages" '{
+			model: $model,
+			messages: $messages
+		}')
+		
+		response=$(./request "https://api.openai.com/v1/chat/completions" --token "$OPENAI_API_KEY" --json "$payload");
         echo "$response" | jq -r '.choices[0].message.content'
         ;;
 

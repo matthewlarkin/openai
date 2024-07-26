@@ -9,28 +9,25 @@ touch ~/.bashrc
 PATH="./:$PATH"
 export PORT=8282
 
-# initialize db if needed
-[[ ! -f .var/www/sqlpage/sqlpage.db ]] && ./bare serve --briefly
+./sync
 
-# sync files from .lib/www to .var/www without overwriting new files in .var/www
-mkdir -p ".var/www" && rsync -av ".lib/www/" ".var/www/" >> /dev/null
+
 
 # close up shop early, if that's it
-[[ "$1" = '' ]] && exit 0
+[[ -z "$1" ]] && exit 0
 
 # Check if the -I flag is provided for interactive mode
 if [[ "$1" == "-I" ]]; then
-  shift
-  # Start an interactive bash shell with the current environment
-  exec bash --rcfile <(echo "
-  PS1='🐻 bare > '
-  source ~/.bashrc
-  PATH=\"$PATH\"
-  PROMPT_COMMAND='./bare'
-  ")
-else
-  # Delegate the rest
-  script_name="$1" && shift && ./"$script_name" "$@"
+	shift
+	# Start an interactive bash shell with the current environment
+	exec bash --rcfile <(echo "
+	PS1='🐻 bare > '
+	source ~/.bashrc
+	PATH=\"$PATH\"
+	trap 'bare' DEBUG
+	")
 fi
+
+script_name="$1" && shift && ./"$script_name" "$@"
 
 exit 0

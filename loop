@@ -2,31 +2,15 @@
 
 script_to_call="$1"
 csv_file=".var/$2"
+shift 2
 
-# Initialize lax_mode to 0 (false)
-lax_mode=0
-
-# Check for --lax flag in the remaining arguments
-for arg in "$@"; do
-	if [[ "$arg" == "--lax" ]]; then
-		lax_mode=1
-		break
-	fi
-done
+# Initialize lax_mode to 1 (true)
+lax_mode=1
 
 if [ ! -f "$csv_file" ]; then
 	echo "Error: $csv_file file not found"
 	exit 1
 fi
-
-# Remove the first two arguments and any --lax flag
-shift 2
-args=("$@")
-for i in "${!args[@]}"; do
-	if [[ "${args[$i]}" == "--lax" ]]; then
-		unset 'args[i]'
-	fi
-done
 
 # Check if the last line of the CSV file is empty, and if not, add an empty line
 if [ -n "$(tail -c 1 "$csv_file")" ]; then
@@ -55,17 +39,24 @@ tail -n +2 "$csv_file" | while IFS=, read -r -a line_values; do
 		continue
 	fi
 
+	# Function to sanitize column names
+	sanitize_column_name() {
+		echo "$1" | tr -c '[:alnum:]_' '_'
+	}
+	
 	# Dynamically create variables for each column
 	for i in "${!column_names[@]}"; do
 		value="${line_values[$i]}"
 		clean_value=$(clean_value "$value")
-		declare "${column_names[$i]}"="$clean_value"
+		sanitized_column_name=$(sanitize_column_name "${column_names[$i]}")
+		declare "${sanitized_column_name}"="$clean_value"
 	done
-
+	
 	# Prepare the arguments for the script based on the column names
 	args=()
 	for column in "${column_names[@]}"; do
-		args+=("${!column}")
+		sanitized_column_name=$(sanitize_column_name "$column")
+		args+=("${!sanitized_column_name}")
 	done
 
 	# Call the script with the dynamically determined arguments

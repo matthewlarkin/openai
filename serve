@@ -13,11 +13,9 @@ case "$command" in
 		# Give the service some time to start
 		sleep 0.2
 
-		if [ -n "$service_pid" ]; then
+		if ps -p $service_pid > /dev/null; then
 			kill $service_pid
 			wait $service_pid 2>/dev/null
-		else
-			echo "No service running on port $PORT"
 		fi
 		;;
 
