@@ -1,0 +1,62 @@
+#!/usr/bin/env bash
+
+./deps yq jq awk cmark || exit 1
+
+command="$1" && shift
+multi=""
+
+case $command in
+
+	md )
+
+		input=".var/${1:-$(cat)}"
+
+		# get files (as list of inner directory or input itself)
+		if [ -d "$input" ]; then
+			multi="true"
+			files=$(find "$input" -type f -name "*.md")
+		else
+			multi="false"
+			files="$input"
+		fi
+
+		# capture --flags and clear
+		remaining_args=() && while [[ "$#" -gt 0 ]]; do
+			case $1 in
+				--meta) meta="true" && shift ;;
+				--body) body="true" && shift ;;
+				--html) html="true" && shift ;;
+				--by-title) by_title="$2" && shift 2 ;;
+				--by-contents) by_contents="$2" && shift 2 ;;
+				*) remaining_args+=("$1") && shift ;;
+			esac
+		done && set -- "${remaining_args[@]}"
+
+		# Exit if no markdown files are found
+		[[ -z "$files" ]] && echo "No markdown files found" && exit 1
+
+		# Initialize an empty JSON array
+		full="[]"
+
+		# Iterate through each file
+		for file in $files; do
+			frontmatter=$(sed -n '/^---$/,/^---$/p' "$file" | sed '1d;$d' | yq e -o=json '.')
+			contents=$(sed -n '/^---$/,/^---$/!p' "$file")
+			json_object=$(echo "$frontmatter" | jq --arg filepath "$file" --arg contents "$contents" '. + {filepath: $filepath, contents: $contents}')
+			full=$(echo "$full" | jq --argjson obj "$json_object" '. + [$obj]')
+		done
+
+		[[ $multi = 'true' ]] && {
+			[[ $meta = 'true' ]] && echo "$full" | jq 'map(del(.contents))' && exit 0
+			[[ -n $by_title ]] && echo "$full" | jq 'map(select(.title | test("'"$by_title"'"; "i")))' && exit 0
+			[[ -n $by_contents ]] && echo "$full" | jq 'map(select(.contents | test("'"$by_contents"'"; "i"))' && exit 0
+			echo "$full" | jq && exit 0
+		}
+
+		[[ $body = 'true' ]] && echo "$full" | jq 'map(.contents)' | jq '.[]' -r && exit 0
+		[[ $html = 'true' ]] && echo "$full" | jq 'map(.contents)' | jq '.[]' -r | cmark && exit 0
+		echo "$full" | jq '.[]' && exit 0
+
+	;;
+
+esac
