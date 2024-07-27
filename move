@@ -33,7 +33,7 @@ elif [[ $# -eq 1 ]]; then
   read file
 elif [[ $# -eq 2 ]]; then
   # If two arguments, first is file path, second is destination
-  file="$1"
+  [[ "$outside_bare" = true ]] && file="$1" || file=".var/$1"
   if [ "$outside_bare" = false ]; then
     destination=".var/$2"
   else
