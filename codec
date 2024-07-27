@@ -8,6 +8,11 @@ input="${1:-$(cat)}"
 
 case $scope in
 
+	text.filesafe ) echo -n "$input" | sed 's/ /-/g; s/[^a-zA-Z0-9._-]//g' ;;
+
+	json.encode ) echo -n "$input" | jq -s -R -r @json ;;
+	json.decode ) echo -n "$input" | jq -r . ;;
+
 	# text.newlines ) echo -n "$input" | awk '{printf "%s  \\n", $0}' | tr -d '\n' ;;
 	newlines.encode )
 	  # Read input line by line, including the last line whether it ends with a newline or not
