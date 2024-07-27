@@ -23,6 +23,7 @@ if [[ "$1" == "-I" ]]; then
 	PS1='🐻 bare > '
 	source ~/.bashrc
 	PATH=\"$PATH\"
+	echo 'entering bare terminal. type exit when ready to leave.'
 	")
 fi
 
