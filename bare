@@ -9,9 +9,8 @@ touch ~/.bashrc
 PATH="./:$PATH"
 export PORT=8282
 
-./sync
-
-
+# sync files from .lib/www to .var/www without overwriting new files in .var/www
+mkdir -p ".var/www" && rsync -av ".lib/www/" ".var/www/" >> /dev/null
 
 # close up shop early, if that's it
 [[ -z "$1" ]] && exit 0
@@ -24,7 +23,6 @@ if [[ "$1" == "-I" ]]; then
 	PS1='🐻 bare > '
 	source ~/.bashrc
 	PATH=\"$PATH\"
-	trap 'bare' DEBUG
 	")
 fi
 
