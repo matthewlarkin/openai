@@ -25,7 +25,7 @@ set -- "${remaining_args[@]}"
 # set system prompt (according to assistant name)
 assistant_prompt="You are a helpful assistant";
 [[ -n $assistant_name ]] && {
-	assistant_prompt="Your name is $assistant_name. $(./bare parse assistants | jq --arg name "$assistant_name" '.[] | select(.name == $name) | .contents' | ./bare codec json.decode)"
+	assistant_prompt="Your name is $assistant_name. $(./bare filter assistants | jq --arg name "$assistant_name" '.[] | select(.name == $name) | .contents' | ./bare codec json.decode)"
 }
 
 # Cycle through commands
@@ -66,13 +66,13 @@ case "$1" in
 
 		[[ -n $thread_name ]] && {
 			thread_path=".var/threads/$(./bare codec text.filesafe "$thread_name").md";
-			thread="$(./bare parse threads | jq --arg name "$thread_name" '.[] | select(.name == $name)')"
+			thread="$(./bare filter threads | jq --arg name "$thread_name" '.[] | select(.name == $name)')"
 			[[ -z $thread ]] && {
 				echo "---" >> "$thread_path"
 				echo "name: $thread_name" >> "$thread_path"
 				echo "created: $(date '+%Y-%m-%d %H:%M')" >> "$thread_path"
 				echo "---" >> "$thread_path"
-				thread="$(./bare parse threads | jq --arg name "$thread_name" '.[] | select(.name == $name)')"
+				thread="$(./bare filter threads | jq --arg name "$thread_name" '.[] | select(.name == $name)')"
 			}
 			echo "" >> "$thread_path"
 			echo "USER: $user_messages" >> "$thread_path"
