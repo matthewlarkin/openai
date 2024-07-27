@@ -79,7 +79,7 @@ case "$1" in
 			echo "" >> "$thread_path"
 			thread_contents="$(echo "$thread" | jq '.contents' | ./bare codec json.decode)"
 			[[ $thread_contents != '' ]] && {
-				user_messages="Given our thread here - - - $(./bare codec json.encode "$thread_contents") - - - and given I am the USER, - - - $user_messages"
+				user_messages="Here's our thread from earlier (I am the user) - - - $(./bare codec json.encode "$thread_contents") - - - - - - Now... $user_messages"
 			}
 		}
 		
