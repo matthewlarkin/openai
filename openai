@@ -8,13 +8,13 @@
 ./deps curl jq openssl
 
 # capture assistant name
-assistant_name="default"
 remaining_args=()
 
 while [[ "$#" -gt 0 ]]; do
 	case $1 in
 		@*) assistant_name="${1#@}"; shift ;;
 		--assistant) assistant_name="$2"; shift 2 ;;
+		--thread) thread_name="$2"; shift 2 ;;
 		*) remaining_args+=("$1"); shift ;;
 	esac
 done
@@ -23,7 +23,10 @@ done
 set -- "${remaining_args[@]}"
 
 # set system prompt (according to assistant name)
-assistant_prompt="$(./sql "select contents from assistants where name = '$assistant_name';")";
+assistant_prompt="You are a helpful assistant";
+[[ -n $assistant_name ]] && {
+	assistant_prompt="Your name is $assistant_name. $(./bare parse assistants | jq --arg name "$assistant_name" '.[] | select(.name == $name) | .contents' | ./bare codec json.decode)"
+}
 
 # Cycle through commands
 
@@ -52,15 +55,33 @@ case "$1" in
 		shift
 		while [[ "$#" -gt 0 ]]; do
 			case $1 in
-				--model) model="$2"; shift ;;
-				--system_prompt) system_prompt="$2"; shift ;;
-				--user_messages) user_messages+=("$2"); shift ;;
-				--assistant_messages) assistant_messages+=("$2"); shift ;;
-				--messages) messages=$(echo "$2" | jq -c .); shift ;;
+				--model) model="$2"; shift 2 ;;
+				--system_prompt) system_prompt="$2"; shift 2 ;;
+				--user_messages) user_messages+=("$2"); shift 2 ;;
+				--assistant_messages) assistant_messages+=("$2"); shift 2 ;;
+				--messages) messages=$(echo "$2" | jq -c .); shift 2 ;;
 				*) echo "Invalid option: $1" >&2 && exit 1 ;;
 			esac
-			shift
 		done
+
+		[[ -n $thread_name ]] && {
+			thread_path=".var/threads/$(./bare codec text.filesafe "$thread_name").md";
+			thread="$(./bare parse threads | jq --arg name "$thread_name" '.[] | select(.name == $name)')"
+			[[ -z $thread ]] && {
+				echo "---" >> "$thread_path"
+				echo "name: $thread_name" >> "$thread_path"
+				echo "created: $(date '+%Y-%m-%d %H:%M')" >> "$thread_path"
+				echo "---" >> "$thread_path"
+				thread="$(./bare parse threads | jq --arg name "$thread_name" '.[] | select(.name == $name)')"
+			}
+			echo "" >> "$thread_path"
+			echo "USER: $user_messages" >> "$thread_path"
+			echo "" >> "$thread_path"
+			thread_contents="$(echo "$thread" | jq '.contents' | ./bare codec json.decode)"
+			[[ $thread_contents != '' ]] && {
+				user_messages="Given our thread here - - - $(./bare codec json.encode "$thread_contents") - - - and given I am the USER, - - - $user_messages"
+			}
+		}
 		
 		# Construct the messages array if not provided
 		if [ -z "$messages" ]; then
@@ -85,8 +106,16 @@ case "$1" in
 			messages: $messages
 		}')
 		
-		response=$(./request "https://api.openai.com/v1/chat/completions" --token "$OPENAI_API_KEY" --json "$payload");
-        echo "$response" | jq -r '.choices[0].message.content'
+		response=$(./request "https://api.openai.com/v1/chat/completions" --token "$OPENAI_API_KEY" --json "$payload" | jq -r '.choices[0].message.content');
+
+		[[ -n $thread_name ]] && {
+			echo "" >> "$thread_path"
+			echo "$(./bare uppercase "${assistant_name-Assistant}"): $response" >> "$thread_path"
+			echo "" >> "$thread_path"
+		}
+
+		echo "$response"
+
         ;;
 
 
