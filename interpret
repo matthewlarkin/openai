@@ -1,20 +1,5 @@
 #!/usr/bin/env bash
 
-
-
-# Check if the inline script flag is provided
-if [ "$1" = "-i" ]; then
-	shift # Removes '-i'
-	script_contents="$1" # Captures the script content
-	shift # Removes the script content from arguments
-
-	# Execute the script content in a new bash shell, passing the remaining arguments
-	bash -c "$script_contents" _ "$@"
-	exit_status=$?
-
-	exit $exit_status
-fi
-
 # Check if a file argument is provided
 [ $# -eq 0 ] && {
 	echo "Usage: ./interpret <script-name>"
@@ -22,16 +7,14 @@ fi
 }
 
 # Ensure script name does not contain path traversal characters
-script_name=$(basename "$1") && shift
+script_title="${1-$(cat)}" && shift
 
-# Check if the script file exists in .var/scripts/<script-name>.bare
-[ ! -f ".var/scripts/${script_name}.bare" ] && {
-	echo "Error: script file .var/scripts/${script_name}.bare not found"
-	exit 1
-}
+script_contents=$(recsel -t Script .var/scripts.rec -e "Title = '$script_title'" -P Contents)
+
+[[ -z $script_contents ]] && echo "No script by that title found: $script_title" && exit 1
 
 # Prepend shebang and PATH export, then execute the script
 {
 	printf '#!/usr/bin/env bash\nexport PATH="$PATH:."\n'
-	cat ".var/scripts/${script_name}.bare"
+	echo "$script_contents"
 } | bash -s -- "$@"
