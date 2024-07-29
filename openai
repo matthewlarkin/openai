@@ -8,24 +8,19 @@
 ./deps curl jq openssl
 
 # capture assistant name
-remaining_args=()
-
-while [[ "$#" -gt 0 ]]; do
+remaining_args=() && while [[ "$#" -gt 0 ]]; do
 	case $1 in
 		@*) assistant_name="${1#@}"; shift ;;
 		--assistant) assistant_name="$2"; shift 2 ;;
-		--thread) thread_name="$2"; shift 2 ;;
+		--thread) thread_title="$2"; shift 2 ;;
 		*) remaining_args+=("$1"); shift ;;
 	esac
-done
-
-# Reset positional parameters to remaining arguments
-set -- "${remaining_args[@]}"
+done && set -- "${remaining_args[@]}"
 
 # set system prompt (according to assistant name)
 assistant_prompt="You are a helpful assistant";
 [[ -n $assistant_name ]] && {
-	assistant_prompt="Your name is $assistant_name. $(./bare filter assistants | jq --arg name "$assistant_name" '.[] | select(.name == $name) | .contents' | ./bare codec json.decode)"
+	assistant_prompt="In this conversation you are '$assistant_name'. $(recsel .var/assistants.rec -e "Name = '$assistant_name'" -P Contents) - - - Take into consideration this full thread (if there are any past messages) even if those messages are not your own (as you may be entering the chat mid-conversation and should catch yourself up). You are being addressed, so respond to the last thing said appropriately."
 }
 
 # Cycle through commands
@@ -64,40 +59,37 @@ case "$1" in
 			esac
 		done
 
-		[[ -n $thread_name ]] && {
-			thread_path=".var/threads/$(./bare codec text.filesafe "$thread_name").md";
-			thread="$(./bare filter threads | jq --arg name "$thread_name" '.[] | select(.name == $name)')"
-			[[ -z $thread ]] && {
-				echo "---" >> "$thread_path"
-				echo "name: $thread_name" >> "$thread_path"
-				echo "created: $(date '+%Y-%m-%d %H:%M')" >> "$thread_path"
-				echo "---" >> "$thread_path"
-				thread="$(./bare filter threads | jq --arg name "$thread_name" '.[] | select(.name == $name)')"
-			}
-			echo "" >> "$thread_path"
-			echo "USER: $user_messages" >> "$thread_path"
-			echo "" >> "$thread_path"
-			thread_contents="$(echo "$thread" | jq '.contents' | ./bare codec json.decode)"
-			[[ $thread_contents != '' ]] && {
-				user_messages="Here's our thread from earlier (I am the user) - - - $(./bare codec json.encode "$thread_contents") - - - - - - Now... $user_messages"
-			}
+		
+
+		[[ -n $thread_title ]] && {
+
+			[[ "$(recsel -t Thread .var/ai-threads.rec -e "Title = '$thread_title'")" ]] || recins -t Thread .var/ai-threads.rec -f Title -v "$thread_title"
+
+			thread_contents=$(recsel -t ThreadMessage .var/ai-threads.rec -p Created,Author,Contents -e "Thread = '$thread_title'")
+
+			recins -t ThreadMessage .var/ai-threads.rec -f Thread -v "$thread_title" -f Author -v "User" -f Contents -v "$user_messages" --verbose
 		}
 		
 		# Construct the messages array if not provided
 		if [ -z "$messages" ]; then
+			
+			# Initialize the messages array with the system prompt
 			messages=$(jq -n --arg system_prompt "$system_prompt" '[
-				{
-					"role": "system",
-					"content": $system_prompt
-				}
+			  {
+				"role": "system",
+				"content": $system_prompt
+			  }
 			]')
-		
-			for i in "${!user_messages[@]}"; do
-				messages=$(echo "$messages" | jq --arg content "${user_messages[$i]}" '. += [{"role": "user", "content": $content}]')
-				if [ "$i" -lt ${#assistant_messages[@]} ]; then
-					messages=$(echo "$messages" | jq --arg content "${assistant_messages[$i]}" '. += [{"role": "assistant", "content": $content}]')
-				fi
-			done
+			
+			# Fetch the message thread and convert it to a JSON array
+			message_thread=$(recsel -t ThreadMessage .var/ai-threads.rec -p Created,Author,Contents -e "Thread = '$thread_title'" | rec2csv | python3 -c 'import csv, json, sys; print(json.dumps([dict(r) for r in csv.DictReader(sys.stdin)]))')
+			
+			# Format the message_thread JSON array using jq
+			formatted_message_thread=$(echo "$message_thread" | jq '[.[] | {role: (if .Author == "User" then "user" else "assistant" end), name: (if .Author != "User" then .Author else null end), content: .Contents}]')
+			
+			# Append the formatted_message_thread array to the messages array
+			messages=$(jq --argjson thread "$formatted_message_thread" '. + $thread' <<< "$messages")
+
 		fi
 		
 		# Construct the final JSON string using jq
@@ -108,10 +100,8 @@ case "$1" in
 		
 		response=$(./request "https://api.openai.com/v1/chat/completions" --token "$OPENAI_API_KEY" --json "$payload" | jq -r '.choices[0].message.content');
 
-		[[ -n $thread_name ]] && {
-			echo "" >> "$thread_path"
-			echo "$(./bare uppercase "${assistant_name-Assistant}"): $response" >> "$thread_path"
-			echo "" >> "$thread_path"
+		[[ -n $thread_title ]] && {
+			recins -t ThreadMessage .var/ai-threads.rec -f Thread -v "$thread_title" -f Author -v "${assistant_name-Assistant}" -f Contents -v "$response"  --verbose
 		}
 
 		echo "$response"
