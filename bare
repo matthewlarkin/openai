@@ -9,6 +9,11 @@ touch ~/.bashrc
 PATH="./:$PATH"
 export PORT=8282
 
+# setup recs if needed
+for item in scripts ai-threads assistants documents; do
+	[[ ! -f ".var/$item.rec" ]] && cp ".lib/recfiles/$item.rec" ".var/$item.rec"
+done
+
 # sync files from .lib/www to .var/www without overwriting new files in .var/www
 mkdir -p ".var/www" && rsync -av ".lib/www/" ".var/www/" >> /dev/null
 
@@ -23,6 +28,7 @@ if [[ "$1" == "-I" ]]; then
 	PS1='🐻 bare > '
 	source ~/.bashrc
 	PATH=\"$PATH\"
+	PROMPT_COMMAND=./bare
 	echo 'entering bare terminal. type exit when ready to leave.'
 	")
 fi
