@@ -3,7 +3,7 @@
 ./deps cmark || exit 1
 
 # Initialize flags
-file=".var/$1" && shift
+[[ -t 0 ]] && content="$(cat ".var/$1")" && shift || content="$(cat)"
 to_html=0
 inline=0
 
@@ -22,8 +22,6 @@ done
 
 # echo all remaining args
 set -- "${args[@]}"
-
-content=$(< "$file")
 
 # Output content, converting to HTML if required
 if [[ $to_html -eq 1 ]]; then
