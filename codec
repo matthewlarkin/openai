@@ -82,6 +82,20 @@ case $scope in
 		;;
 	html.decode ) echo "$input" | php -R 'echo html_entity_decode($argn, ENT_QUOTES|ENT_HTML5) . "\n";' ;;
 
+	recfile.encode )
+		# Read the input into an array
+		IFS=$'\n' read -r -d '' -a lines <<< "$input"
+		
+		# Print the first line
+		echo "${lines[0]}"
+		
+		# Print each subsequent line with a '+ ' prefix
+		for ((i=1; i<${#lines[@]}; i++)); do
+			echo "+ ${lines[$i]}"
+		done
+		;;
+
+
 esac
 
 exit 0
