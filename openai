@@ -61,14 +61,17 @@ case "$1" in
 
 		
 
-		[[ -n $thread_title ]] && {
+		if [[ -n $thread_title ]]; then
 
 			[[ "$(recsel -t Thread .var/ai-threads.rec -e "Title = '$thread_title'")" ]] || recins -t Thread .var/ai-threads.rec -f Title -v "$thread_title"
 
 			thread_contents=$(recsel -t ThreadMessage .var/ai-threads.rec -p Created,Author,Contents -e "Thread = '$thread_title'")
 
 			recins -t ThreadMessage .var/ai-threads.rec -f Thread -v "$thread_title" -f Author -v "User" -f Contents -v "$user_messages" --verbose
-		}
+
+		fi
+
+
 		
 		# Construct the messages array if not provided
 		if [ -z "$messages" ]; then
@@ -81,12 +84,17 @@ case "$1" in
 			  }
 			]')
 			
-			# Fetch the message thread and convert it to a JSON array
-			message_thread=$(recsel -t ThreadMessage .var/ai-threads.rec -p Created,Author,Contents -e "Thread = '$thread_title'" | rec2csv | python3 -c 'import csv, json, sys; print(json.dumps([dict(r) for r in csv.DictReader(sys.stdin)]))')
-			
-			# Format the message_thread JSON array using jq
-			formatted_message_thread=$(echo "$message_thread" | jq '[.[] | {role: (if .Author == "User" then "user" else "assistant" end), name: (if .Author != "User" then .Author else null end), content: .Contents}]')
-			
+			if [[ -n $thread_title ]]; then
+				# Fetch the message thread and convert it to a JSON array
+				message_thread=$(recsel -t ThreadMessage .var/ai-threads.rec -p Created,Author,Contents -e "Thread = '$thread_title'" | rec2csv | python3 -c 'import csv, json, sys; print(json.dumps([dict(r) for r in csv.DictReader(sys.stdin)]))')
+				
+				# Format the message_thread JSON array using jq
+				formatted_message_thread=$(echo "$message_thread" | jq '[.[] | {role: (if .Author == "User" then "user" else "assistant" end), name: (if .Author != "User" then .Author else null end), content: .Contents}]')
+			else
+				# put single value of "$user_messages" and format that as a single message
+				formatted_message_thread=$(jq -n --arg user_message "${user_messages[0]}" '[{role: "user", content: $user_message}]')
+			fi
+				
 			# Append the formatted_message_thread array to the messages array
 			messages=$(jq --argjson thread "$formatted_message_thread" '. + $thread' <<< "$messages")
 
