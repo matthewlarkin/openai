@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+
+./deps rec2csv
+
+input="$(cat)"
+
+mode="$1"
+
+case $mode in
+
+	--csv)
+		echo "$input" | rec2csv
+		;;
+
+	--json)
+		if [[ -n $input ]]; then
+			# Convert recsel output to CSV, then to JSON, and format with jq
+			json_output=$(echo "$input" | rec2csv 2>/dev/null | python3 -c 'import csv, json, sys; print(json.dumps([dict(r) for r in csv.DictReader(sys.stdin)]))' 2>/dev/null | jq 2>/dev/null)
+
+			# Check if the conversion was successful
+			if [[ $? -eq 0 ]]; then
+				echo "$json_output" | jq
+			else
+				echo "Error: Conversion failed" >&2
+				exit 1
+			fi
+		else
+			echo "Error: No input provided" >&2
+			exit 1
+		fi
+		;;
+
+	*) echo "$input"
+
+esac
