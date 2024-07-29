@@ -28,6 +28,7 @@ Install these with your package manager (`apt get install` on Ubuntu, `brew inst
 ```md
 - curl (7.82+)
 - jq
+- recutils
 - sqlite3
 - cmark
 - yq
@@ -35,7 +36,6 @@ Install these with your package manager (`apt get install` on Ubuntu, `brew inst
 - php
 - awk
 - perl
-- nb
 - openssl
 - magick
 - qrencode
