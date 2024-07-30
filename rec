@@ -1,36 +1,77 @@
 #!/usr/bin/env bash
 
-./deps rec2csv
+./deps rec2csv timeout
 
-input="$(cat)"
-mode="$1"
+[[ -t 0 ]] || input="$(cat)"
+mode="$1" && shift
 
 case $mode in
 
-	--csv)
+    select)
 
-		echo "$input" | rec2csv
+        setrecfile() {
+            recfile=".var/$1" && shift
+        }
+        [[ $1 == 'from' ]] && setrecfile "$2" && shift 2 || setrecfile "$1" && shift
+        [[ ! -f "$recfile" ]] && echo "ERROR: no such recfile: $recfile" && exit 1
+        recsel "$recfile" "$@"
+
+        ;;
+
+	--from)
+
+		file=".var/$1"
+		[[ ! -f "$file" ]] && echo "ERROR: no such file: .var/$1" && exit 1
+		# if file is .csv file pipe to --from-csv, if .json pipe to --from-json
+		[[ $file == *.csv ]] && rec --from-csv "$1" "$2"
+		[[ $file == *.json ]] && rec --from-json "$1" "$2"
 
 		;;
 
-	--json)
+    --from-csv)
 
-		# Convert recsel output to CSV, then to JSON, and format with jq
-		json_output=$(echo "$input" | rec2csv 2>/dev/null | python3 -c 'import csv, json, sys; print(json.dumps([dict(r) for r in csv.DictReader(sys.stdin)]))' 2>/dev/null | jq 2>/dev/null)
+        [[ -f ".var/$1" ]] && input="$(cat ".var/$1")" && shift
+        [[ -z $input ]] && echo "ERROR: no input provided" && exit 1
+        output="$(echo "$input" | csv2rec)"
+        [[ -n $1 ]] && echo "$output" >> ".var/$1" || echo "$output"
 
-		# Check if the conversion was successful
-		if [[ $? -eq 0 ]]; then
-			echo "$json_output" | jq
-		else
-			echo "Error: Conversion failed" >&2
-			exit 1
-		fi
+        ;;
 
-		;;
+    --csv|--to-csv)
 
-	*)
+        echo "$input" | rec2csv
 
-		echo "$input"
+        ;;
 
+    --json|--to-json)
+
+        # Convert recsel output to CSV, then to JSON, and format with jq
+        json_output=$(echo "$input" | rec2csv 2>/dev/null | python3 -c 'import csv, json, sys; print(json.dumps([dict(r) for r in csv.DictReader(sys.stdin)]))' 2>/dev/null | jq 2>/dev/null)
+
+        # Check if the conversion was successful
+        if [[ $? -eq 0 ]]; then
+            echo "$json_output" | jq
+        else
+            echo "Error: Conversion failed" >&2
+            exit 1
+        fi
+
+        ;;
+
+    --from-json)
+    
+		[[ -f ".var/$1" ]] && input="$(cat ".var/$1")" && shift
+		[[ -z $input ]] && echo "ERROR: no input provided" && exit 1
+		# convert given input to csv
+		output=$(echo "$input" | jq -r '(.[0] | keys_unsorted) as $keys | $keys, map([.[ $keys[] ]])[] | @csv' | csv2rec)
+		[[ -n $1 ]] && echo "$output" >> ".var/$1" || echo "$output"
+
+        ;;
+
+    *)
+
+        echo "$input"
 
 esac
+
+exit 0
