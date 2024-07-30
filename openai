@@ -152,11 +152,8 @@ case "$1" in
 		# Check if $1 is provided
 		if [ -n "$1" ]; then
 			input="$1"
-		elif [ -t 0 ]; then  # Check if stdin is connected to a terminal
-			echo "Error: No input provided. Please provide input as an argument or through stdin." >&2
-			exit 1
 		else
-			read -r input
+			input="$(cat | codec newlines.encode)"
 		fi
 
 		output="$(./bare random string 32).mp3"
