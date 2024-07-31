@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-./deps rec2csv timeout
+./deps rec2csv csvlook
 
 [[ -t 0 ]] || input="$(cat)"
 mode="$1" && shift
@@ -32,7 +32,7 @@ case $mode in
 
         [[ -f ".var/$1" ]] && input="$(cat ".var/$1")" && shift
         [[ -z $input ]] && echo "ERROR: no input provided" && exit 1
-        output="$(echo "$input" | csv2rec)"
+        output="$(echo "$input" | sed '1s/^\xEF\xBB\xBF//' | csv2rec)"
         [[ -n $1 ]] && echo "$output" >> ".var/$1" || echo "$output"
 
         ;;
@@ -41,6 +41,17 @@ case $mode in
 
         echo "$input" | rec2csv
 
+        ;;
+		
+	--table|--to-table)
+
+        echo "$input" | rec2csv | csvlook
+
+        ;;
+
+	--sort)
+
+        echo "$input" | rec2csv | csvsort -c "$1" "$2"
         ;;
 
     --json|--to-json)
