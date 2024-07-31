@@ -1,70 +1,21 @@
 #!/usr/bin/env bash
 
-echo "'filter' is not available right now...'"
-echo "It's being reconsidered."
+while [[ "$#" -gt 0 ]]; do
+	case $1 in
+		empty-lines) command="empty-lines"; shift ;;
+	esac
+done && set -- "$@"
 
-# ./deps yq jq awk cmark || exit 1
+input="${1:-$(cat)}"
 
-# command="$1" && shift
-# multi=""
+case $command in
 
-# case $command in
-#     md )
+	empty-lines) 
 
-#         input=".var/${1:-$(cat)}"
+		echo "$input" | sed '/^$/d'
 
-#         # get files (as list of inner directory or input itself)
-#         if [ -d "$input" ]; then
-#             multi="true"
-#             files=$(find "$input" -maxdepth 1 -type f -name "*.md")
-#         else
-#             multi="false"
-#             files="$input"
-#         fi
+		;;
 
-#         # capture --flags and clear
-#         meta="false"
-#         body="false"
-#         html="false"
-#         property=""
-#         value=""
-#         remaining_args=()
-#         while [[ "$#" -gt 0 ]]; do
-#             case $1 in
-#                 --meta) meta="true" && shift ;;
-#                 --body) body="true" && shift ;;
-#                 --html) html="true" && shift ;;
-#                 --by) property="$2" && value="$3" && shift 3 ;;
-#                 *) remaining_args+=("$1") && shift ;;
-#             esac
-#         done
-#         set -- "${remaining_args[@]}"
+	*) echo "Invalid filter: $filter"; exit 1 ;;
 
-#         # Exit if no markdown files are found
-#         [[ -z "$files" ]] && echo "No markdown files found" && exit 1
-
-#         # Initialize an empty JSON array
-#         full="[]"
-
-#         # Iterate through each file
-#         while IFS= read -r file; do
-#             frontmatter=$(sed -n '1,/^---$/ { /^---$/d; p; }' "$file" | yq e -o=json '.')
-#             contents=$(sed -n '/^---$/,/^---$/!p' "$file")
-#             json_object=$(jq -n --arg filepath "$file" --arg contents "$contents" --argjson frontmatter "$frontmatter" '$frontmatter + {filepath: $filepath, contents: $contents}')
-#             full=$(jq --argjson obj "$json_object" '. + [$obj]' <<< "$full")
-#         done <<< "$files"
-
-#         [[ $multi = 'true' ]] && {
-#             [[ $meta = 'true' ]] && echo "$full" | jq 'map(del(.contents))' && exit 0
-#             [[ -n $property && -n $value ]] && echo "$full" | jq --arg prop "$property" --arg val "$value" 'map(select(.[$prop] | test($val; "i")))' && exit 0
-#             echo "$full" | jq && exit 0
-#         }
-
-#         [[ $meta = 'true' ]] && echo "$full" | jq 'map(del(.contents))' && exit 0
-#         [[ $body = 'true' ]] && echo "$full" | jq 'map(.contents)' | jq '.[]' -r && exit 0
-#         [[ $html = 'true' ]] && echo "$full" | jq 'map(.contents)' | jq '.[]' -r | cmark && exit 0
-#         echo "$full" | jq '.[]' && exit 0
-
-#     ;;
-
-# esac
+esac

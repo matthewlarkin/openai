@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+
+input="${1-$([[ -t 0 ]] || cat)}"
+
+# catch no input && exit
+[[ -n $input ]] || { echo "No input provided"; exit 1; }
+
+echo "$input"
