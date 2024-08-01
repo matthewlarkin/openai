@@ -2,59 +2,105 @@
 
 ./deps rec2csv csvlook
 
-[[ -t 0 ]] || input="$(cat)"
-mode="$1" && shift
+if [[ -f $1 ]]; then input="$(cat "$1")" && shift; else [[ -t 0 ]] || input="$(cat)"; fi
 
-case $mode in
+command="$1" && shift
 
-    select)
+remaining_args=() && while [[ "$#" -gt 0 ]]; do
+	case $1 in
+		where|-e|--expression) remaining_args+=(-e "$2") && shift 2 ;;
+		containing|-q|--quick) remaining_args+=(-q "$2") && shift 2 ;;
+		random|-m|--random) remaining_args+=(-m) && shift ;;
+		--table) as_table=1 && shift ;;
+		--as) as="$2" && shift 2 ;;
+		*) remaining_args+=("$1") && shift ;;
+	esac
+done && set -- "${remaining_args[@]}"
 
-        setrecfile() {
-            recfile=".var/$1" && shift
-        }
-        [[ $1 == 'from' ]] && setrecfile "$2" && shift 2 || setrecfile "$1" && shift
-        [[ ! -f "$recfile" ]] && echo "ERROR: no such recfile: $recfile" && exit 1
-        recsel "$recfile" "$@"
+case $command in
+	create|insert|edit|update|remove|delete|transcribe|transform)
+		file="$1" && shift
+		[[ ! -f "$file" ]] && echo "ERROR: no such file: $1" && exit 1
+		;;
+esac
 
-        ;;
+case $command in
 
-	--from)
+	schema) echo "$input" | recinf -d ;;
 
-		file=".var/$1"
-		[[ ! -f "$file" ]] && echo "ERROR: no such file: .var/$1" && exit 1
-		# if file is .csv file pipe to --from-csv, if .json pipe to --from-json
-		[[ $file == *.csv ]] && rec --from-csv "$1" "$2"
-		[[ $file == *.json ]] && rec --from-json "$1" "$2"
+	tables|types) echo "$input" | recinf -d | sed -n '/^%rec/s/^%rec: //p' ;;
+
+	list|select)
+
+		tables="$(echo "$input" | rec tables | tr '\n' '|' | sed 's/|$//')"
+		for table in $(echo "$tables" | tr '|' ' '); do
+			if [[ $table = "$1" ]]; then
+				unset 'remaining_args[i]'
+				remaining_args+=(-t "$table")
+				set -- "${remaining_args[@]}"
+				break
+			fi
+		done
+		[[ $input == '' ]] && {
+			file="$1"
+			[[ ! -f "$file" ]] && file="$1"
+			[[ ! -f "$file" ]] && echo "ERROR: no such file: $1" && exit 1
+			input=$(cat "$file") && shift
+		}
+
+		[[ -n $as_table ]] && echo "$input" | recsel "$@" | rec2csv | csvlook && exit 0
+		echo "$input" | recsel "$@"
+		;;
+
+	create|insert)
+
+		recins "$file" "$@"
 
 		;;
 
-    --from-csv)
+	edit|update)
 
-        [[ -f ".var/$1" ]] && input="$(cat ".var/$1")" && shift
-        [[ -z $input ]] && echo "ERROR: no input provided" && exit 1
-        output="$(echo "$input" | sed '1s/^\xEF\xBB\xBF//' | csv2rec)"
-        [[ -n $1 ]] && echo "$output" >> ".var/$1" || echo "$output"
+		recset "$file" "$@"
 
-        ;;
+		;;
 
-    --csv|--to-csv)
+	remove|delete)
 
-        echo "$input" | rec2csv
+		recdel "$file" "$@"
 
-        ;;
-		
-	--table|--to-table)
+		;;
 
-        echo "$input" | rec2csv | csvlook
+	transform|transcribe) ;;
 
-        ;;
+	import)
 
-	--sort)
+		case $1 in
 
-        echo "$input" | rec2csv | csvsort -c "$1" "$2"
-        ;;
+			from)
 
-    --json|--to-json)
+				shift
+
+				file="$1" && shift
+				[[ ! -f "$file" ]] && echo "ERROR: no such file: $1" && exit 1
+				# if file is .csv file pipe to --from-csv, if .json pipe to --from-json
+				destination="$2" && shift
+				[[ $2 == 'to' ]] && destination="$3"
+				[[ $file == *.csv ]] && rec --from-csv "$file" "$destination"
+				[[ $file == *.json ]] && rec --from-json "$file" "$destination"
+
+				;;
+
+		esac
+
+		;;
+
+	--csv|--to-csv)
+
+		echo "$input" | rec2csv
+
+		;;
+
+	--json|--to-json)
 
         # Convert recsel output to CSV, then to JSON, and format with jq
         json_output=$(echo "$input" | rec2csv 2>/dev/null | python3 -c 'import csv, json, sys; print(json.dumps([dict(r) for r in csv.DictReader(sys.stdin)]))' 2>/dev/null | jq 2>/dev/null)
@@ -67,21 +113,26 @@ case $mode in
             exit 1
         fi
 
-        ;;
+		;;
 
-    --from-json)
+	--from-json)
     
-		[[ -f ".var/$1" ]] && input="$(cat ".var/$1")" && shift
+		[[ -f "$1" ]] && input="$(cat "$1")" && shift
 		[[ -z $input ]] && echo "ERROR: no input provided" && exit 1
 		# convert given input to csv
 		output=$(echo "$input" | jq -r '(.[0] | keys_unsorted) as $keys | $keys, map([.[ $keys[] ]])[] | @csv' | csv2rec)
-		[[ -n $1 ]] && echo "$output" >> ".var/$1" || echo "$output"
+		[[ -n $1 ]] && echo "$output" >> "$1" || echo "$output"
 
         ;;
 
-    *)
+	--from-csv)
 
-        echo "$input"
+		[[ -f "$1" ]] && input="$(cat "$1")" && shift
+		[[ -z $input ]] && echo "ERROR: no input provided" && exit 1
+		output="$(echo "$input" | sed '1s/^\xEF\xBB\xBF//' | csv2rec)"
+		[[ -n $1 ]] && echo "$output" >> "$1" || echo "$output"
+
+		;;
 
 esac
 
