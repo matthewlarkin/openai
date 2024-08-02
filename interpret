@@ -9,7 +9,7 @@
 # Ensure script name does not contain path traversal characters
 script_title="${1-$(cat)}" && shift
 
-script_contents=$(recsel -t Script .var/scripts.rec -e "Title = '$script_title'" -P Contents)
+script_contents=$(recsel -t Script .var/bare.rec -e "Title = '$script_title'" -P Contents)
 
 [[ -z $script_contents ]] && echo "No script by that title found: $script_title" && exit 1
 

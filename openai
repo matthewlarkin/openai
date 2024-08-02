@@ -15,6 +15,7 @@ remaining_args=() && while [[ "$#" -gt 0 ]]; do
 		--assistants) list_assistants=1 && shift ;;
 		--thread) thread_title="$2"; shift 2 ;;
 		--threads) list_threads=1 && shift ;;
+		--json) json_mode=1 && shift ;;
 		*) remaining_args+=("$1"); shift ;;
 	esac
 done && set -- "${remaining_args[@]}"
@@ -23,16 +24,16 @@ done && set -- "${remaining_args[@]}"
 assistant_prompt="You are a helpful assistant.";
 [[ -n $assistant_name ]] && {
 	assistant_introduction="In this conversation thread you are '$assistant_name'."
-	assistant_instructions="$(recsel .var/assistants.rec -e "Name = '$assistant_name'" -P Contents)"
+	assistant_instructions="$(recsel -t Assistant .var/bare.rec -e "Name = '$assistant_name'" -P Contents)"
 	assistant_background="Take into consideration the conversation thread (even if some messages are not your own, as you may be entering the chat mid-conversation and should catch yourself up)."
 	assistant_prompt="%YOUR_NAME: $assistant_introduction - - - %YOUR_INSTRUCTIONS: $assistant_instructions - - - %BACKGROUND: $assistant_background - - - %YOUR TASK: Now, you have just been addressed, so respond to the last thing said in a manner consistent with %YOUR_INSTRUCTIONS."
 }
 
 # if --threads, just list thread title and exit
-[[ -n $list_threads ]] && recsel -t Thread .var/ai-threads.rec -P Title && exit 0
+[[ -n $list_threads ]] && recsel -t Thread .var/bare.rec -P Title && exit 0
 
 # if --assistants, just list assistants and their instructions and exit
-[[ -n $list_assistants ]] && recsel .var/assistants.rec -p Name,Contents | awk '{
+[[ -n $list_assistants ]] && recsel -t Assistant .var/bare.rec -p Name,Contents | awk '{
   while (length($0) > 60) {
     space_index = 60
     while (substr($0, space_index, 1) != " " && space_index > 1) space_index--
@@ -70,15 +71,15 @@ case "$1" in
 			done < /dev/stdin
 		fi
 		
-		# Parse command-line arguments
 		shift
+		# Parse command-line arguments
 		while [[ "$#" -gt 0 ]]; do
 			case $1 in
-				--model) model="$2"; shift 2 ;;
-				--system_prompt) system_prompt="$2"; shift 2 ;;
-				--user_messages) user_messages+=("$2"); shift 2 ;;
-				--assistant_messages) assistant_messages+=("$2"); shift 2 ;;
-				--messages) messages=$(echo "$2" | jq -c .); shift 2 ;;
+				--model) model="$2" && shift 2 ;;
+				--system_prompt) system_prompt="$2" && shift 2 ;;
+				--user_messages) user_messages+=("$2") && shift 2 ;;
+				--assistant_messages) assistant_messages+=("$2") && shift 2 ;;
+				--messages) messages=$(echo "$2" | jq -c .) && shift 2 ;;
 				*) echo "Invalid option: $1" >&2 && exit 1 ;;
 			esac
 		done
@@ -87,15 +88,15 @@ case "$1" in
 
 		if [[ -n $thread_title ]]; then
 
-			[[ "$(recsel -t Thread .var/ai-threads.rec -e "Title = '$thread_title'")" ]] || recins -t Thread .var/ai-threads.rec -f Title -v "$thread_title"
+			[[ "$(recsel -t Thread .var/bare.rec -e "Title = '$thread_title'")" ]] || recins -t Thread .var/bare.rec -f Title -v "$thread_title"
 
-			thread_contents=$(recsel -t ThreadMessage .var/ai-threads.rec -p Created,Author,Contents -e "Thread = '$thread_title'")
+			thread_contents=$(recsel -t ThreadMessage .var/bare.rec -p Created,Author,Contents -e "Thread = '$thread_title'")
 
-			recins -t ThreadMessage .var/ai-threads.rec -f Thread -v "$thread_title" -f Author -v "User" -f Contents -v "$user_messages" --verbose
+			recins -t ThreadMessage .var/bare.rec -f Thread -v "$thread_title" -f Author -v "User" -f Contents -v "$user_messages" --verbose
 
 		fi
 
-
+		[[ -n $json_mode ]] && system_prompt="$system_prompt. And return as JSON. If the user does not specify a property to put the response in, put the response in a property named 'response'."
 		
 		# Construct the messages array if not provided
 		if [ -z "$messages" ]; then
@@ -110,7 +111,7 @@ case "$1" in
 			
 			if [[ -n $thread_title ]]; then
 				# Fetch the message thread and convert it to a JSON array
-				message_thread=$(recsel -t ThreadMessage .var/ai-threads.rec -p Created,Author,Contents -e "Thread = '$thread_title'" | rec2csv | python3 -c 'import csv, json, sys; print(json.dumps([dict(r) for r in csv.DictReader(sys.stdin)]))')
+				message_thread=$(recsel -t ThreadMessage .var/bare.rec -p Created,Author,Contents -e "Thread = '$thread_title'" | rec2csv | python3 -c 'import csv, json, sys; print(json.dumps([dict(r) for r in csv.DictReader(sys.stdin)]))')
 				
 				# Format the message_thread JSON array using jq
 				formatted_message_thread=$(echo "$message_thread" | jq '[.[] | {role: (if .Author == "User" then "user" else "assistant" end), name: (if .Author != "User" then .Author else null end), content: .Contents}]')
@@ -129,11 +130,14 @@ case "$1" in
 			model: $model,
 			messages: $messages
 		}')
+
+		# if json_mode append "response_format": { "type": "json_object" } to payload
+		[[ -n $json_mode ]] && payload=$(echo "$payload" | jq '. + {response_format: {type: "json_object"}}')
 		
 		response=$(./request "https://api.openai.com/v1/chat/completions" --token "$OPENAI_API_KEY" --json "$payload" | jq -r '.choices[0].message.content');
 
 		[[ -n $thread_title ]] && {
-			recins -t ThreadMessage .var/ai-threads.rec -f Thread -v "$thread_title" -f Author -v "${assistant_name-Assistant}" -f Contents -v "$response"  --verbose
+			recins -t ThreadMessage .var/bare.rec -f Thread -v "$thread_title" -f Author -v "${assistant_name-Assistant}" -f Contents -v "$response"
 		}
 
 		echo "$response"

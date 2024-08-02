@@ -9,6 +9,31 @@ touch ~/.bashrc
 PATH="./:$PATH"
 export PORT=8282
 
+
+# set bare.rec
+etc_file=".etc/bare.rec"
+var_file=".var/bare.rec"
+
+# Read existing lines from the var file into an associative array for quick lookup
+declare -A existing_lines
+while IFS= read -r line; do
+  if [[ $line == %rec:* ]]; then
+    existing_lines["$line"]=1
+  fi
+done < "$var_file"
+
+# Read each line from the etc file and add missing lines to the var file
+while IFS= read -r line; do
+  if [[ $line == %rec:* ]]; then
+    record_type=$(echo $line | awk '{print $2}')
+    var_line="%rec: $record_type $etc_file"
+    if [[ -z ${existing_lines["$var_line"]} ]]; then
+      echo -e "\n$var_line" >> "$var_file"
+    fi
+  fi
+done < "$etc_file"
+
+
 # setup recs if needed
 for item in scripts ai-threads assistants documents; do
 	[[ ! -f ".var/$item.rec" ]] && cp ".lib/recfiles/$item.rec" ".var/$item.rec"

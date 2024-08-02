@@ -1,0 +1,27 @@
+# This document is intended solely for recfile
+# descriptors, and not for the records themselves.
+# Please note that it may be overwritten by future
+# bare updates.
+
+%rec: Assistant
+%mandatory: Name Contents
+
+%rec: Document
+%mandatory: Title Contents
+
+%rec: Thread
+%key: Title
+%mandatory: Created
+%type: Created date
+%auto: Created
+
+%rec: ThreadMessage
+%key: ID
+%mandatory: Author Contents Thread Created
+%type: ID int
+%type: Created date
+%auto: ID Created
+
+%rec: Script
+%key: Title
+%mandatory: Contents

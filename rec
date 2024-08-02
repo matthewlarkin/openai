@@ -49,6 +49,8 @@ case $command in
 		}
 
 		[[ -n $as_table ]] && echo "$input" | recsel "$@" | rec2csv | csvlook && exit 0
+		[[ $as == 'json' ]] && echo "$input" | recsel "$@" | rec --json && exit 0
+		[[ $as == 'csv' ]] && echo "$input" | recsel "$@" | rec --csv && exit 0
 		echo "$input" | recsel "$@"
 		;;
 
