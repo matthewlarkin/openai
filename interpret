@@ -10,8 +10,8 @@
 script_title="${1-$(cat)}" && shift
 
 script_contents=$(recsel -t Script .var/bare.rec -e "Title = '$script_title'" -P Contents)
-
-[[ -z $script_contents ]] && echo "No script by that title found: $script_title" && exit 1
+[[ $script_contents == '' ]] && script_contents=$(cat .var/scripts/"$(./bare codec text.filesafe "$script_title")")
+[[ $script_contents == '' ]] && echo "No script by that title found: $script_title" && exit 1
 
 # Prepend shebang and PATH export, then execute the script
 {
