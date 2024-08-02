@@ -8,6 +8,31 @@ input="${1:-$(cat)}"
 
 case $scope in
 
+	lines.arguments )
+		readarray -t lines <<< "$input"
+
+		# Check if the last element contains a space
+		if [[ "${lines[-1]}" == *" "* ]]; then
+		# Combine the last two elements
+		last_element="${lines[-2]} ${lines[-1]}"
+		# Remove the last two elements
+		unset 'lines[-1]'
+		unset 'lines[-2]'
+		# Add the combined element
+		lines+=("$last_element")
+		fi
+
+		# Print each element as a separate argument on one line
+		output=""
+		for line in "${lines[@]}"; do
+		output+="\"$line\" "
+		done
+
+		# Trim the trailing space and print the result
+		echo "${output% }"
+
+		;;
+
 	text.filesafe ) echo -n "$input" | sed 's/ /-/g; s/[^a-zA-Z0-9._-]//g' ;;
 
 	json.encode ) echo -n "$input" | jq -s -R -r @json ;;
