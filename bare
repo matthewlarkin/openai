@@ -10,6 +10,9 @@ PATH="./:$PATH"
 export PORT=8282
 
 
+# setup bare recfile if needed
+[[ ! -f ".var/bare.rec" ]] && cp ".etc/bare.rec" ".var/bare.rec"
+
 # set bare.rec
 etc_file=".etc/bare.rec"
 var_file=".var/bare.rec"
@@ -32,12 +35,6 @@ while IFS= read -r line; do
     fi
   fi
 done < "$etc_file"
-
-
-# setup recs if needed
-for item in scripts ai-threads assistants documents; do
-	[[ ! -f ".var/$item.rec" ]] && cp ".lib/recfiles/$item.rec" ".var/$item.rec"
-done
 
 # sync files from .lib/www to .var/www without overwriting new files in .var/www
 mkdir -p ".var/www" && rsync -av ".lib/www/" ".var/www/" >> /dev/null
