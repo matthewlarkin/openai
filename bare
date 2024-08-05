@@ -7,43 +7,12 @@ cd "$(dirname "$0")"
 touch ~/.bashrc
 [[ -f .etc/barerc ]] && source .etc/barerc
 PATH="./:$PATH"
-export PORT=8282
-
-
-# setup bare recfile if needed
-[[ ! -f ".var/bare.rec" ]] && cp ".etc/bare.rec" ".var/bare.rec"
-
-# set bare.rec
-etc_file=".etc/bare.rec"
-var_file=".var/bare.rec"
-
-# Read existing lines from the var file into an associative array for quick lookup
-declare -A existing_lines
-while IFS= read -r line; do
-  if [[ $line == %rec:* ]]; then
-    existing_lines["$line"]=1
-  fi
-done < "$var_file"
-
-# Read each line from the etc file and add missing lines to the var file
-while IFS= read -r line; do
-  if [[ $line == %rec:* ]]; then
-    record_type=$(echo $line | awk '{print $2}')
-    var_line="%rec: $record_type $etc_file"
-    if [[ -z ${existing_lines["$var_line"]} ]]; then
-      echo -e "\n$var_line" >> "$var_file"
-    fi
-  fi
-done < "$etc_file"
-
-# sync files from .lib/www to .var/www without overwriting new files in .var/www
-mkdir -p ".var/www" && rsync -av ".lib/www/" ".var/www/" >> /dev/null
 
 # close up shop early, if that's it
-[[ -z "$1" ]] && exit 0
+[[ -z $1 ]] && exit 0
 
 # Check if the -I flag is provided for interactive mode
-if [[ "$1" == "-I" ]]; then
+if [[ $1 == "-I" || $1 == '-i' ]]; then
 	shift
 	# Start an interactive bash shell with the current environment
 	exec bash --rcfile <(echo "
