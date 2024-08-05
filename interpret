@@ -9,12 +9,23 @@
 # Ensure script name does not contain path traversal characters
 script_title="${1-$(cat)}" && shift
 
-script_contents=$(recsel -t Script .var/bare.rec -e "Title = '$script_title'" -P Contents)
-[[ $script_contents == '' ]] && script_contents=$(cat .var/scripts/"$(./bare codec text.filesafe "$script_title")")
+script_contents=$(cat ".var/scripts/$script_title")
 [[ $script_contents == '' ]] && echo "No script by that title found: $script_title" && exit 1
 
-# Prepend shebang and PATH export, then execute the script
+# Create a temporary file
+temp_script=$(mktemp)
+
+# Prepend shebang and PATH export, then write the script contents to the temporary file
 {
 	printf '#!/usr/bin/env bash\nexport PATH="$PATH:."\n'
 	echo "$script_contents"
-} | bash -s -- "$@"
+} > "$temp_script"
+
+# Make the temporary file executable
+chmod +x "$temp_script"
+
+# Execute the temporary script
+"$temp_script" "$@"
+
+# Remove the temporary file
+rm "$temp_script"
