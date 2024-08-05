@@ -1,20 +1,30 @@
 #!/usr/bin/env bash
 
+# Read from stdin if not a terminal
 [[ -t 0 ]] || contents=$(cat)
 
-remaining_args=() && while [[ $# -gt 0 ]]; do
+# Parse arguments
+remaining_args=()
+while [[ $# -gt 0 ]]; do
 	case $1 in
 		--to) file="$2" && shift 2 ;;
 		--contents) contents="$2" && shift 2 ;;
 		*) remaining_args+=("$1") && shift ;;
 	esac
-done && set -- "${remaining_args[@]}"
+done
+set -- "${remaining_args[@]}"
 
+# Handle positional arguments
 [[ $# -eq 1 && -n $file ]] && contents="$1"
 [[ $# -eq 1 && -n $contents ]] && file="$1"
 [[ $# -eq 2 ]] && { contents="$1"; file="$2"; }
 
+# Check for missing arguments
 [[ -z $contents ]] && echo "Error: Missing contents" >&2 && exit 1
 [[ -z $file ]] && echo "Error: Missing file" >&2 && exit 1
 
+# Clean carriage return characters from contents
+contents=$(echo "$contents" | tr -d '\r')
+
+# Write contents to the specified file
 echo "$contents" > "$file"
