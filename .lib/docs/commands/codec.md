@@ -88,3 +88,21 @@ cat my-file.txt | ./bare codec newlines.encode
 #
 # With a bigger gap at the bottom
 #
+```
+
+
+### Options
+
+- lines.json
+- items.index
+- lines.index
+- item.raw
+- lines.markdown
+- lines.arguments|items
+- text.filesafe
+- json.encode/decode
+- newlines.encode/decode
+- url.encode/decode
+- form-data.encode/decode
+- base64.encode/decode
+- html.encode
