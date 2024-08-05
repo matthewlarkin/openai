@@ -2,14 +2,18 @@
 
 ./deps rec2csv csvlook
 
-if [[ -f $1 ]]; then input="$(cat "$1")" && shift; else [[ -t 0 ]] || input="$(cat)"; fi
+if [[ -f $1 ]]; then
+	input=$(cat "$1") && shift;
+else
+	[[ -t 0 ]] || input=$(cat);
+fi
+
+[[ -z $input ]] && input=$(cat .var/bare.rec)
 
 command="$1" && shift
 
 remaining_args=() && while [[ "$#" -gt 0 ]]; do
 	case $1 in
-		where|-e|--expression) remaining_args+=(-e "$2") && shift 2 ;;
-		containing|-q|--quick) remaining_args+=(-q "$2") && shift 2 ;;
 		random|-m|--random) remaining_args+=(-m) && shift ;;
 		--table) as_table=1 && shift ;;
 		--as) as="$2" && shift 2 ;;
@@ -18,61 +22,33 @@ remaining_args=() && while [[ "$#" -gt 0 ]]; do
 done && set -- "${remaining_args[@]}"
 
 case $command in
-	create|insert|edit|update|remove|delete|transcribe|transform)
-		file="$1" && shift
-		[[ ! -f "$file" ]] && echo "ERROR: no such file: $1" && exit 1
-		;;
-esac
-
-case $command in
 
 	schema) echo "$input" | recinf -d ;;
 
 	tables|types) echo "$input" | recinf -d | sed -n '/^%rec/s/^%rec: //p' ;;
 
-	list|select)
+	select)
 
-		tables="$(echo "$input" | rec tables | tr '\n' '|' | sed 's/|$//')"
-		for table in $(echo "$tables" | tr '|' ' '); do
-			if [[ $table = "$1" ]]; then
-				unset 'remaining_args[i]'
-				remaining_args+=(-t "$table")
-				set -- "${remaining_args[@]}"
-				break
-			fi
-		done
-		[[ $input == '' ]] && {
-			file="$1"
-			[[ ! -f "$file" ]] && file="$1"
-			[[ ! -f "$file" ]] && echo "ERROR: no such file: $1" && exit 1
-			input=$(cat "$file") && shift
-		}
-
-		[[ -n $as_table ]] && echo "$input" | recsel "$@" | rec2csv | csvlook && exit 0
-		[[ $as == 'json' ]] && echo "$input" | recsel "$@" | rec --json && exit 0
-		[[ $as == 'csv' ]] && echo "$input" | recsel "$@" | rec --csv && exit 0
 		echo "$input" | recsel "$@"
-		;;
-
-	create|insert)
-
-		recins "$file" "$@"
 
 		;;
 
-	edit|update)
+	list)
 
-		recset "$file" "$@"
+		case $1 in
+
+			[dD]ocuments) echo "$input" | recsel -t Document -P Title -C | sed 's/$/  /' ;;
+
+			[aA]ssistants) echo "$input" | recsel -t Assistant -P Name -C | sed 's/$/  /' ;;
+
+			[sS]cripts) ls .var/scripts | sed 's/$/  /' ;;
+
+			[tT]hreads)
+
+
+		esac
 
 		;;
-
-	remove|delete)
-
-		recdel "$file" "$@"
-
-		;;
-
-	transform|transcribe) ;;
 
 	import)
 
