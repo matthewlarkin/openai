@@ -11,7 +11,7 @@ inline=0
 args=()
 for arg in "$@"; do
 	case "$arg" in
-		--to-html)
+		--to-html|--as-html)
 			to_html=1 && shift
 			;;
 		*)
