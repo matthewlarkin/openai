@@ -2,112 +2,228 @@
 
 ./deps jq xxd php awk perl
 
+remaining_args=() && while [[ $# -gt 0 ]]; do
+    case $1 in
+        --trim) trim=1 && shift ;;
+        *) remaining_args+=("$1") && shift ;;
+    esac
+done && set -- "${remaining_args[@]}"
+
 scope="$1" && shift
 
-input="${1:-$(cat)}"
+[[ -t 0 ]] || input=$(cat)
+[[ -z $input ]] && input="$1"
+[[ -z $input ]] && echo -n "ERROR: No input provided." && exit 1
+
+[[ -n $trim ]] && input=$(echo -n "$input" | awk '{$1=$1};1')
+
+
+
+output=""
 
 case $scope in
 
-	lines.arguments )
-	
-		readarray -t lines <<< "$input"
+	lines.json)
 
-		output="" && for line in "${lines[@]}"; do
-			output+="\"$line\" "
-		done
+		# Function to convert a list of items into a JSON array
+		convert_to_json_array() {
+			local input="$1"
+			output=$(echo -n "$input" | jq -R -s -c 'split("\n") | map(select(length > 0) | gsub("^\\s+|\\s+$"; ""))')
+		}
 
-		echo "${output% }"
+		# Function to handle JSON string input
+		handle_json_string() {
+			local input="$1"
+			output=$(echo -n "$input" | jq -s -c '.')
+		}
 
-		;;
-
-	text.filesafe ) echo -n "$input" | sed 's/ /-/g; s/[^a-zA-Z0-9._-]//g' ;;
-
-	json.encode ) echo -n "$input" | jq -s -R -r @json ;;
-	json.decode ) echo -n "$input" | jq -r . ;;
-
-	# text.newlines ) echo -n "$input" | awk '{printf "%s  \\n", $0}' | tr -d '\n' ;;
-	newlines.encode )
-	  # Read input line by line, including the last line whether it ends with a newline or not
-	  while IFS= read -r line || [[ -n "$line" ]]; do
-		# Print the line with a \n at the end
-		printf '%s\\n' "$line"
-	  done <<< "$input"
-	  echo ""
-	;;
-	newlines.decode ) echo -e "$input" ;;
-
-	url.encode ) echo -n "$input" | jq -s -R -r @uri ;;
-	url.decode ) echo -n "$input" | perl -pe 'chomp; s/%([0-9a-f]{2})/sprintf("%s", pack("H2",$1))/eig' && echo "" ;;
-
-	form-data.encode )
-		if [[ -n "$input" ]]; then
-			encoded=$(echo "$input" | jq -r 'to_entries | map("\(.key)=\(.value|@uri)") | join("&")')
-			echo "$encoded"
+		# Check if the input is a JSON string or a list of items
+		if echo -n "$input" | jq empty 2>/dev/null; then
+			handle_json_string "$input"
 		else
-			echo "No input provided."
+			convert_to_json_array "$input"
 		fi
+
 		;;
 
-	form-data.decode )
-		declare -A params=()
+	items.index)
+
+		index="$1" && shift
+		json_array=$(echo -n "$input" | sed 's/\" \"/\", \"/g; s/^/[/; s/$/]/')
 		
-		IFS='&' read -ra key_value_pairs <<< "$input"
-		
-		json_object="{"
-		for key_value_pair in "${key_value_pairs[@]}"; do
-			IFS='=' read -r key value <<< "$key_value_pair"
-			
-			# Decode the key and value from URL encoding
-			decoded_key=$(echo -e $(sed 's/+/ /g;s/%\(..\)/\\x\1/g' <<< "$key"))
-			decoded_value=$(echo -e $(sed 's/+/ /g;s/%\(..\)/\\x\1/g' <<< "$value"))
-			
-			# Ensure keys are URI encoded for JSON keys
-			json_key=$(jq -Rr @uri <<<"$decoded_key")
-			
-			# Check if decoded_value is a JSON array or object
-			if [[ $decoded_value == \{* ]] || [[ $decoded_value == \[* ]]; then
-				# It's a JSON array or object, add it directly
-				json_object+="\"$json_key\":$decoded_value,"
-			else
-				# It's a regular string, format it for JSON
-				json_object+="\"$json_key\":$(jq -Rr @json <<<"$decoded_value"),"
-			fi
-		done
-		json_object="${json_object%,}}"
-		
-		echo $json_object | jq -cM .
+		output=""
+		if [[ -z "$index" ]]; then
+			# No index given, return all items
+			output=$(echo -n "$json_array" | jq -r '.[]')
+		else
+			IFS=',' read -ra indices <<< "$index"
+
+			for idx in "${indices[@]}"; do
+				if [[ "$idx" =~ ^[0-9]+$ ]]; then
+					# Single index given
+					output+=$(echo -n "$json_array" | jq -r --argjson n "$idx" '.[$n]')$'\n'
+				elif [[ "$idx" =~ ^[0-9]+-[0-9]+$ ]]; then
+					# Range of indices given
+					start=$(echo -n "$idx" | cut -d'-' -f1)
+					end=$(echo -n "$idx" | cut -d'-' -f2)
+					output+=$(echo -n "$json_array" | jq -r --argjson start "$start" --argjson end "$end" '.[$start:$end+1][]')$'\n'
+				else
+					echo -n "Invalid index format: $idx"
+					exit 1
+				fi
+			done
+
+			# Trim the trailing newline from the final output
+			output="${output%"${output##*[![:space:]]}"}"
+		fi
+
 		;;
 
-	base64.encode ) echo "$input" | jq -s -R -r @base64 ;;
-	base64.decode ) echo "$input" | perl -MMIME::Base64 -ne 'print decode_base64($_)';;
 
-	hex.encode ) echo "$input" | xxd -ps ;;
-	hex.decode ) echo "$input" | xxd -r -p ;;
-
-	html.encode )
-		
-		# Base64 encode the input to avoid issues with special characters
-		encoded_input=$(echo "$input" | base64)
+	lines.index)
 	
-		# Decode from base64 and then encode to HTML
-		echo "$encoded_input" | base64 --decode | jq -j -s -R -r @html
-		;;
-	html.decode ) echo "$input" | php -R 'echo html_entity_decode($argn, ENT_QUOTES|ENT_HTML5) . "\n";' ;;
+		# Read the index and shift arguments
+		index="$1" && shift
+		# Process the input, trim white spaces, remove empty lines, and join with newline character
+		lines=$(echo -n "$input" | awk '{$1=$1;print}' | jq -R -s -c 'split("\n") | map(select(length > 0))')
 
-	recfile.encode )
-		# Read the input into an array
-		IFS=$'\n' read -r -d '' -a lines <<< "$input"
-		
-		# Print the first line
-		echo "${lines[0]}"
-		
-		# Print each subsequent line with a '+ ' prefix
-		for ((i=1; i<${#lines[@]}; i++)); do
-			echo "+ ${lines[$i]}"
-		done
+		output=""
+		if [[ -z "$index" ]]; then
+			# No index given, return all lines
+			output=$(echo -n "$lines" | jq -r '.[]' | codec newlines.decode)
+		else
+			IFS=',' read -ra indices <<< "$index"
+
+			for idx in "${indices[@]}"; do
+				reverse_flag=false
+				if [[ "$idx" =~ ^- ]]; then
+					reverse_flag=true
+					idx="${idx#-}"
+					lines=$(echo -n "$lines" | jq 'reverse')
+				fi
+
+				if [[ "$idx" =~ ^[0-9]+$ ]]; then
+					output+=$(echo -n "$lines" | jq -r --argjson n "$idx" '.[$n]')$'\n'
+				elif [[ "$idx" =~ ^[0-9]+-[0-9]+$ ]]; then
+					start=$(echo -n "$idx" | cut -d'-' -f1)
+					end=$(echo -n "$idx" | cut -d'-' -f2)
+					output+=$(echo -n "$lines" | jq -r --argjson start "$start" --argjson end "$end" '.[$start:$end+1][]')$'\n'
+				else
+					echo -n "Invalid index format: $idx"
+					exit 1
+				fi
+
+				if $reverse_flag; then
+					lines=$(echo -n "$lines" | jq 'reverse')
+				fi
+			done
+
+			# Trim the trailing newline from the final output
+			output="${output%"${output##*[![:space:]]}"}"
+		fi
+
 		;;
 
+
+	item.raw)
+
+		# strips the outer quotes off items " and '
+		output=$(echo -n "$input" | jq -r)
+
+		;;
+
+	lines.markdown)
+
+		output="${input//$'\n'/$'  \n'}"
+
+		;;
+
+    lines.arguments|lines.items)
+
+        output=$(echo -n "$input" | awk '{$1=$1;print}' | jq -R -s -c 'split("\n") | map(select(length > 0) | @json) | join(" ")' | sed 's/\\\"/\"/g' | sed 's/^"//;s/"$//')
+
+        ;;
+
+    text.filesafe ) output=$(echo -n "$input" | sed 's/ /-/g; s/[^a-zA-Z0-9._-]//g') ;;
+
+    json.encode ) output=$(echo -n "$input" | jq -s -R -r @json) ;;
+    json.decode ) output=$(echo -n "$input" | jq -r .) ;;
+
+    newlines.encode )
+      # Read input line by line, including the last line whether it ends with a newline or not
+      output=$(
+        while IFS= read -r line || [[ -n "$line" ]]; do
+            # Print the line with a \n at the end
+            printf '%s\\n' "$line"
+        done <<< "$input"
+      )
+    ;;
+    newlines.decode ) output=$(echo -e "$input") ;;
+
+    url.encode ) output=$(echo -n "$input" | jq -s -R -r @uri) ;;
+    url.decode ) output=$(echo -n "$input" | perl -pe 'chomp; s/%([0-9a-f]{2})/sprintf("%s", pack("H2",$1))/eig') ;;
+
+    form-data.encode )
+        if [[ -n "$input" ]]; then
+            output=$(echo -n "$input" | jq -r 'to_entries | map("\(.key)=\(.value|@uri)") | join("&")')
+        else
+            output="No input provided."
+        fi
+        ;;
+
+    form-data.decode )
+        
+        IFS='&' read -ra key_value_pairs <<< "$input"
+        
+        json_object="{"
+        for key_value_pair in "${key_value_pairs[@]}"; do
+            IFS='=' read -r key value <<< "$key_value_pair"
+            
+            # Decode the key and value from URL encoding
+            decoded_key=$(echo -e "$(sed 's/+/ /g;s/%\(..\)/\\x\1/g' <<< "$key")")
+            decoded_value=$(echo -e "$(sed 's/+/ /g;s/%\(..\)/\\x\1/g' <<< "$value")")
+            
+            # Ensure keys are URI encoded for JSON keys
+            json_key=$(jq -Rr @uri <<<"$decoded_key")
+            
+            # Check if decoded_value is a JSON array or object
+            if [[ $decoded_value == \{* ]] || [[ $decoded_value == \[* ]]; then
+                # It's a JSON array or object, add it directly
+                json_object+="\"$json_key\":$decoded_value,"
+            else
+                # It's a regular string, format it for JSON
+                json_object+="\"$json_key\":$(jq -Rr @json <<<"$decoded_value"),"
+            fi
+        done
+        json_object="${json_object%,}}"
+        
+        output=$(echo -n "$json_object" | jq -cM .)
+        ;;
+
+    base64.encode ) output=$(echo -n "$input" | jq -s -R -r @base64) ;;
+    base64.decode ) output=$(echo -n "$input" | perl -MMIME::Base64 -ne 'print decode_base64($_)') ;;
+
+    hex.encode ) output=$(echo -n "$input" | xxd -ps) ;;
+    hex.decode ) output=$(echo -n "$input" | xxd -r -p) ;;
+
+    html.encode )
+        
+        # Base64 encode the input to avoid issues with special characters
+        encoded_input=$(echo -n "$input" | base64)
+    
+        # Decode from base64 and then encode to HTML
+        output=$(echo -n "$encoded_input" | base64 --decode | jq -j -s -R -r @html)
+        ;;
+    html.decode ) output=$(echo -n "$input" | php -R 'echo html_entity_decode($argn, ENT_QUOTES|ENT_HTML5) . "\n";') ;;
+
+	*) echo "ERROR: Invalid scope provided." && exit 1 ;;
 
 esac
 
-exit 0
+[[ $trim ]] && output=$(echo -n "$output" | awk '{$1=$1};1')
+
+if [[ $trim ]]; then
+    echo -n "$output"
+else
+    echo "$output"
+fi
