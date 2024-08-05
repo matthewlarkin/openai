@@ -2,6 +2,13 @@
 
 ./deps sqlpage
 
+# sync files from .lib/www to .var/www without overwriting new files in .var/www
+mkdir -p ".var/www" && rsync -av ".lib/www/" ".var/www/" >> /dev/null
+
+export PORT=8282
+export allow_exec=true
+export max_uploaded_file_size=50000000
+
 command="$1"
 
 case "$command" in
