@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
 
-[[ -t 0 ]] || input=$(cat)
-
 remaining_args=() && while true; do
 	case $1 in
 		'') break ;;
@@ -10,7 +8,7 @@ remaining_args=() && while true; do
 	esac
 done && set -- "${remaining_args[@]}"
 
-[[ -z $input ]] && input="$*" && shift $#
+[[ -t 0 ]] && input=$* || input=$(cat)
 
 # if 'all', capitalize all words
 echo "$input" |

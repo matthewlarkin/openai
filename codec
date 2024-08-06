@@ -11,13 +11,10 @@ done && set -- "${remaining_args[@]}"
 
 scope="$1" && shift
 
-[[ -t 0 ]] || input=$(cat)
-[[ -z $input ]] && input="$1"
+[[ -t 0 ]] && input=$1 || input=$(cat)
 [[ -z $input ]] && echo -n "ERROR: No input provided." && exit 1
 
 [[ -n $trim ]] && input=$(echo -n "$input" | awk '{$1=$1};1')
-
-
 
 output=""
 

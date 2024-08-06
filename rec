@@ -41,10 +41,9 @@ case $command in
 
 			[aA]ssistants) echo "$input" | recsel -t Assistant -P Name -C | sed 's/$/  /' ;;
 
-			[sS]cripts) ls .var/scripts | sed 's/$/  /' ;;
+			[sS]cripts) find .var/scripts -maxdepth 1 -print0 | xargs -0 -I {} basename {} | sed 's/$/  /' ;;
 
-			[tT]hreads)
-
+			[tT]hreads) ;;
 
 		esac
 
