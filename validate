@@ -1,0 +1,104 @@
+#!/usr/bin/env bash
+
+[[ -t 0 ]] && {
+    type=$1 && input="$2" && shift 2
+} || { input=$(cat); type=$1; shift; }
+
+# Output approach: store output, then check if output exists
+
+case $type in
+
+    url|web-address|link)
+        output=$(echo "$input" | sed -E '/^(https?:\/\/)?([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(\/.*)?$/!d') ;;
+
+	ip)
+		output=$(echo "$input" | sed -E '/^([0-9]{1,3}\.){3}[0-9]{1,3}$/!d') ;;
+
+	number|num)
+
+			[[ $(validate integer "$input") == 'true' || $(validate float "$input") == 'true' ]] && {
+				output="$input"
+			}
+
+		;;
+
+	integer|int|digit)
+
+		# check for --digits --length of numeral count
+		while true; do
+			case $1 in
+				'') break ;;
+				--digits|--length) digits="$2" && shift 2 ;;
+				*) shift ;;
+			esac
+		done
+
+		[[ -n $digits && $(validate number "$digits") == false ]] && {
+			echo "Error: integer digits argument not a number" && exit 1
+		}
+
+		# Default to any length if digits is not specified
+		if [[ -z $digits ]]; then
+			regex="^[0-9]+$"
+		else
+			regex="^[0-9]{${digits}}$"
+		fi
+		
+		output=$(echo "$input" | sed -E "/$regex/!d")
+
+		;;
+
+	email|email-address)
+		output=$(echo "$input" | sed -E '/^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/!d') ;;
+
+	uuid)
+		output=$(echo "$input" | sed -E '/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/!d') ;;
+
+	decimal|float|floating-point)
+	
+		while true; do
+			case $1 in
+				'') break ;;
+				--places|--decimals|--precision) precision="$2" && shift 2 ;;
+				--digits|--length) digits="$2" && shift 2 ;;
+				*) shift ;;
+			esac
+		done
+	
+		# Validate that precision is a number
+		[[ -n $precision && $(validate number "$precision") == 'false' ]] && {
+			echo "Error: decimal precision argument not a number" && exit 1
+		}
+	
+		# Validate that digits is a number
+		[[ -n $digits && $(validate number "$digits") == 'false' ]] && {
+			echo "Error: decimal digits argument not a number" && exit 1
+		}
+	
+		# Construct regex based on the specified precision and digits
+		if [[ -z $precision ]]; then
+			regex="^[0-9]+(\.[0-9]+)?$"
+		else
+			regex="^[0-9]+(\.[0-9]{${precision}})?$"
+		fi
+	
+		if [[ -n $digits ]]; then
+			regex="^[0-9]{${digits}}(\.[0-9]{${precision}})?$"
+		fi
+	
+		# Ensure the input must have decimal places
+		regex="^[0-9]+(\.[0-9]{${precision:-1},})$"
+	
+		output=$(echo "$input" | sed -E "/$regex/!d")
+	
+		;;
+
+    *)
+        echo "Invalid type: $type" && exit 1
+        ;;
+
+esac
+
+[[ -z $output ]] && echo "false" && exit 0
+
+echo "true"
