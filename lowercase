@@ -1,11 +1,7 @@
 #!/usr/bin/env bash
 
-# Check if there is an argument provided
-if [ $# -gt 0 ]; then
-	echo "$1" | tr '[:upper:]' '[:lower:]'
-else
-	# Read from stdin
-	while IFS= read -r line; do
-		echo "$line" | tr '[:upper:]' '[:lower:]'
-	done
-fi
+[[ -t 0 ]] || input=$(cat)
+
+[[ -z $input ]] && input="$1"
+
+./bare transform --lowercase "$input"
