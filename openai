@@ -56,7 +56,7 @@ case "$1" in
 
         shift
 		# Initialize variables
-		model=${OPENAI_DEFAULT_MODEL:-'gpt-3.5-turbo'}
+		model=${OPENAI_DEFAULT_MODEL:-'gpt-4o-mini'}
 		system_prompt="$assistant_prompt"
 		user_messages=()
 		assistant_messages=()
