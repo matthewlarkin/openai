@@ -1,5 +1,9 @@
 # `bare`
 
+🆕 Subscribe to the [YouTube Channel @bareDeveloper](https://youtube.com/@bareDeveloper) to see video tutorials and more content adjacent to `bare`.
+
+- - -
+
 `bare` is a collection of bash scripts designed to simplify personal and small business workflows. These scripts are crafted to be easy to write and read for anyone who wants to learn *a little programming*. The syntax is intentially kept simple. More advanced users can create customer `bare` scripts using existing `bare` commands as well as any `bash` programming syntax, making the system highly extensible.
 
 Core `bare` commands are inspired by the Unix philosophy, accepting input from `stdin`, output to `stdout` wherever possible and treat text as the universal interface.
@@ -23,7 +27,7 @@ export POSTMARK_API_TOKEN="xxxxx-xxxx-xxxxx"
 
 Various CLI tools are required in the bare ecosystem, mostly classics like `curl` and `jq`, but sometimes more obscure ones like `yt-dlp`. `bare` will alert you that you don't have these installed, but if you'd like to get a headstart, here are the bulk of the tools that you'll probably need.
 
-Install these with your package manager (`apt get install` on Ubuntu, `brew install` on Mac).
+You can still use much of `bare` without most of these, but we recommend installing them to get the full experience. You can install them with a package manager such as `apt-get` on Ubuntu or `brew` on Mac.
 
 ```md
 - curl (7.82+)
@@ -38,7 +42,11 @@ Install these with your package manager (`apt get install` on Ubuntu, `brew inst
 - perl
 - openssl
 - magick
+-- ffmpeg
 - qrencode
+- yt-dlp
+- csvkit
+- sqlpage
 ```
 
 ## Bare terminal
@@ -47,7 +55,7 @@ Download the zip or clone this repo, hop inside to get started.
 
 You can either use the bare terminal (recommended) or call scripts inline with `./bare`.
 
-**bare terminal**
+**`bare` terminal**
 ```console
 cd bare.sh
 ./bare -I
@@ -83,6 +91,32 @@ email --to "matthew@groveos.com" --subject "Bare suggestion" --body "Hi there, I
 
 ## Bare scripts
 
-The Bare system facilitates the use of *bare scripts*. These scripts are just bash scripts but primarily contain lines of Bare script expressions, which are executed in sequence. Each expression is a command that can be independently executed in the shell, but together they can be used to automate a more complex workflow.
+With `bare`, we can create our own custom *bare scripts*. These scripts are just bash scripts but may contain lines of `bare` script expressions, which are executed in sequence, just like any other bash script.
+
+Each expression is a command that can be independently executed in the shell, but together they can be used to automate a more complex workflow.
+
+To create a `bare` script, navigate to your `.var/scripts` directory, create a file (no file extension necessary), and then write your `bare` commands and/or bash commands!
+
+Here's a sample script called `sample` in the `.var/scripts` directory. We added a shebang at the front for better syntax highlighting in VS Code, but shebangs here are not necessary.
+
+**`.var/scripts/sample`**
+```bash
+#!/usr/bin/env bash
+
+echo "We are using: $(ls | codec lines.index 0)"
+random string 30
+openai chat "Hi there, I'm using a new toolkit called bare, have you heard of it?"
+```
+
+You can now run that script from the `bare` terminal or from an inline `./bare` call.
+
+**`bare` terminal**
+
+```console
+🐻 bare > run sample
+We are using: bare
+04Gg4gyS02X4skSWzQcmMFuBmZD6dG
+Hello! I haven't heard of a toolkit by the name "bare." Could you provide more information about it so I can assist you better?
+```
 
 This is a very powerful feature. We'll have more on this soon.
