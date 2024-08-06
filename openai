@@ -92,7 +92,7 @@ case "$1" in
 
 			thread_contents=$(recsel -t ThreadMessage .var/bare.rec -p Created,Author,Contents -e "Thread = '$thread_title'")
 
-			recins -t ThreadMessage .var/bare.rec -f Thread -v "$thread_title" -f Author -v "User" -f Contents -v "$user_messages" --verbose
+			recins -t ThreadMessage .var/bare.rec -f Thread -v "$thread_title" -f Author -v "User" -f Contents -v "$user_messages"
 
 		fi
 
