@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 
-find "$1" -type f -exec stat -f%z {} + | awk '{
+[[ -t 0 ]] || file=$(cat)
+
+[[ -z $file ]] && file=$1
+
+find "$file" -type f -exec stat -f%z {} + | awk '{
 	total += $1
 }
 END {
