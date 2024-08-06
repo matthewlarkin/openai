@@ -8,6 +8,64 @@
 
 case $type in
 
+	ai)
+
+		runs_remaining=3
+		condition="$input"
+		source_material="$1" && shift
+		model=${OPENAI_DEFAULT_MODEL:-'gpt-4o-mini'}
+
+		while true; do
+			case $1 in
+				--explain) explain=true && shift ;;
+				--high-powered) model='gpt-4o' && shift ;;
+				--model) model="$2" && shift 2 ;;
+				''|*) break ;;
+			esac
+		done
+		
+		while [ $runs_remaining -gt 0 ]; do
+			response="$(openai chat "You are an expert validator. I will provide a condition and a source material. Your task is to determine if the source material satisfies the condition. Respond with one JSON object containing two properties: 'reasoning' and 'answer'. The 'reasoning' property should contain your explanation, and the 'answer' property should be a boolean (true or false) indicating whether the source material satisfies the condition. - - - ### - - - CONDITION: $condition - - - SOURCE MATERIAL: $source_material - - - ### - - - Now, would you say true or false to the given the condition regarding the source material? Please respond with a single dimensional JSON object (just the reasoning and answer properties)." --model "$model" --json)"
+		
+			# Validate that response JSON object contains just two properties (reasoning and answer) and that answer is true or false boolean.
+			if [[ $(echo "$response" | jq 'keys | length') -eq 2 && ( $(echo "$response" | jq -r '.answer') == 'true' || $(echo "$response" | jq -r '.answer') == 'false' ) ]]; then
+				runs_remaining=0  # Valid response, exit the loop
+			else
+				runs_remaining=$((runs_remaining - 1))  # Invalid response, decrement runs_remaining
+				if [ $runs_remaining -eq 0 ]; then
+					echo "Sorry, we're having a hard time responding to this request. Maybe try rephrasing." && exit 1
+				fi
+			fi
+		done
+
+		[[ -n $explain ]] && echo "$response" | jq -r '.reasoning' && exit 0
+		echo "$response" | jq -r '.answer' && exit 0 ;;
+
+
+	alpha|alphabetic)
+
+		output=$(echo "$input" | sed -E '/^[a-zA-Z]+$/!d') ;;
+
+	alpha-underscore|alphabetic-underscore)
+
+		output=$(echo "$input" | sed -E '/^[a-zA-Z_]+$/!d') ;;
+
+	alpha-hyphen|alphabetic-hyphen)
+
+		output=$(echo "$input" | sed -E '/^[a-zA-Z-]+$/!d') ;;
+
+	alphanumeric)
+
+		output=$(echo "$input" | sed -E '/^[a-zA-Z0-9]+$/!d') ;;
+
+	uppercase|uppercased)
+
+		output=$(echo "$input" | sed -E '/^[A-Z]+$/!d') ;;
+
+	lowercase|lowercased)
+
+		output=$(echo "$input" | sed -E '/^[a-z]+$/!d') ;;
+
     url|web-address|link)
         output=$(echo "$input" | sed -E '/^(https?:\/\/)?([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}(\/.*)?$/!d') ;;
 
