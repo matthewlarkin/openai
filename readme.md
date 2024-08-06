@@ -42,7 +42,7 @@ You can still use much of `bare` without most of these, but we recommend install
 - perl
 - openssl
 - magick
--- ffmpeg
+- ffmpeg
 - qrencode
 - yt-dlp
 - csvkit
