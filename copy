@@ -2,24 +2,11 @@
 
 [[ -t 0 ]] || file=$(cat)
 
-remaining_args=() && while [[ $# -gt 0 ]]; do
-	case $1 in
-		--outside-bare) outside_bare=true && shift ;;
-		*) remaining_args+=("$1") && shift ;;
-	esac
-done && set -- "${remaining_args[@]}"
-
 [[ -z $file && $# != 2 ]] || [[ -n $file && $# != 1 ]] && echo "Error: expected two arguments." && exit 1
 
 [[ -n $file ]] && destination="$1"
 [[ -z $file ]] && file="$1" && destination="$2"
 
-[[ -z $outside_bare ]] && {
-	file=".var/$file"
-	destination=".var/$destination"
-}
-
 [[ ! -f "$file" ]] && echo "Error: file '$file' does not exist." && exit 1
-[[ -f "$destination" ]] && echo "Error: file '$destination' already exists." && exit 1
 
 cp "$file" "$destination"
