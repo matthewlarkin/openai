@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-input="${1-$([[ -t 0 ]] || cat)}"
+[[ -t 0 ]] && input=$1 || input=$(cat)
 
 # catch no input && exit
 [[ -n $input ]] || { echo "No input provided"; exit 1; }
