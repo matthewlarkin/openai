@@ -72,7 +72,7 @@ case $type in
 	ip)
 		output=$(echo "$input" | sed -E '/^([0-9]{1,3}\.){3}[0-9]{1,3}$/!d') ;;
 
-	number|num)
+	number|numeric|num)
 
 			[[ $(validate integer "$input") == 'true' || $(validate float "$input") == 'true' ]] && {
 				output="$input"
