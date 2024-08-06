@@ -2,8 +2,9 @@
 
 [[ -t 0 ]] || input=$(cat)
 
-remaining_args=() && while [[ $# -gt 0 ]]; do
+remaining_args=() && while true; do
 	case $1 in
+		'') break ;;
 		--all) all=1 && shift ;;
 		*) remaining_args+=("$1") && shift ;;
 	esac
@@ -12,9 +13,9 @@ done && set -- "${remaining_args[@]}"
 [[ -z $input ]] && input="$*" && shift $#
 
 # if 'all', capitalize all words
-[[ -n $all ]] && {
-	echo "$input" | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) tolower(substr($i,2)); print}' && exit 0
-}
-
-# or just capitalize the first word
-echo "$input" | awk '{first=toupper(substr($1,1,1)) tolower(substr($1,2)); $1=""; print first $0}' && exit 0
+echo "$input" |
+	(
+		[[ -n $all ]] \
+		&& transform "$input" --capitalize --all \
+		|| transform "$input" --capitalize
+	)

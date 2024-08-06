@@ -4,79 +4,137 @@
 
 format='text' # (default format)
 
-remaining_args=() && while [[ $# -gt 0 ]]; do
+remaining_args=() && while true; do
 	case $1 in
-		--phone|--telephone) format='phone' && shift ;;
-
-		*) remaining_args+=("$1") && shift
-	esac
+		'') break ;;
+		--phone|--telephone) format='phone' ;;
+		*) remaining_args+=("$1")
+	esac && shift
 done && set -- "${remaining_args[@]}"
 
 case $format in
+
 	phone)
+		
 		variant='hyphens' # (default variant)
-		remaining_args=() && while [[ $# -gt 0 ]]; do
+
+		remaining_args=() && while true; do
+
 			case $1 in
-				--parentheses|--parenthetical|--paren) variant='parentheses' && shift ;;
-				--hyphens|--hyphenated|--dashes|--dashed) variant='hyphens' && shift ;;
-				--dots|--dotted|--periods) variant='dots' && shift ;;
-				--spaces|--spaced) variant='spaces' && shift ;;
-				--plain|--raw|--none|--clean) variant='plain' && shift ;;
-				*) remaining_args+=("$1") && shift
-			esac
+
+				'') break ;;
+
+				--parentheses|--parenthetical|--paren)
+					variant='parentheses' ;;
+
+				--hyphens|--hyphenated|--dashes|--dashed)
+					variant='hyphens' ;;
+
+				--dots|--dotted|--periods)
+					variant='dots' ;;
+
+				--spaces|--spaced)
+					variant='spaces' ;;
+
+				--plain|--raw|--none|--clean)
+					variant='plain' ;;
+
+				*) remaining_args+=("$1")
+
+			esac && shift
+
 		done && set -- "${remaining_args[@]}"
+		
 		;;
+
 	text)
-		remaining_args=() && while [[ $# -gt 0 ]]; do
+
+		remaining_args=() && while true; do
+
 			case $1 in
-				--uppercase|--upper|--caps) variant='uppercase' && shift ;;
-				--lowercase|--lower) variant='lowercase' && shift ;;
-				--capitalize|--capitalized) variant='capitalize' && shift ;;
-				*) remaining_args+=("$1") && shift
-			esac
+
+				'') break ;;
+
+				--uppercase|--upper|--caps)
+					variant='uppercase' ;;
+
+				--lowercase|--lower)
+					variant='lowercase' ;;
+
+				--capitalize|--capitalized)
+					variant='capitalize' ;;
+
+				--all) all=1 ;;
+
+				*) remaining_args+=("$1")
+
+			esac && shift
+
 		done && set -- "${remaining_args[@]}"
+
 		;;
+
 esac
 
 [[ -z $input ]] && input="$1"
 
 case $format in
+
 	phone)
+
+		# sanitize the phone number (remove dashes, etc)
 		phone_number=$(echo "$input" | tr -cd '[:digit:]')
-		# Check if phone number is a digit
-		if ! [[ $phone_number =~ ^[0-9]+$ ]]; then
-			echo "Invalid phone number: Phone number must be a digit"
+
+		# Make sure remainder is a nine-digit number (US based)
+		[[ ! $phone_number =~ ^[0-9]{9}$ ]] && {
+			echo "Invalid phone number: Phone number must be a nine-digit number"
 			exit 1
-		fi
+		}
+
 		case $variant in
-			parentheses)
-				echo "$phone_number" | sed -r 's/([0-9]{3})([0-9]{3})([0-9]{4})/(\1) \2-\3/'
-				;;
-			hyphens)
-				echo "$phone_number" | sed -r 's/([0-9]{3})([0-9]{3})([0-9]{4})/\1-\2-\3/'
-				;;
-			dots)
-				echo "$phone_number" | sed -r 's/([0-9]{3})([0-9]{3})([0-9]{4})/\1.\2.\3/'
-				;;
-			spaces)
-				echo "$phone_number" | sed -r 's/([0-9]{3})([0-9]{3})([0-9]{4})/\1 \2 \3/'
-				;;
-			plain)
-				echo "$phone_number"
-				;;
+
+			parentheses) echo "$phone_number" |
+				sed -r 's/([0-9]{3})([0-9]{3})([0-9]{4})/(\1) \2-\3/' ;;
+
+			hyphens) echo "$phone_number" |
+				sed -r 's/([0-9]{3})([0-9]{3})([0-9]{4})/\1-\2-\3/' ;;
+
+			dots) echo "$phone_number" |
+				sed -r 's/([0-9]{3})([0-9]{3})([0-9]{4})/\1.\2.\3/' ;;
+
+			spaces) echo "$phone_number" |
+				sed -r 's/([0-9]{3})([0-9]{3})([0-9]{4})/\1 \2 \3/' ;;
+
+			plain) echo "$phone_number" ;;
+
 		esac
 		;;
+
 	text)
+
 		case $variant in
-			uppercase)
-				echo "$input" | tr '[:lower:]' '[:upper:]'
-				;;
-			lowercase)
-				echo "$input" | tr '[:upper:]' '[:lower:]'
-				;;
+
+			uppercase) echo "$input" |
+				tr '[:lower:]' '[:upper:]' ;;
+
+			lowercase) echo "$input" |
+				tr '[:upper:]' '[:lower:]' ;;
+
 			capitalize)
-				echo "$input" | awk '{for(i=1;i<=NF;i++){$i=toupper(substr($i,1,1))tolower(substr($i,2))}}1'
+
+				echo "$input" |
+					(
+						[[ -n $all ]] \
+						&& awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) tolower(substr($i,2)); print}' \
+						|| awk '{first=toupper(substr($1,1,1)) tolower(substr($1,2)); $1=""; print first $0}'
+					)
+
 				;;
+
 		esac
+
 		;;
+		
 esac
+
+exit 0
