@@ -3,19 +3,26 @@
 [[ -t 0 ]] || input=$(cat)
 
 remaining_args=() && while [[ $# -gt 0 ]]; do
-	case $1 in
-		--trim) trim=1 && shift ;;
-		for|with) shift ;;
-		--from|from|--in|in)
-			[[ -n "$2" ]] && {
-				[[ -f "$2" ]] && input=$(cat "$2") || input="$2"
-			} && shift 2 || { echo "requires argument"; exit 1; }
-			;;
-		*) remaining_args+=("$1") && shift ;;
-	esac
+    case $1 in
+        --trim) trim=1 && shift ;;
+        for|with) shift ;;
+        --from|from|--in|in)
+            [[ -n "$2" ]] && {
+                [[ -f "$2" ]] && input=$(cat "$2") || input="$2"
+            } && shift 2 || { echo "requires argument"; exit 1; }
+            ;;
+        *) remaining_args+=("$1") && shift ;;
+    esac
 done && set -- "${remaining_args[@]}"
 
 [[ -z $input ]] && echo "requires input" && exit 1
 
-[[ -n $trim ]] && echo "$input" | tr "$1" "$2" && exit 0
-[[ -z $trim ]] && echo "$input" | tr "$1" "$2" && echo "" && exit 0
+if [[ -n $trim ]]; then
+    [[ $# -lt 2 ]] && echo "requires two arguments for substitution" && exit 1
+    echo -n "$input" | sed "s/$1/$2/g"
+else
+    [[ $# -lt 2 ]] && echo "requires two arguments for substitution" && exit 1
+    echo "$input" | sed "s/$1/$2/g"
+fi
+
+exit 0
