@@ -31,13 +31,15 @@ if [[ $1 == "-I" || $1 == '-i' ]]; then
 
     GREEN=\"\\[\\033[0;32m\\]\"
     YELLOW=\"\\[\\033[0;33m\\]\"
-    RESET=\"\\[\\033[0m\\]\"
+    GRAY=\"\\033[2;37m\"
+    RESET=\"\\033[0m\"
 
-    PS1=\"🐻 \${GREEN}\$(basename \$(pwd)) \${YELLOW}> \${RESET}\"
-    PROMPT_COMMAND=./bare;
-    echo 'entering bare terminal. type exit when ready to leave.'
+    PS1=\"🐻 \${GREEN}\$(basename \$(pwd)) \${YELLOW}> \\[\\033[0m\\]\"
+    PROMPT_COMMAND=./bare
+    printf \"\\n\${GRAY}entering bare terminal. type exit when ready to leave.\${RESET}\\n\"
     ")
 fi
+
 
 script_name="$1" && shift && ./"$script_name" "$@"
 
