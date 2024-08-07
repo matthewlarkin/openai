@@ -27,6 +27,26 @@ case $command in
 
 	tables|types) echo "$input" | recinf -d | sed -n '/^%rec/s/^%rec: //p' ;;
 
+	insert|create)
+
+		[[ $# -eq 0 ]] && echo "Error: expected at least one argument" && exit 1
+
+		output=$(echo "$input" | recins "$@")
+		[[ $? -ne 0 ]] && echo "$output" && exit 0
+		echo "$output" > .var/bare.rec
+
+		;;
+
+	delete|remove)
+
+		[[ $# -eq 0 ]] && echo "Error: expected at least one argument" && exit 1
+
+		output=$(echo "$input" | recdel "$@")
+		[[ $? -ne 0 ]] && echo "$output" && exit 0
+		echo "$output" > .var/bare.rec
+
+		;;
+
 	select)
 
 		echo "$input" | recsel "$@"
@@ -37,13 +57,15 @@ case $command in
 
 		case $1 in
 
-			[dD]ocuments) echo "$input" | recsel -t Document -P Title -C | sed 's/$/  /' ;;
+			[dD]ocuments) echo "$input" | recsel -t Document -P Title -C ;;
 
-			[aA]ssistants) echo "$input" | recsel -t Assistant -P Name -C | sed 's/$/  /' ;;
+			[aA]ssistants) echo "$input" | recsel -t Assistant -P Name -C ;;
 
-			[sS]cripts) find .var/scripts -maxdepth 1 -print0 | xargs -0 -I {} basename {} | sed 's/$/  /' ;;
+			[sS]cripts) find .var/scripts -maxdepth 1 -print0 | xargs -0 -I {} basename {} ;;
 
-			[tT]hreads) ;;
+			[tT]hreads) echo "$input" | recsel -t Thread -P Title -C ;;
+
+			[tT]ags) echo "$input" | recsel -t Tag -P Title -C ;;
 
 		esac
 
