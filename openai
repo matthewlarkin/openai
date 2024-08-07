@@ -111,7 +111,7 @@ case "$1" in
 			
 			if [[ -n $thread_title ]]; then
 				# Fetch the message thread and convert it to a JSON array
-				message_thread=$(recsel -t ThreadMessage .var/bare.rec -p Created,Author,Contents -e "Thread = '$thread_title'" | rec2csv | python3 -c 'import csv, json, sys; print(json.dumps([dict(r) for r in csv.DictReader(sys.stdin)]))')
+				message_thread=$(recsel -t ThreadMessage .var/bare.rec -p Created,Author,Contents -e "Thread = '$thread_title'" | rec --json)
 				
 				# Format the message_thread JSON array using jq
 				formatted_message_thread=$(echo "$message_thread" | jq '[.[] | {role: (if .Author == "User" then "user" else "assistant" end), name: (if .Author != "User" then .Author else null end), content: .Contents}]')
