@@ -3,11 +3,20 @@
 # Please note that it may be overwritten by future
 # bare updates.
 
+%rec: Tag
+%key: Title
+
 %rec: Assistant
-%mandatory: Name Contents
+%key: Name
+%mandatory: Contents
 
 %rec: Document
 %mandatory: Title Contents
+
+%rec: DocumentTag
+%mandatory: Document Tag
+%type: Document rec Document
+%type: Tag rec Tag
 
 %rec: Thread
 %key: Title
