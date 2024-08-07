@@ -26,9 +26,14 @@ if [[ $1 == "-I" || $1 == '-i' ]]; then
     shift
     # Start an interactive bash shell with the current environment
     exec bash --rcfile <(echo "
-    PS1='🐻 bare > '
     source ~/.bashrc
-    PATH=\"$(pwd):\$PATH\"
+    PATH=\"\$(pwd):\$PATH\"
+
+    GREEN=\"\\[\\033[0;32m\\]\"
+    YELLOW=\"\\[\\033[0;33m\\]\"
+    RESET=\"\\[\\033[0m\\]\"
+
+    PS1=\"🐻 \${GREEN}\$(basename \$(pwd)) \${YELLOW}> \${RESET}\"
     PROMPT_COMMAND=./bare;
     echo 'entering bare terminal. type exit when ready to leave.'
     ")
