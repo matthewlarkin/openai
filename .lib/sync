@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+
+# make sure we're in bare directory
+
+	[[ ! -f ./bare ]] && echo "Error: it doesn't seem like we're in the bare directory" && exit 1
+
+
+
+# sync www
+
+	mkdir -p ".var/www" && rsync -av ".lib/www/" ".var/www/" >> /dev/null
+
+
+
+# sync recfiles
+
+	# Read the content of .etc/bare.rec and .var/bare.rec
+	recdefs=$(cat .etc/bare.rec)
+	recfile=$(cat .var/bare.rec)
+
+	# Extract and prepare %rec: blocks from recdefs
+	recdefs_blocks=$(echo "$recdefs" | awk '/^%rec:/ {if (rec) print rec; rec=$0; next} /^%/ {rec=rec"\n"$0} END {print rec}')
+
+	# Function to get a block from recdefs by type
+	get_rec_block() {
+		local type=$1
+		echo "$recdefs_blocks" | awk -v type="$type" '
+		$1 == "%rec:" && $2 == type {
+			rec=$0
+			while (getline > 0) {
+				if ($1 == "%rec:") break
+				rec=rec"\n"$0
+			}
+			print rec
+			exit
+		}'
+	}
+
+	# Trim the recfile to remove any lines that start with % (except those that start with %rec:)
+	recfile_trimmed=$(echo "$recfile" | sed '/^%[^r]/d')
+
+	# Process recfile_trimmed to insert corresponding %rec: blocks
+	output=""
+	while IFS= read -r line; do
+		if [[ $line =~ ^%rec: ]]; then
+			rec_type=$(echo "$line" | cut -d' ' -f2)
+			block=$(get_rec_block "$rec_type")
+			output+="$block"$'\n'
+		else
+			output+="$line"$'\n'
+		fi
+	done <<< "$recfile_trimmed"
+
+	echo "$output" > .var/bare.rec
+	

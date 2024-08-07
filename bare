@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+./deps git
+
 # Change directory to the current script's directory
 cd "$(dirname "$0")"
 
@@ -7,6 +9,14 @@ cd "$(dirname "$0")"
 touch ~/.bashrc
 [[ -f .etc/barerc ]] && source .etc/barerc
 PATH="./:$PATH"
+
+# check if we need to sync bare
+touch .var/sync && {
+	now=$(git log -1 --format=%ct)
+	[[ $(cat .var/sync) -lt $now ]] && {
+		bash .lib/sync && echo "$now" > .var/sync
+	}
+}
 
 # close up shop early, if that's it
 [[ -z $1 ]] && exit 0
