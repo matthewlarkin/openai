@@ -20,13 +20,12 @@
 
 %rec: Thread
 %key: Title
-%mandatory: Created
 %type: Created date
 %auto: Created
 
 %rec: ThreadMessage
 %key: ID
-%mandatory: Author Contents Thread Created
+%mandatory: Author Contents Thread
 %type: ID int
 %type: Created date
 %auto: ID Created
