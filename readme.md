@@ -34,7 +34,7 @@ You can still use much of `bare` without most of these, but we recommend install
 - jq
 - recutils
 - sqlite3
-- cmark
+- pandoc
 - yq
 - xxd
 - php

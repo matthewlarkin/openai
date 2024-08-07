@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-./deps cmark || exit 1
+./deps pandoc || exit 1
 
 # Initialize flags
 [[ -t 0 ]] && content="$(cat ".var/$1")" && shift || content="$(cat)"
@@ -25,7 +25,7 @@ set -- "${args[@]}"
 
 # Output content, converting to HTML if required
 if [[ $to_html -eq 1 ]]; then
-	eval "echo \"$content\"" | cmark
+	echo "$content" | pandoc
 else
-	eval "echo \"$content\""
+	echo "$content"
 fi
