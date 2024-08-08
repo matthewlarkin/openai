@@ -3,11 +3,11 @@
 ./deps git
 
 # Change directory to the current script's directory
-cd "$(dirname "$0")"
+cd "$(dirname "$0")" || exit
 
 # Setup environment
-touch ~/.bashrc
-[[ -f .etc/barerc ]] && source .etc/barerc
+source .etc/barerc
+
 PATH="./:$PATH"
 
 # check if we need to sync bare
@@ -23,23 +23,27 @@ touch .var/sync && {
 
 # Check if the -I flag is provided for interactive mode
 if [[ $1 == "-I" || $1 == '-i' ]]; then
-    shift
-    # Start an interactive bash shell with the current environment
-    exec bash --rcfile <(echo "
-    source ~/.bashrc
-    PATH=\"\$(pwd):\$PATH\"
-    export BASH_SILENCE_DEPRECATION_WARNING=1 # mostly for Macs running zsh by default
+    shift && exec bash --rcfile <(cat << EOF
 
-    GREEN=\"\033[0;32m\"
-    YELLOW=\"\033[0;33m\"
-    GRAY=\"\033[2;37m\"
-    RESET=\"\033[0m\"
+    source .etc/barerc
 
-    PS1=\"🐻 \${GREEN}\$(basename \$(pwd)) \${YELLOW}> \${RESET}\"
-    PROMPT_COMMAND=./bare
-    printf \"\n\${GRAY}entering bare terminal. type exit when ready to leave.\${RESET}\n\"
-    ")
-fi
+    # put all bare commands in context
+    PATH="$(pwd):\$PATH"
+
+    # mostly for Macs running zsh by default
+    export BASH_SILENCE_DEPRECATION_WARNING=1
+
+    GREEN='\\033[0;32m'
+    YELLOW='\\033[0;33m'
+    GRAY='\\033[2;37m'
+    RESET='\\033[0m'
+
+    PS1="🐻 \[\${GREEN}\]\$(basename \$(pwd)) \[\${YELLOW}\]> \[\${RESET}\]"
+
+    printf "\n\${GRAY}entering bare terminal. type exit when ready to leave.\${RESET}\n"
+
+EOF
+); fi
 
 script_name="$1" && shift && ./"$script_name" "$@"
 
