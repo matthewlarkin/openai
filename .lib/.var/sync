@@ -8,7 +8,7 @@
 
 # sync www
 
-	mkdir -p ".var/www" && rsync -av ".lib/www/" ".var/www/" >> /dev/null
+	mkdir -p ".var/www" && rsync -av ".lib./var/www/" ".var/www/" >> /dev/null
 
 
 
