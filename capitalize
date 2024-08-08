@@ -11,9 +11,8 @@ done && set -- "${remaining_args[@]}"
 [[ -t 0 ]] && input=$* || input=$(cat)
 
 # if 'all', capitalize all words
-echo "$input" |
-	(
-		[[ -n $all ]] \
-		&& transform "$input" --capitalize --all \
-		|| transform "$input" --capitalize
-	)
+if [[ -n $all ]]; then
+    transform "$input" --capitalize --all
+else
+    transform "$input" --capitalize
+fi
