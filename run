@@ -1,3 +1,21 @@
 #!/usr/bin/env bash
 
-./bare interpret "$@"
+script=$1 && shift
+
+remaining_args=()
+csv=""
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --over-csv) shift && [[ -t 0 ]] && csv=$(cat "$1") && shift || csv=$(cat) ;;
+        *) remaining_args+=("$1") && shift ;;
+    esac
+done
+
+set -- "${remaining_args[@]}"
+
+if [[ -n $csv ]]; then
+    echo "$csv" | ./bare loop "$script"
+else
+    ./bare interpret "$script" "$@"
+fi
