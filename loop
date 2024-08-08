@@ -1,69 +1,23 @@
 #!/usr/bin/env bash
 
-script_to_call="$1"
-csv_file=".var/$2"
-shift 2
+[[ -t 0 ]] && csv=$(cat "$1") && shift || csv=$(cat)
 
-# Initialize lax_mode to 1 (true)
-lax_mode=1
+script="$1" && shift
 
-if [ ! -f "$csv_file" ]; then
-	echo "Error: $csv_file file not found"
-	exit 1
-fi
+# Read the CSV file and process each row
+echo "$csv" | csvjson --snifflimit 0 --no-inference | jq -c '.[]' | while read -r row; do
+    # Use jq to extract all keys and values in one go
+    declare -A row_data
+    while IFS="=" read -r key value; do
+        row_data["$key"]="$value"
+    done < <(echo "$row" | jq -r 'to_entries | .[] | "\(.key)=\(.value)"')
 
-# Check if the last line of the CSV file is empty, and if not, add an empty line
-if [ -n "$(tail -c 1 "$csv_file")" ]; then
-	echo "" >> "$csv_file"
-fi
+    # Export the variables
+    for key in "${!row_data[@]}"; do
+		var_name=$(echo "$key" | tr ' ' '_' | tr '[:upper:]' '[:lower:]' | tr -cd '[:alnum:]_')
+        export "$var_name=${row_data[$key]}"
+    done
 
-# Function to clean and remove unnecessary quotes from values
-clean_value() {
-	local value="$1"
-	# Remove surrounding quotes if they exist
-	if [[ "$value" =~ ^\"(.*)\"$ ]]; then
-		value="${BASH_REMATCH[1]}"
-	fi
-	# Replace escaped quotes with a single quote
-	value="${value//\"\"/\"}"
-	echo "$value"
-}
-
-# Read the header line and convert it into an array of column names
-IFS=, read -r -a column_names < <(sed 's/"//g' "$csv_file")
-
-# Process the file starting from the second line
-tail -n +2 "$csv_file" | while IFS=, read -r -a line_values; do
-	# Skip empty lines
-	if [ -z "${line_values[0]}" ]; then
-		continue
-	fi
-
-	# Function to sanitize column names
-	sanitize_column_name() {
-		echo "$1" | tr -c '[:alnum:]_' '_'
-	}
-	
-	# Dynamically create variables for each column
-	for i in "${!column_names[@]}"; do
-		value="${line_values[$i]}"
-		clean_value=$(clean_value "$value")
-		sanitized_column_name=$(sanitize_column_name "${column_names[$i]}")
-		declare "${sanitized_column_name}"="$clean_value"
-	done
-	
-	# Prepare the arguments for the script based on the column names
-	args=()
-	for column in "${column_names[@]}"; do
-		sanitized_column_name=$(sanitize_column_name "$column")
-		args+=("${!sanitized_column_name}")
-	done
-
-	# Call the script with the dynamically determined arguments
-	./bare interpret "$script_to_call" "${args[@]}"
-
-	# If lax_mode is enabled, sleep for 0.2 seconds
-	if [[ $lax_mode -eq 1 ]]; then
-		sleep 0.2
-	fi
+    # Call the script with the variables
+    ./bare interpret "$script"
 done
