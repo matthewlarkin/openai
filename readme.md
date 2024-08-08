@@ -1,6 +1,8 @@
 # `bare`
 
-🆕 Subscribe to the [YouTube Channel @bareDeveloper](https://youtube.com/@bareDeveloper) to see video tutorials and more content adjacent to `bare`.
+🆕 Subscribe to the [YouTube Channel @bareDeveloper](https://youtube.com/@bareDeveloper) to see video tutorials and more content adjacent to `bare`, including bash scripting and markdown tutorials.
+
+**Interested in contributing?** Read the [contributing.md](blob/root/contributing.md) file. *Contributions are welcome from coders and non-coders alike!*
 
 - - -
 
