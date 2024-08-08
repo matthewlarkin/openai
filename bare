@@ -22,30 +22,36 @@ touch .var/sync && {
 [[ -z $1 ]] && exit 0
 
 # Check if the -I flag is provided for interactive mode
-if [[ $1 == "-I" || $1 == '-i' ]]; then
-    shift && exec bash --rcfile <(cat << EOF
 
-	source ~/.bashrc
-    source .etc/barerc
+case $1 in
 
-    # put all bare commands in context
-    PATH="$(pwd):\$PATH"
+	-[iI]|-[tT]|terminal) # i = interactive / t = terminal
 
-    # mostly for Macs running zsh by default
-    export BASH_SILENCE_DEPRECATION_WARNING=1
+		shift && exec bash --rcfile <(cat << EOF
 
-    GREEN='\\033[0;32m'
-    YELLOW='\\033[0;33m'
-    GRAY='\\033[2;37m'
-    RESET='\\033[0m'
+			source ~/.bashrc
+			source .etc/barerc
 
-    PS1="🐻 \[\${GREEN}\]\$(basename \$(pwd)) \[\${YELLOW}\]> \[\${RESET}\]"
+			# put all bare commands in context
+			PATH="$(pwd):\$PATH"
 
-    printf "\n\${GRAY}entering bare terminal. type exit when ready to leave.\${RESET}\n"
+			# mostly for Macs running zsh by default
+			export BASH_SILENCE_DEPRECATION_WARNING=1
+
+			GREEN='\\033[0;32m'
+			YELLOW='\\033[0;33m'
+			GRAY='\\033[2;37m'
+			RESET='\\033[0m'
+
+			PS1="🐻 \[\${GREEN}\]\$(basename \$(pwd)) \[\${YELLOW}\]> \[\${RESET}\]"
+
+			printf "\n\${GRAY}entering bare terminal. type exit when ready to leave.\${RESET}\n"
 
 EOF
-); fi
+		);
 
-script_name="$1" && shift && ./"$script_name" "$@"
+		;;
 
-exit 0
+	*) script_name="$1" && shift && ./"$script_name" "$@" ;;
+
+esac
