@@ -6,7 +6,8 @@
 cd "$(dirname "$0")" || exit
 
 # Setup environment
-source .etc/barerc
+touch .etc/barerc && source .etc/barerc
+rsync -a --ignore-existing .lib/.var/ .var
 
 PATH="./:$PATH"
 
