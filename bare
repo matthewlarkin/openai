@@ -25,6 +25,7 @@ touch .var/sync && {
 if [[ $1 == "-I" || $1 == '-i' ]]; then
     shift && exec bash --rcfile <(cat << EOF
 
+	source ~/.bashrc
     source .etc/barerc
 
     # put all bare commands in context
