@@ -7,6 +7,7 @@ cd "$(dirname "$0")" || exit
 
 # Setup environment
 touch .etc/barerc && source .etc/barerc
+touch .lib/barerc && source .lib/barerc
 rsync -a --ignore-existing .lib/.var/ .var
 
 PATH="./:$PATH"
@@ -31,7 +32,8 @@ case $1 in
 		shift && exec bash --rcfile <(cat << EOF
 
 			source ~/.bashrc
-			source .etc/barerc
+			touch .etc/barerc && source .etc/barerc
+			touch .lib/barerc && source .lib/barerc
 
 			# put all bare commands in context
 			PATH="$(pwd):\$PATH"

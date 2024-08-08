@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+
+# This is the bare run command file and is used to store global bare
+# configuration details. DO NOT sotre your API keys or other user specific
+# configuration details here, as they will be overwritten on bare update.
+
