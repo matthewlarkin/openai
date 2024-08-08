@@ -20,19 +20,27 @@ temp_file=".var/downloads/${output_name}"
 
 while true; do # continue through remaining args
   case $1 in
-	'') break ;;
-	--mp3) as_mp3=1 && shift ;;
-	--thumbnail) as_thumbnail=1 && shift ;;
-	* ) echo "Unknown option: $1" && exit 1 ;;
+    '') break ;;
+    --mp3) as_mp3=1 && shift ;;
+    --thumbnail|--thumb) as_thumbnail=1 && shift ;;
+    * ) echo "Unknown option: $1" && exit 1 ;;
   esac
 done
 
 if [[ "$is_youtube" = 1 ]]; then
 
-	[[ "$as_mp3" ]] && ./bare youtube download "$url" --mp3 && exit 0
-	[[ "$as_thumbnail" ]] && ./bare youtube download "$url" --thumbnail --max && exit 0
-	./bare youtube download "$url"
-	exit 0
+    [[ "$as_mp3" ]] && {
+        ./bare youtube download "$url" --mp3
+        exit 0
+    }
+
+    [[ "$as_thumbnail" ]] && {
+        ./bare youtube download "$url" --thumbnail --max
+        exit 0
+    }
+
+    ./bare youtube download "$url"
+    exit 0
 
 else
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-./deps yt-dlp
+./deps yt-dlp phantomjs # phantomjs is a temporary fix for nsig downloading issues (recommended by yt-dlp)
 
 command="$1"
 url="$2"
@@ -99,7 +99,7 @@ case "$command" in
 								;;
 						esac
 					done
-					download_thumbnail
+					download_thumbnail && exit 0
 					;;
 				*)
 					echo "Unknown option: $1" >&2
@@ -107,11 +107,11 @@ case "$command" in
 					;;
 			esac
 		done
-		download_video
+		download_video && exit 0
 		;;
-	id)
-		extract_id
-		;;
+
+	id) extract_id && exit 0 ;;
+
 	thumbnail)
 		shift 2 # Remove the first two arguments
 		while [[ "$#" -gt 0 ]]; do
@@ -130,11 +130,10 @@ case "$command" in
 					;;
 			esac
 		done
-		download_thumbnail
+		download_thumbnail && exit 0
 		;;
-	*)
-		echo "Unknown command: $command" >&2
-		exit 1
-		;;
+
+	*) echo "Unknown command: $command" >&2 && exit 1 ;;
+	
 esac
 
