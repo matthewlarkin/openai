@@ -144,30 +144,59 @@ case $type in
 		fi
 
 		;;
-
-	date)
 	
+	date)
+
 		date_format="%Y-%m-%d"
-		
+		custom_format=0  # Initialize custom_format flag
+
 		# Parse the format argument
 		case $1 in
 			--format)
-				case $2 in
-					"mm-dd-yyyy") date_format="%m-%d-%Y" ;;
-					"mm/dd/yyyy") date_format="%m/%d/%Y" ;;
-					"mm.dd.yyyy") date_format="%m.%d.%Y" ;;
-					"dd-mm-yyyy") date_format="%d-%m-%Y" ;;
-					"dd/mm/yyyy") date_format="%d/%m/%Y" ;;
-					"dd.mm.yyyy") date_format="%d.%m.%Y" ;;
-					"yyyy-mm-dd") date_format="%Y-%m-%d" ;;
-					"yyyy/mm/dd") date_format="%Y/%m/%d" ;;
-					"yyyy.mm.dd") date_format="%Y.%m.%d" ;;
-					"yyyy-mm-ddThh:mm:ss") date_format="%Y-%m-%dT%H:%M:%S" ;;
-					"yyyy-mm-ddThh:mm:ssZ") date_format="%Y-%m-%dT%H:%M:%SZ" ;;
-					"mm-dd-yyyy hh:mm:ss") date_format="%m-%d-%Y %H:%M:%S" ;;
-					"mm/dd/yyyy hh:mm:ss") date_format="%m/%d/%Y %H:%M:%S" ;;
-					"dd-mm-yyyy hh:mm:ss") date_format="%d-%m-%Y %H:%M:%S" ;;
-					"dd/mm/yyyy hh:mm:ss") date_format="%d/%m/%Y %H:%M:%S" ;;
+				custom_format=1 && shift
+				case $1 in
+					"mm-dd-yyyy"|"mm-dd-Y") date_format="%m-%d-%Y" ;;
+					"mm/dd/yyyy"|"mm/dd/Y") date_format="%m/%d/%Y" ;;
+					"mm.dd.yyyy"|"mm.dd.Y") date_format="%m.%d.%Y" ;;
+					"dd-mm-yyyy"|"dd-mm-Y") date_format="%d-%m-%Y" ;;
+					"dd/mm/yyyy"|"dd/mm/Y") date_format="%d/%m/%Y" ;;
+					"dd.mm.yyyy"|"dd.mm.Y") date_format="%d.%m.%Y" ;;
+					"yyyy-mm-dd"|"Y-mm-dd") date_format="%Y-%m-%d" ;;
+					"yyyy/mm/dd"|"Y/mm/dd") date_format="%Y/%m/%d" ;;
+					"yyyy.mm.dd"|"Y.mm.dd") date_format="%Y.%m.%d" ;;
+					"yyyy-mm-ddThh:mm:ss"|"Y-mm-ddThh:mm:ss") date_format="%Y-%m-%dT%H:%M:%S" ;;
+					"yyyy-mm-ddThh:mm:ssZ"|"Y-mm-ddThh:mm:ssZ") date_format="%Y-%m-%dT%H:%M:%SZ" ;;
+					"yyyy-mm-dd hh:mm"|"Y-mm-dd hh:mm") date_format="%Y-%m-%d %H:%M" ;;
+					"yyyy-mm-dd hh:mm am/pm"|"Y-mm-dd hh:mm am/pm") date_format="%Y-%m-%d %I:%M %p" ;;
+					"yyyy-mm-dd hh:mm:ss"|"Y-mm-dd hh:mm:ss") date_format="%Y-%m-%d %H:%M:%S" ;;
+					"mm-dd-yyyy hh:mm:ss"|"mm-dd-Y hh:mm:ss") date_format="%m-%d-%Y %H:%M:%S" ;;
+					"mm/dd/yyyy hh:mm:ss"|"mm/dd/Y hh:mm:ss") date_format="%m/%d/%Y %H:%M:%S" ;;
+					"dd-mm-yyyy hh:mm:ss"|"dd-mm-Y hh:mm:ss") date_format="%d-%m-%Y %H:%M:%S" ;;
+					"dd/mm/yyyy hh:mm:ss"|"dd/mm/Y hh:mm:ss") date_format="%d/%m/%Y %H:%M:%S" ;;
+					"mm/dd/yyyy hh:mm am/pm"|"mm/dd/Y hh:mm am/pm") date_format="%m/%d/%Y %I:%M %p" ;;
+					"m/d/yyyy"|"m/d/Y") date_format="%-m/%-d/%Y" ;;
+					"m/d/yyyy hh:mm am/pm"|"m/d/Y hh:mm am/pm") date_format="%-m/%-d/%Y %I:%M %p" ;;
+					"m/d/yyyy h:mm am/pm"|"m/d/Y h:mm am/pm") date_format="%-m/%-d/%Y %-I:%M %p" ;;
+					"yyyy-mm-dd hh:mm:ss Z"|"Y-mm-dd hh:mm:ss Z") date_format="%Y-%m-%d %H:%M:%S %z" ;;
+					"yyyy-mm-ddThh:mm:ss+hh:mm"|"Y-mm-ddThh:mm:ss+hh:mm") date_format="%Y-%m-%dT%H:%M:%S%z" ;;
+					"yyyy-mm-dd hh:mm:ss z"|"Y-mm-dd hh:mm:ss z") date_format="%Y-%m-%d %H:%M:%S %Z" ;;
+					"yyyy/mm/dd hh:mm:ss Z"|"Y/mm/dd hh:mm:ss Z") date_format="%Y/%m/%d %H:%M:%S %z" ;;
+					"yyyy.mm.dd hh:mm:ss Z"|"Y.mm.dd hh:mm:ss Z") date_format="%Y.%m.%d %H:%M:%S %z" ;;
+					"dd.mm.yyyy hh:mm:ss"|"dd.mm.Y hh:mm:ss") date_format="%d.%m.%Y %H:%M:%S" ;;
+					"dd/mm/yyyy hh:mm:ss Z"|"dd/mm/Y hh:mm:ss Z") date_format="%d/%m/%Y %H:%M:%S %z" ;;
+					"yy/mm/dd") date_format="%y/%m/%d" ;;
+					"yy-mm-dd") date_format="%y-%m-%d" ;;
+					"dd/mm/yy") date_format="%d/%m/%y" ;;
+					"mm/dd/yy") date_format="%m/%d/%y" ;;
+					"m/d/yy") date_format="%-m/%-d/%y" ;;
+					"yyyy-Www-d"|"Y-Www-d") date_format="%G-W%V-%u" ;;
+					"yyyy-ww"|"Y-ww") date_format="%G-%V" ;;
+					"yyyy-ww-d"|"Y-ww-d") date_format="%G-%V-%u" ;;
+					"yyyy-mm-dd (ddd)"|"Y-mm-dd (ddd)") date_format="%Y-%m-%d (%a)" ;;
+					"ddd, yyyy-mm-dd"|"ddd, Y-mm-dd") date_format="%a, %Y-%m-%d" ;;
+					"ddd mm/dd/yyyy"|"ddd mm/dd/Y") date_format="%a %m/%d/%Y" ;;
+					"hh:mm:ss") date_format="%H:%M:%S" ;;
+					"hh:mm am/pm") date_format="%I:%M %p" ;;
 					*) date_format="$2" ;; # Default to the provided format
 				esac
 				shift 2
@@ -176,43 +205,46 @@ case $type in
 		
 		# Detect the operating system
 		os_type=$(uname)
-		
+
 		# Initialize output to false
 		output="false"
-		
+
 		# Attempt to parse the date based on the OS
 		if [ "$os_type" = "Darwin" ]; then
 			# macOS
-			if date -j -f "$date_format" "$input" >/dev/null 2>&1; then
-				output="true"
-			fi
+			parsed_date=$( /bin/date -j -f "$date_format" "$input" +"$date_format" 2>/dev/null)
 		else
-			# Assume Ubuntu or other Linux
-			if date -d "$input" +"$date_format" >/dev/null 2>&1; then
-				output="true"
-			fi
+			# Assume Linux (GNU date)
+			parsed_date=$( /bin/date -d "$input" +"$date_format" 2>/dev/null)
+		fi
+
+		# Strictly compare the original input with the parsed date
+		if [[ "$parsed_date" == "$input" ]]; then
+			output="true"
 		fi
 
 		;;
 
 	time)
-
+	
 		time_format="%H:%M"  # Default time format
-			
+		custom_format=0  # Initialize custom_format flag
+
 		# Parse the format argument
 		case $1 in
 			--format)
-				case $2 in
-					"24-hour") time_format="%H:%M" ;; # e.g., 13:45
-					"24-hour-seconds") time_format="%H:%M:%S" ;; # e.g., 13:45:30
-					"12-hour") time_format="%I:%M %p" ;; # e.g., 01:45 PM
-					"12-hour-seconds") time_format="%I:%M:%S %p" ;; # e.g., 01:45:30 PM
-					*) time_format="$2" ;; # Use provided format
+				custom_format=1 && shift
+				case $1 in
+					"24-hour"|"hh:mm") time_format="%H:%M" ;; # e.g., 13:45
+					"24-hour-seconds"|"hh:mm:ss") time_format="%H:%M:%S" ;; # e.g., 13:45:30
+					"12-hour"|"hh:mm am/pm") time_format="%I:%M %p" ;; # e.g., 01:45 PM
+					"12-hour-seconds"|"hh:mm:ss am/pm") time_format="%I:%M:%S %p" ;; # e.g., 01:45:30 PM
+					*) time_format="$1" ;; # Use provided format
 				esac
 				shift 2
 				;;
 		esac
-			
+
 		# Normalize the input to handle lowercase am/pm
 		normalized_input=$(echo "$input" | tr '[:lower:]' '[:upper:]')
 			
@@ -225,21 +257,19 @@ case $type in
 		# Attempt to parse the time based on the OS
 		if [ "$os_type" = "Darwin" ]; then
 			# macOS (BSD)
-			if formatted_time=$(date -j -f "$time_format" "$normalized_input" +"$time_format" 2>/dev/null); then
-				if [ "$formatted_time" = "$normalized_input" ]; then
-					output="true"
-				fi
-			fi
+			parsed_time=$(date -j -f "$time_format" "$normalized_input" +"$time_format" 2>/dev/null)
 		else
-			# Assume Unix (Linux)
-			if formatted_time=$(date -d "$normalized_input" +"$time_format" 2>/dev/null); then
-				# Convert the formatted time back to the original format to ensure correctness
-				if [[ "$(date -d "$formatted_time" +"$time_format")" == "$normalized_input" ]]; then
-					output="true"
-				fi
-			fi
+			# Assume Linux (GNU date)
+			parsed_time=$(date -d "$normalized_input" +"$time_format" 2>/dev/null)
 		fi
+
+		# Strictly compare the original input with the parsed time
+		if [[ "$parsed_time" == "$normalized_input" ]]; then
+			output="true"
+		fi
+
 		;;
+
 
 	true-false|true/false)
 

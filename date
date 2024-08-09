@@ -1,0 +1,105 @@
+#!/usr/bin/env bash
+
+# Capture input if piped
+[[ -t 0 ]] || input=$(cat)
+
+# Initialize empty array for remaining arguments
+remaining_args=()
+
+date_format="%Y-%m-%d %H:%M:%S"
+input_format="%Y-%m-%d %H:%M:%S"
+
+# Process arguments
+while [[ $# -gt 0 ]]; do
+  case $1 in
+    -F|--format|--formatted)
+        custom_format=1 && shift
+        case $1 in
+            "mm-dd-yyyy"|"mm-dd-Y") date_format="%m-%d-%Y" ;;
+            "mm/dd/yyyy"|"mm/dd/Y") date_format="%m/%d/%Y" ;;
+            "mm.dd.yyyy"|"mm.dd.Y") date_format="%m.%d.%Y" ;;
+            "dd-mm-yyyy"|"dd-mm-Y") date_format="%d-%m-%Y" ;;
+            "dd/mm/yyyy"|"dd/mm/Y") date_format="%d/%m/%Y" ;;
+            "dd.mm.yyyy"|"dd.mm.Y") date_format="%d.%m.%Y" ;;
+            "yyyy-mm-dd"|"Y-mm-dd") date_format="%Y-%m-%d" ;;
+            "yyyy/mm/dd"|"Y/mm/dd") date_format="%Y/%m/%d" ;;
+            "yyyy.mm.dd"|"Y.mm.dd") date_format="%Y.%m.%d" ;;
+            "yyyy-mm-ddThh:mm:ss"|"Y-mm-ddThh:mm:ss") date_format="%Y-%m-%dT%H:%M:%S" ;;
+            "yyyy-mm-ddThh:mm:ssZ"|"Y-mm-ddThh:mm:ssZ") date_format="%Y-%m-%dT%H:%M:%SZ" ;;
+            "yyyy-mm-dd hh:mm"|"Y-mm-dd hh:mm") date_format="%Y-%m-%d %H:%M" ;;
+            "yyyy-mm-dd hh:mm am/pm"|"Y-mm-dd hh:mm am/pm") date_format="%Y-%m-%d %I:%M %p" ;;
+            "yyyy-mm-dd hh:mm:ss"|"Y-mm-dd hh:mm:ss") date_format="%Y-%m-%d %H:%M:%S" ;;
+            "mm-dd-yyyy hh:mm:ss"|"mm-dd-Y hh:mm:ss") date_format="%m-%d-%Y %H:%M:%S" ;;
+            "mm/dd/yyyy hh:mm:ss"|"mm/dd/Y hh:mm:ss") date_format="%m/%d/%Y %H:%M:%S" ;;
+            "dd-mm-yyyy hh:mm:ss"|"dd-mm-Y hh:mm:ss") date_format="%d-%m-%Y %H:%M:%S" ;;
+            "dd/mm/yyyy hh:mm:ss"|"dd/mm/Y hh:mm:ss") date_format="%d/%m/%Y %H:%M:%S" ;;
+            "mm/dd/yyyy hh:mm am/pm"|"mm/dd/Y hh:mm am/pm") date_format="%m/%d/%Y %I:%M %p" ;;
+            "m/d/yyyy"|"m/d/Y") date_format="%-m/%-d/%Y" ;;
+            "m/d/yyyy hh:mm am/pm"|"m/d/Y hh:mm am/pm") date_format="%-m/%-d/%Y %I:%M %p" ;;
+            "m/d/yyyy h:mm am/pm"|"m/d/Y h:mm am/pm") date_format="%-m/%-d/%Y %-I:%M %p" ;;
+            "yyyy-mm-dd hh:mm:ss Z"|"Y-mm-dd hh:mm:ss Z") date_format="%Y-%m-%d %H:%M:%S %z" ;;
+            "yyyy-mm-ddThh:mm:ss+hh:mm"|"Y-mm-ddThh:mm:ss+hh:mm") date_format="%Y-%m-%dT%H:%M:%S%z" ;;
+            "yyyy-mm-dd hh:mm:ss z"|"Y-mm-dd hh:mm:ss z") date_format="%Y-%m-%d %H:%M:%S %Z" ;;
+            "yyyy/mm/dd hh:mm:ss Z"|"Y/mm/dd hh:mm:ss Z") date_format="%Y/%m/%d %H:%M:%S %z" ;;
+            "yyyy.mm.dd hh:mm:ss Z"|"Y.mm.dd hh:mm:ss Z") date_format="%Y.%m.%d %H:%M:%S %z" ;;
+            "dd.mm.yyyy hh:mm:ss"|"dd.mm.Y hh:mm:ss") date_format="%d.%m.%Y %H:%M:%S" ;;
+            "dd/mm/yyyy hh:mm:ss Z"|"dd/mm/Y hh:mm:ss Z") date_format="%d/%m/%Y %H:%M:%S %z" ;;
+            "yy/mm/dd") date_format="%y/%m/%d" ;;
+            "yy-mm-dd") date_format="%y-%m-%d" ;;
+            "dd/mm/yy") date_format="%d/%m/%y" ;;
+            "mm/dd/yy") date_format="%m/%d/%y" ;;
+            "m/d/yy") date_format="%-m/%-d/%y" ;;
+            "yyyy-Www-d"|"Y-Www-d") date_format="%G-W%V-%u" ;;
+            "yyyy-ww"|"Y-ww") date_format="%G-%V" ;;
+            "yyyy-ww-d"|"Y-ww-d") date_format="%G-%V-%u" ;;
+            "yyyy-mm-dd (ddd)"|"Y-mm-dd (ddd)") date_format="%Y-%m-%d (%a)" ;;
+            "ddd, yyyy-mm-dd"|"ddd, Y-mm-dd") date_format="%a, %Y-%m-%d" ;;
+            "ddd mm/dd/yyyy"|"ddd mm/dd/Y") date_format="%a %m/%d/%Y" ;;
+            "hh:mm:ss") date_format="%H:%M:%S" ;;
+            "hh:mm") date_format="%H:%M" ;;
+            "hh:mm am/pm") date_format="%I:%M %p" ;;
+            *) echo "Invalid format" && exit 1 ;;
+        esac
+        shift
+        ;;
+    *)
+        remaining_args+=("$1")
+        ;;
+  esac
+  shift
+done
+
+# Set the remaining arguments
+set -- "${remaining_args[@]}"
+
+# If no arguments or input, default to today's date
+[[ -z $input ]] && [[ $# -eq 0 ]] && input=$(date +"%Y-%m-%d %H:%M:%S")
+[[ -z $input ]] && input="$1"
+
+# Validate the date and time
+os_type=$(uname)
+if [[ $# -eq 1 ]]; then
+  if [ "$os_type" = "Darwin" ]; then
+    # macOS date validation
+    date -j -f "$input_format" "$input" &> /dev/null && valid_date="true"
+  elif [ "$os_type" = "Linux" ]; then
+    # Linux date validation
+    date -d "$input" &> /dev/null && valid_date="true"
+  fi
+fi
+
+# Format and print the date using the specified format, or default to standard
+if [[ $custom_format == 1 ]]; then
+    # Detect the operating system
+    if [[ "$os_type" == "Darwin" ]]; then
+        # macOS
+        formatted_date=$(date -j -f "$input_format" "$input" +"$date_format")
+    else
+        # Assume Linux (Ubuntu)
+        formatted_date=$(date -d "$input" +"$date_format")
+    fi
+    
+    echo "$formatted_date"
+else
+    /bin/date "$@"
+fi
