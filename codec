@@ -63,7 +63,7 @@ case $scope in
 					# Range of indices given
 					start=$(echo -n "$idx" | cut -d'-' -f1)
 					end=$(echo -n "$idx" | cut -d'-' -f2)
-					output+=$(echo -n "$json_array" | jq -r --argjson start "$start" --argjson end "$end" '.[$start:$end+1][]')$'\n'
+					output+=$(echo -n "$json_array" | jq -r --argjson start "$start" --argjson end "$end" '.['"$start"':'"$end"'+1][]')$'\n'
 				else
 					echo -n "Invalid index format: $idx"
 					exit 1
@@ -104,7 +104,7 @@ case $scope in
 				elif [[ "$idx" =~ ^[0-9]+-[0-9]+$ ]]; then
 					start=$(echo -n "$idx" | cut -d'-' -f1)
 					end=$(echo -n "$idx" | cut -d'-' -f2)
-					output+=$(echo -n "$lines" | jq -r --argjson start "$start" --argjson end "$end" '.[$start:$end+1][]')$'\n'
+					output+=$(echo -n "$lines" | jq -r --argjson start "$start" --argjson end "$end" '.['"$start"':'"$end"'+1][]')$'\n'
 				else
 					echo -n "Invalid index format: $idx"
 					exit 1
