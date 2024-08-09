@@ -1,140 +1,80 @@
 #!/usr/bin/env bash
 
-[[ -t 0 ]] || input=$(cat)
+format='text' # Default format
+variant='hyphens' # Default phone format variant
+all=0
 
-format='text' # (default format)
-
-remaining_args=() && while true; do
-	case $1 in
-		'') break ;;
-		--phone|--telephone) format='phone' ;;
-		*) remaining_args+=("$1")
-	esac && shift
+# Parse arguments
+remaining_args=() && while [[ $# -gt 0 ]]; do
+  case $1 in
+    --phone|--telephone) format='phone' ;;
+    --parentheses|--parenthetical|--paren) variant='parentheses' ;;
+    --hyphens|--hyphenated|--dashes|--dashed) variant='hyphens' ;;
+    --dots|--dotted|--periods) variant='dots' ;;
+    --spaces|--spaced) variant='spaces' ;;
+    --plain|--raw|--none|--clean) variant='plain' ;;
+    --uppercase|--upper|--caps) variant='uppercase' ;;
+    --lowercase|--lower) variant='lowercase' ;;
+    --capitalize|--capitalized) variant='capitalize' ;;
+    --all) all=1 ;;
+    *) remaining_args+=("$1") ;;
+  esac
+  shift
 done && set -- "${remaining_args[@]}"
 
-case $format in
+# Check if input is provided via stdin
+if [[ -t 0 ]]; then input="$1" && shift; else input=$(cat); fi
 
-	phone)
-		
-		variant='hyphens' # (default variant)
-
-		remaining_args=() && while true; do
-
-			case $1 in
-
-				'') break ;;
-
-				--parentheses|--parenthetical|--paren)
-					variant='parentheses' ;;
-
-				--hyphens|--hyphenated|--dashes|--dashed)
-					variant='hyphens' ;;
-
-				--dots|--dotted|--periods)
-					variant='dots' ;;
-
-				--spaces|--spaced)
-					variant='spaces' ;;
-
-				--plain|--raw|--none|--clean)
-					variant='plain' ;;
-
-				*) remaining_args+=("$1")
-
-			esac && shift
-
-		done && set -- "${remaining_args[@]}"
-		
-		;;
-
-	text)
-
-		remaining_args=() && while true; do
-
-			case $1 in
-
-				'') break ;;
-
-				--uppercase|--upper|--caps)
-					variant='uppercase' ;;
-
-				--lowercase|--lower)
-					variant='lowercase' ;;
-
-				--capitalize|--capitalized)
-					variant='capitalize' ;;
-
-				--all) all=1 ;;
-
-				*) remaining_args+=("$1")
-
-			esac && shift
-
-		done && set -- "${remaining_args[@]}"
-
-		;;
-
-esac
-
-[[ -z $input ]] && input="$1"
+[[ -z $input ]] && { echo "No input provided" && exit 1; }
 
 case $format in
 
-	phone)
+  phone)
 
-		# sanitize the phone number (remove dashes, etc)
-		phone_number=$(echo "$input" | tr -cd '[:digit:]')
+    phone=$(echo "$input" | tr -cd '[:digit:]')
 
-		# Make sure remainder is a nine-digit number (US based)
-		[[ ! $phone_number =~ ^[0-9]{9}$ ]] && {
-			echo "Invalid phone number: Phone number must be a nine-digit number"
-			exit 1
-		}
+    # Check if the phone number is a valid NANP number
+    if [[ $phone =~ ^1?([2-9][0-9]{2}[2-9][0-9]{2}[0-9]{4})$ ]]; then
+      phone="${BASH_REMATCH[1]}"
+    else
+      echo "Invalid phone number: Must be a valid NANP number"
+      exit 1
+    fi
 
-		case $variant in
+    case $variant in
+      parentheses)
+        echo "(${phone:0:3}) ${phone:3:3}-${phone:6:4}"
+        ;;
+      hyphens)
+        echo "${phone:0:3}-${phone:3:3}-${phone:6:4}"
+        ;;
+      dots)
+        echo "${phone:0:3}.${phone:3:3}.${phone:6:4}"
+        ;;
+      spaces)
+        echo "${phone:0:3} ${phone:3:3} ${phone:6:4}"
+        ;;
+      plain)
+        echo "$phone"
+        ;;
 
-			parentheses) echo "$phone_number" |
-				sed -r 's/([0-9]{3})([0-9]{3})([0-9]{4})/(\1) \2-\3/' ;;
+    esac
 
-			hyphens) echo "$phone_number" |
-				sed -r 's/([0-9]{3})([0-9]{3})([0-9]{4})/\1-\2-\3/' ;;
+    ;;
 
-			dots) echo "$phone_number" |
-				sed -r 's/([0-9]{3})([0-9]{3})([0-9]{4})/\1.\2.\3/' ;;
-
-			spaces) echo "$phone_number" |
-				sed -r 's/([0-9]{3})([0-9]{3})([0-9]{4})/\1 \2 \3/' ;;
-
-			plain) echo "$phone_number" ;;
-
-		esac
-		;;
-
-	text)
-
-		case $variant in
-
-			uppercase) echo "$input" |
-				tr '[:lower:]' '[:upper:]' ;;
-
-			lowercase) echo "$input" |
-				tr '[:upper:]' '[:lower:]' ;;
-
-			capitalize)
-
-				echo "$input" |
-					(
-						[[ -n $all ]] \
-						&& awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) tolower(substr($i,2)); print}' \
-						|| awk '{first=toupper(substr($1,1,1)) tolower(substr($1,2)); $1=""; print first $0}'
-					)
-
-				;;
-
-		esac
-
-		;;
-		
+  text)
+    case $variant in
+      uppercase) echo "$input" | tr '[:lower:]' '[:upper:]' ;;
+      lowercase) echo "$input" | tr '[:upper:]' '[:lower:]' ;;
+      capitalize)
+        if [[ $all -eq 1 ]]; then
+          echo "$input" | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) tolower(substr($i,2)); print}'
+        else
+          echo "$input" | awk '{first=toupper(substr($1,1,1)) tolower(substr($1,2)); $1=""; print first $0}'
+        fi
+        ;;
+    esac
+    ;;
 esac
 
 exit 0
