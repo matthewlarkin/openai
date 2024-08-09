@@ -18,6 +18,8 @@ remaining_args=() && while [[ $# -gt 0 ]]; do
     --uppercase|--upper|--caps) variant='uppercase' ;;
     --lowercase|--lower) variant='lowercase' ;;
     --capitalize|--capitalized) variant='capitalize' ;;
+	--space-collaps|--squish) variant='squish' ;;
+	--trim) variant='trim' ;;
     --all) all=1 ;;
     *) remaining_args+=("$1") ;;
   esac
@@ -64,15 +66,17 @@ case $format in
 
   text)
     case $variant in
-      uppercase) echo "$input" | tr '[:lower:]' '[:upper:]' ;;
-      lowercase) echo "$input" | tr '[:upper:]' '[:lower:]' ;;
-      capitalize)
-        if [[ $all -eq 1 ]]; then
-          echo "$input" | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) tolower(substr($i,2)); print}'
-        else
-          echo "$input" | awk '{first=toupper(substr($1,1,1)) tolower(substr($1,2)); $1=""; print first $0}'
-        fi
-        ;;
+		squish) echo "$input" | tr -d '[:space:]' && echo "" ;;
+      	uppercase) echo "$input" | tr '[:lower:]' '[:upper:]' ;;
+      	lowercase) echo "$input" | tr '[:upper:]' '[:lower:]' ;;
+      	capitalize)
+			if [[ $all -eq 1 ]]; then
+				echo "$input" | awk '{for(i=1;i<=NF;i++) $i=toupper(substr($i,1,1)) tolower(substr($i,2)); print}'
+			else
+				echo "$input" | awk '{first=toupper(substr($1,1,1)) tolower(substr($1,2)); $1=""; print first $0}'
+			fi
+			;;
+			trim) echo "$input" | awk '{$1=$1; printf "%s", $0}' ;;
     esac
     ;;
 esac
