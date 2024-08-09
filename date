@@ -73,7 +73,7 @@ done
 set -- "${remaining_args[@]}"
 
 # If no arguments or input, default to today's date
-[[ -z $input ]] && [[ $# -eq 0 ]] && input=$(date +"%Y-%m-%d %H:%M:%S")
+[[ -z $input && $# -eq 0 ]] && input=$(/bin/date +"%Y-%m-%d %H:%M:%S")
 [[ -z $input ]] && input="$1"
 
 [[ $(validate date "$input" --format 'Y-m-d') == 'true' ]] && {
