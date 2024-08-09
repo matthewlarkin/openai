@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+./deps gdate
+
 if [[ -t 0 ]]; then
     type=$1
     input=$2
@@ -195,8 +197,11 @@ case $type in
 					"yyyy-mm-dd (ddd)"|"Y-mm-dd (ddd)") date_format="%Y-%m-%d (%a)" ;;
 					"ddd, yyyy-mm-dd"|"ddd, Y-mm-dd") date_format="%a, %Y-%m-%d" ;;
 					"ddd mm/dd/yyyy"|"ddd mm/dd/Y") date_format="%a %m/%d/%Y" ;;
+					"hh:mm") date_format="%H:%M" ;;
 					"hh:mm:ss") date_format="%H:%M:%S" ;;
+					"h:mm:ss am/pm") date_format="%-I:%M:%S %p" ;;
 					"hh:mm am/pm") date_format="%I:%M %p" ;;
+					"h:mm am/pm") date_format="%-I:%M %p" ;;
 					*) date_format="$2" ;; # Default to the provided format
 				esac
 				shift 2
@@ -212,10 +217,10 @@ case $type in
 		# Attempt to parse the date based on the OS
 		if [ "$os_type" = "Darwin" ]; then
 			# macOS
-			parsed_date=$( /bin/date -j -f "$date_format" "$input" +"$date_format" 2>/dev/null)
+			parsed_date=$(gdate -d "$input" +"$date_format" 2>/dev/null)
 		else
 			# Assume Linux (GNU date)
-			parsed_date=$( /bin/date -d "$input" +"$date_format" 2>/dev/null)
+			parsed_date=$(gdate -d "$input" +"$date_format" 2>/dev/null)
 		fi
 
 		# Strictly compare the original input with the parsed date
@@ -257,10 +262,10 @@ case $type in
 		# Attempt to parse the time based on the OS
 		if [ "$os_type" = "Darwin" ]; then
 			# macOS (BSD)
-			parsed_time=$(date -j -f "$time_format" "$normalized_input" +"$time_format" 2>/dev/null)
+			parsed_time=$(gdate -j -f "$time_format" "$normalized_input" +"$time_format" 2>/dev/null)
 		else
 			# Assume Linux (GNU date)
-			parsed_time=$(date -d "$normalized_input" +"$time_format" 2>/dev/null)
+			parsed_time=$(gdate -d "$normalized_input" +"$time_format" 2>/dev/null)
 		fi
 
 		# Strictly compare the original input with the parsed time

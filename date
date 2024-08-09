@@ -15,51 +15,82 @@ while [[ $# -gt 0 ]]; do
     -F|--format|--formatted)
         custom_format=1 && shift
         case $1 in
-            "mm-dd-yyyy"|"mm-dd-Y") date_format="%m-%d-%Y" ;;
-            "mm/dd/yyyy"|"mm/dd/Y") date_format="%m/%d/%Y" ;;
-            "mm.dd.yyyy"|"mm.dd.Y") date_format="%m.%d.%Y" ;;
-            "dd-mm-yyyy"|"dd-mm-Y") date_format="%d-%m-%Y" ;;
-            "dd/mm/yyyy"|"dd/mm/Y") date_format="%d/%m/%Y" ;;
-            "dd.mm.yyyy"|"dd.mm.Y") date_format="%d.%m.%Y" ;;
-            "yyyy-mm-dd"|"Y-mm-dd"|"Y-m-d") date_format="%Y-%m-%d" ;;
-            "yyyy/mm/dd"|"Y/mm/dd") date_format="%Y/%m/%d" ;;
-            "yyyy.mm.dd"|"Y.mm.dd"|"Y.m.d") date_format="%Y.%m.%d" ;;
-            "yyyy-mm-ddThh:mm:ss"|"Y-mm-ddThh:mm:ss") date_format="%Y-%m-%dT%H:%M:%S" ;;
-            "yyyy-mm-ddThh:mm:ssZ"|"Y-mm-ddThh:mm:ssZ") date_format="%Y-%m-%dT%H:%M:%SZ" ;;
-            "yyyy-mm-dd hh:mm"|"Y-mm-dd hh:mm") date_format="%Y-%m-%d %H:%M" ;;
-            "yyyy-mm-dd hh:mm am/pm"|"Y-mm-dd hh:mm am/pm") date_format="%Y-%m-%d %I:%M %p" ;;
-            "yyyy-mm-dd hh:mm:ss"|"Y-mm-dd hh:mm:ss") date_format="%Y-%m-%d %H:%M:%S" ;;
-            "mm-dd-yyyy hh:mm:ss"|"mm-dd-Y hh:mm:ss") date_format="%m-%d-%Y %H:%M:%S" ;;
-            "mm/dd/yyyy hh:mm:ss"|"mm/dd/Y hh:mm:ss") date_format="%m/%d/%Y %H:%M:%S" ;;
-            "dd-mm-yyyy hh:mm:ss"|"dd-mm-Y hh:mm:ss") date_format="%d-%m-%Y %H:%M:%S" ;;
-            "dd/mm/yyyy hh:mm:ss"|"dd/mm/Y hh:mm:ss") date_format="%d/%m/%Y %H:%M:%S" ;;
-            "mm/dd/yyyy hh:mm am/pm"|"mm/dd/Y hh:mm am/pm") date_format="%m/%d/%Y %I:%M %p" ;;
-            "m/d/yyyy"|"m/d/Y") date_format="%-m/%-d/%Y" ;;
-            "m/d/yyyy hh:mm am/pm"|"m/d/Y hh:mm am/pm") date_format="%-m/%-d/%Y %I:%M %p" ;;
-            "m/d/yyyy h:mm am/pm"|"m/d/Y h:mm am/pm") date_format="%-m/%-d/%Y %-I:%M %p" ;;
-            "yyyy-mm-dd hh:mm:ss Z"|"Y-mm-dd hh:mm:ss Z") date_format="%Y-%m-%d %H:%M:%S %z" ;;
-            "yyyy-mm-ddThh:mm:ss+hh:mm"|"Y-mm-ddThh:mm:ss+hh:mm") date_format="%Y-%m-%dT%H:%M:%S%z" ;;
-            "yyyy-mm-dd hh:mm:ss z"|"Y-mm-dd hh:mm:ss z") date_format="%Y-%m-%d %H:%M:%S %Z" ;;
-            "yyyy/mm/dd hh:mm:ss Z"|"Y/mm/dd hh:mm:ss Z") date_format="%Y/%m/%d %H:%M:%S %z" ;;
-            "yyyy.mm.dd hh:mm:ss Z"|"Y.mm.dd hh:mm:ss Z") date_format="%Y.%m.%d %H:%M:%S %z" ;;
-            "dd.mm.yyyy hh:mm:ss"|"dd.mm.Y hh:mm:ss") date_format="%d.%m.%Y %H:%M:%S" ;;
-            "dd/mm/yyyy hh:mm:ss Z"|"dd/mm/Y hh:mm:ss Z") date_format="%d/%m/%Y %H:%M:%S %z" ;;
-            "yy/mm/dd") date_format="%y/%m/%d" ;;
-            "yy-mm-dd") date_format="%y-%m-%d" ;;
-            "dd/mm/yy") date_format="%d/%m/%y" ;;
-            "mm/dd/yy") date_format="%m/%d/%y" ;;
-            "m/d/yy") date_format="%-m/%-d/%y" ;;
-            "yyyy-Www-d"|"Y-Www-d") date_format="%G-W%V-%u" ;;
-            "yyyy-ww"|"Y-ww") date_format="%G-%V" ;;
-            "yyyy-ww-d"|"Y-ww-d") date_format="%G-%V-%u" ;;
-            "yyyy-mm-dd (ddd)"|"Y-mm-dd (ddd)") date_format="%Y-%m-%d (%a)" ;;
-            "ddd, yyyy-mm-dd"|"ddd, Y-mm-dd") date_format="%a, %Y-%m-%d" ;;
-            "ddd mm/dd/yyyy"|"ddd mm/dd/Y") date_format="%a %m/%d/%Y" ;;
-            "hh:mm:ss") date_format="%H:%M:%S" ;;
-            "hh:mm") date_format="%H:%M" ;;
-            "hh:mm am/pm") date_format="%I:%M %p" ;;
-            *) echo "Invalid format" && exit 1 ;;
-        esac
+			"mm-dd-yyyy"|"mm-dd-Y") date_format="%m-%d-%Y" ;;
+			"mm/dd/yyyy"|"mm/dd/Y") date_format="%m/%d/%Y" ;;
+			"mm.dd.yyyy"|"mm.dd.Y") date_format="%m.%d.%Y" ;;
+			"dd-mm-yyyy"|"dd-mm-Y") date_format="%d-%m-%Y" ;;
+			"dd/mm/yyyy"|"dd/mm/Y") date_format="%d/%m/%Y" ;;
+			"dd.mm.yyyy"|"dd.mm.Y") date_format="%d.%m.%Y" ;;
+			"yyyy-mm-dd"|"Y-mm-dd") date_format="%Y-%m-%d" ;;
+			"yyyy/mm/dd"|"Y/mm/dd") date_format="%Y/%m/%d" ;;
+			"yyyy.mm.dd"|"Y.mm.dd") date_format="%Y.%m.%d" ;;
+			"yyyy-mm-ddThh:mm:ss"|"Y-mm-ddThh:mm:ss") date_format="%Y-%m-%dT%H:%M:%S" ;;
+			"yyyy-mm-ddThh:mm:ssZ"|"Y-mm-ddThh:mm:ssZ") date_format="%Y-%m-%dT%H:%M:%SZ" ;;
+			"yyyy-mm-dd hh:mm"|"Y-mm-dd hh:mm") date_format="%Y-%m-%d %H:%M" ;;
+			"yyyy-mm-dd h:mm"|"Y-mm-dd h:mm") date_format="%Y-%m-%d %-H:%M" ;;
+			"yyyy-mm-dd hh:mm am/pm"|"Y-mm-dd hh:mm am/pm"|"Y-m-d hh:mm am/pm") date_format="%Y-%m-%d %I:%M %p" ;;
+			"yyyy-mm-dd h:mm am/pm"|"Y-mm-dd h:mm am/pm") date_format="%Y-%m-%d %-l:%M %p" ;;
+			"yyyy-mm-dd hh:mm:ss"|"Y-mm-dd hh:mm:ss") date_format="%Y-%m-%d %H:%M:%S" ;;
+			"yyyy-mm-dd h:mm:ss"|"Y-mm-dd h:mm:ss") date_format="%Y-%m-%d %-H:%M:%S" ;;
+			"mm-dd-yyyy hh:mm:ss"|"mm-dd-Y hh:mm:ss") date_format="%m-%d-%Y %H:%M:%S" ;;
+			"mm-dd-yyyy h:mm:ss"|"mm-dd-Y h:mm:ss") date_format="%m-%d-%Y %-H:%M:%S" ;;
+			"mm/dd/yyyy hh:mm:ss"|"mm/dd/Y hh:mm:ss") date_format="%m/%d/%Y %H:%M:%S" ;;
+			"mm/dd/yyyy h:mm:ss"|"mm/dd/Y h:mm:ss") date_format="%m/%d/%Y %-H:%M:%S" ;;
+			"dd-mm-yyyy hh:mm:ss"|"dd-mm-Y hh:mm:ss") date_format="%d-%m-%Y %H:%M:%S" ;;
+			"dd-mm-yyyy h:mm:ss"|"dd-mm-Y h:mm:ss") date_format="%d-%m-%Y %-H:%M:%S" ;;
+			"dd/mm/yyyy hh:mm:ss"|"dd/mm/Y hh:mm:ss") date_format="%d/%m/%Y %H:%M:%S" ;;
+			"dd/mm/yyyy h:mm:ss"|"dd/mm/Y h:mm:ss") date_format="%d/%m/%Y %-H:%M:%S" ;;
+			"mm/dd/yyyy hh:mm am/pm"|"mm/dd/Y hh:mm am/pm") date_format="%m/%d/%Y %I:%M %p" ;;
+			"mm/dd/yyyy h:mm am/pm"|"mm/dd/Y h:mm am/pm") date_format="%m/%d/%Y %-l:%M %p" ;;
+			"m/d/yyyy"|"m/d/Y") date_format="%-m/%-d/%Y" ;;
+			"m/d/yyyy hh:mm am/pm"|"m/d/Y hh:mm am/pm") date_format="%-m/%-d/%Y %I:%M %p" ;;
+			"m/d/yyyy h:mm am/pm"|"m/d/Y h:mm am/pm") date_format="%-m/%-d/%Y %-l:%M %p" ;;
+			"m/d/yyyy hh:mm:ss"|"m/d/Y hh:mm:ss") date_format="%-m/%-d/%Y %H:%M:%S" ;;
+			"m/d/yyyy h:mm:ss"|"m/d/Y h:mm:ss") date_format="%-m/%-d/%Y %-H:%M:%S" ;;
+			"yyyy-mm-dd hh:mm:ss Z"|"Y-mm-dd hh:mm:ss Z") date_format="%Y-%m-%d %H:%M:%S %z" ;;
+			"yyyy-mm-dd h:mm:ss Z"|"Y-mm-dd h:mm:ss Z") date_format="%Y-%m-%d %-H:%M:%S %z" ;;
+			"yyyy-mm-ddThh:mm:ss+hh:mm"|"Y-mm-ddThh:mm:ss+hh:mm") date_format="%Y-%m-%dT%H:%M:%S%z" ;;
+			"yyyy-mm-dd hh:mm:ss z"|"Y-mm-dd hh:mm:ss z") date_format="%Y-%m-%d %H:%M:%S %Z" ;;
+			"yyyy-mm-dd h:mm:ss z"|"Y-mm-dd h:mm:ss z") date_format="%Y-%m-%d %-H:%M:%S %Z" ;;
+			"yyyy/mm/dd hh:mm:ss Z"|"Y/mm/dd hh:mm:ss Z") date_format="%Y/%m/%d %H:%M:%S %z" ;;
+			"yyyy/mm/dd h:mm:ss Z"|"Y/mm/dd h:mm:ss Z") date_format="%Y/%m/%d %-H:%M:%S %z" ;;
+			"yyyy.mm.dd hh:mm:ss Z"|"Y.mm.dd hh:mm:ss Z") date_format="%Y.%m.%d %H:%M:%S %z" ;;
+			"yyyy.mm.dd h:mm:ss Z"|"Y.mm.dd h:mm:ss Z") date_format="%Y.%m.%d %-H:%M:%S %z" ;;
+			"dd.mm.yyyy hh:mm:ss"|"dd.mm.Y hh:mm:ss") date_format="%d.%m.%Y %H:%M:%S" ;;
+			"dd.mm.yyyy h:mm:ss"|"dd.mm.Y h:mm:ss") date_format="%d.%m.%Y %-H:%M:%S" ;;
+			"dd/mm/yyyy hh:mm:ss Z"|"dd/mm/Y hh:mm:ss Z") date_format="%d/%m/%Y %H:%M:%S %z" ;;
+			"dd/mm/yyyy h:mm:ss Z"|"dd/mm/Y h:mm:ss Z") date_format="%d/%m/%Y %-H:%M:%S %z" ;;
+			"yy/mm/dd"|"y/m/d") date_format="%y/%m/%d" ;;
+			"yy-mm-dd"|"y-m-d") date_format="%y-%m-%d" ;;
+			"dd/mm/yy"|"d/m/y") date_format="%d/%m/%y" ;;
+			"mm/dd/yy"|"m/d/y") date_format="%m/%d/%y" ;;
+			"m/d/yy"|"m/d/y") date_format="%-m/%-d/%y" ;;
+			"yyyy-Www-d"|"Y-Www-d") date_format="%G-W%V-%u" ;;
+			"yyyy-ww"|"Y-ww") date_format="%G-%V" ;;
+			"yyyy-ww-d"|"Y-ww-d") date_format="%G-%V-%u" ;;
+			"yyyy-mm-dd (ddd)"|"Y-mm-dd (ddd)") date_format="%Y-%m-%d (%a)" ;;
+			"ddd, yyyy-mm-dd"|"ddd, Y-mm-dd") date_format="%a, %Y-%m-%d" ;;
+			"ddd mm/dd/yyyy"|"ddd mm/dd/Y") date_format="%a %m/%d/%Y" ;;
+			"hh:mm:ss") date_format="%H:%M:%S" ;;
+			"h:mm:ss") date_format="%-H:%M:%S" ;;
+			"hh:mm") date_format="%H:%M" ;;
+			"h:mm") date_format="%-H:%M" ;;
+			"hh:mm am/pm") date_format="%I:%M %p" ;;
+			"h:mm am/pm") date_format="%-l:%M %p" ;;
+			"hh:mm:ss.SSS") date_format="%H:%M:%S.%3N" ;;
+			"hh:mm:ss.SSS am/pm") date_format="%I:%M:%S.%3N %p" ;;
+			"hh:mm:ss TZD") date_format="%H:%M:%S %Z" ;;
+			"hh:mm:ss z") date_format="%H:%M:%S %z" ;;
+			"yyyyMMdd"|"YMMdd") date_format="%Y%m%d" ;;
+			"MMddyyyy"|"Mdyyyy") date_format="%m%d%Y" ;;
+			"ddMMyyyy"|"dMyyyy") date_format="%d%m%Y" ;;
+			"yyyyMMddHHmmss"|"YMMddHHmmss") date_format="%Y%m%d%H%M%S" ;;
+			"MMddyyyyHHmmss"|"MdyyyyHHmmss") date_format="%m%d%Y%H%M%S" ;;
+			"ddMMyyyyHHmmss"|"dMyyyyHHmmss") date_format="%d%m%Y%H%M%S" ;;
+			*) echo "Invalid format" && exit 1 ;;
+		esac
+
+
         shift
         ;;
     *)
@@ -73,26 +104,57 @@ done
 set -- "${remaining_args[@]}"
 
 # If no arguments or input, default to today's date
-[[ -z $input && $# -eq 0 ]] && input=$(/bin/date +"%Y-%m-%d %H:%M:%S")
+[[ -z $input && $# -eq 0 ]] && input=$(gdate +"%Y-%m-%d %H:%M:%S")
 [[ -z $input ]] && input="$1"
 
-[[ $(validate date "$input" --format 'Y-m-d') == 'true' ]] && {
-	input="$input 00:00:00"
-}
 
-[[ $(validate date "$input" --format 'Y-m-d hh:mm:ss') = 'false' ]] && {
-	echo "Error: Invalid date format, expected yyyy-mm-dd hh:mm:ss" && exit 1
-}
+# Detect the operating system
+os_type=$(uname)
+
+# Get today's date in yyyy-mm-dd format
+if [ "$os_type" = "Darwin" ] && command -v gdate &> /dev/null; then
+    today=$(gdate +"%Y-%m-%d")
+else
+    today=$(date +"%Y-%m-%d")
+fi
+
+# Detect the operating system
+os_type=$(uname)
+
+# Get today's date in yyyy-mm-dd format
+if [ "$os_type" = "Darwin" ] && command -v gdate &> /dev/null; then
+    today=$(gdate +"%Y-%m-%d")
+else
+    today=$(date +"%Y-%m-%d")
+fi
+
+# condition yyyy-mm-dd
+if [[ $(validate date "$input" --format 'Y-m-d') == 'true' ]]; then
+    input="$input 00:00:00"
+# yyyy-mm-dd hh:mm:ss
+elif [[ $(validate date "$input" --format 'Y-m-d hh:mm:ss') == 'true' ]]; then
+    # input is already in the correct format
+    :
+# yyyy-mm-dd hh:mm
+elif [[ $(validate date "$input" --format 'Y-m-d hh:mm') == 'true' ]]; then
+    input="$input:00"
+# hh:mm
+elif [[ $(validate date "$input" --format 'hh:mm') == 'true' ]]; then
+    input="$today $input:00"
+# hh:mm:ss
+elif [[ $(validate date "$input" --format 'hh:mm:ss') == 'true' ]]; then
+    input="$today $input"
+fi
 
 # Validate the date and time
 os_type=$(uname)
 if [[ $# -eq 1 ]]; then
   if [ "$os_type" = "Darwin" ]; then
     # macOS date validation
-    /bin/date -j -f "$input_format" "$input" &> /dev/null && valid_date="true"
+    gdate -d "$input_format" "$input" &> /dev/null && valid_date="true"
   elif [ "$os_type" = "Linux" ]; then
     # Linux date validation
-    /bin/date -d "$input" &> /dev/null && valid_date="true"
+    gdate -d "$input" &> /dev/null && valid_date="true"
   fi
 fi
 
@@ -101,10 +163,10 @@ if [[ $custom_format == 1 ]]; then
     # Detect the operating system
     if [[ "$os_type" == "Darwin" ]]; then
         # macOS
-        formatted_date=$(/bin/date -j -f "$input_format" "$input" +"$date_format")
+        formatted_date=$(gdate -d "$input" +"$date_format")
     else
         # Assume Linux (Ubuntu)
-        formatted_date=$(/bin/date -d "$input" +"$date_format")
+        formatted_date=$(gdate -d "$input" +"$date_format")
     fi
     
     echo "$formatted_date" && exit 0
