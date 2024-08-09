@@ -76,15 +76,23 @@ set -- "${remaining_args[@]}"
 [[ -z $input ]] && [[ $# -eq 0 ]] && input=$(date +"%Y-%m-%d %H:%M:%S")
 [[ -z $input ]] && input="$1"
 
+[[ $(validate date "$input" --format 'Y-m-d') == 'true' ]] && {
+	input="$input 00:00:00"
+}
+
+[[ $(validate date "$input" --format 'Y-m-d hh:mm:ss') = 'false' ]] && {
+	echo "Error: Invalid date format, expected yyyy-mm-dd hh:mm:ss" && exit 1
+}
+
 # Validate the date and time
 os_type=$(uname)
 if [[ $# -eq 1 ]]; then
   if [ "$os_type" = "Darwin" ]; then
     # macOS date validation
-    date -j -f "$input_format" "$input" &> /dev/null && valid_date="true"
+    /bin/date -j -f "$input_format" "$input" &> /dev/null && valid_date="true"
   elif [ "$os_type" = "Linux" ]; then
     # Linux date validation
-    date -d "$input" &> /dev/null && valid_date="true"
+    /bin/date -d "$input" &> /dev/null && valid_date="true"
   fi
 fi
 
@@ -93,13 +101,13 @@ if [[ $custom_format == 1 ]]; then
     # Detect the operating system
     if [[ "$os_type" == "Darwin" ]]; then
         # macOS
-        formatted_date=$(date -j -f "$input_format" "$input" +"$date_format")
+        formatted_date=$(/bin/date -j -f "$input_format" "$input" +"$date_format")
     else
         # Assume Linux (Ubuntu)
-        formatted_date=$(date -d "$input" +"$date_format")
+        formatted_date=$(/bin/date -d "$input" +"$date_format")
     fi
     
-    echo "$formatted_date"
+    echo "$formatted_date" && exit 0
 else
     /bin/date "$@"
 fi

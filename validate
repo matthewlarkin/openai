@@ -161,14 +161,14 @@ case $type in
 					"dd-mm-yyyy"|"dd-mm-Y") date_format="%d-%m-%Y" ;;
 					"dd/mm/yyyy"|"dd/mm/Y") date_format="%d/%m/%Y" ;;
 					"dd.mm.yyyy"|"dd.mm.Y") date_format="%d.%m.%Y" ;;
-					"yyyy-mm-dd"|"Y-mm-dd") date_format="%Y-%m-%d" ;;
+					"yyyy-mm-dd"|"Y-mm-dd"|"Y-m-d") date_format="%Y-%m-%d" ;;
 					"yyyy/mm/dd"|"Y/mm/dd") date_format="%Y/%m/%d" ;;
 					"yyyy.mm.dd"|"Y.mm.dd") date_format="%Y.%m.%d" ;;
 					"yyyy-mm-ddThh:mm:ss"|"Y-mm-ddThh:mm:ss") date_format="%Y-%m-%dT%H:%M:%S" ;;
 					"yyyy-mm-ddThh:mm:ssZ"|"Y-mm-ddThh:mm:ssZ") date_format="%Y-%m-%dT%H:%M:%SZ" ;;
 					"yyyy-mm-dd hh:mm"|"Y-mm-dd hh:mm") date_format="%Y-%m-%d %H:%M" ;;
 					"yyyy-mm-dd hh:mm am/pm"|"Y-mm-dd hh:mm am/pm") date_format="%Y-%m-%d %I:%M %p" ;;
-					"yyyy-mm-dd hh:mm:ss"|"Y-mm-dd hh:mm:ss") date_format="%Y-%m-%d %H:%M:%S" ;;
+					"yyyy-mm-dd hh:mm:ss"|"Y-mm-dd hh:mm:ss"|"Y-m-d hh:mm:ss") date_format="%Y-%m-%d %H:%M:%S" ;;
 					"mm-dd-yyyy hh:mm:ss"|"mm-dd-Y hh:mm:ss") date_format="%m-%d-%Y %H:%M:%S" ;;
 					"mm/dd/yyyy hh:mm:ss"|"mm/dd/Y hh:mm:ss") date_format="%m/%d/%Y %H:%M:%S" ;;
 					"dd-mm-yyyy hh:mm:ss"|"dd-mm-Y hh:mm:ss") date_format="%d-%m-%Y %H:%M:%S" ;;
@@ -349,3 +349,4 @@ case $type in
 esac
 
 echo "$output"
+exit 0
