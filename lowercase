@@ -2,4 +2,4 @@
 
 [[ -t 0 ]] && input=$1 || input=$(cat)
 
-./bare transform --lowercase "$input"
+./bare transform "$input" --lowercase

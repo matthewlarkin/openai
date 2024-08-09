@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
 
-[[ -t 0 ]] || input=$(cat)
+[[ -t 0 ]] && input=$1 || input=$(cat)
 
-[[ -z $input ]] && input="$1"
-
-./bare transform --uppercase "$input"
+./bare transform "$input" --uppercase
