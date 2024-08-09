@@ -241,9 +241,6 @@ case $type in
 		fi
 		;;
 
-
-
-
 	true-false|true/false)
 
 		if [[ $input == "true" || $input == "false" ]]; then
@@ -263,6 +260,14 @@ case $type in
 		if [[ $input == "0" || $input == "1" ]]; then
 			output="true"
 		fi
+		;;
+
+	boolean)
+
+		if [[ $input == "true" || $input == "false" || $input == "yes" || $input == "no" || $input == "y" || $input == "n" || $input == "0" || $input == "1" ]]; then
+			output="true"
+		fi
+
 		;;
 
 	phone|phone-number)
