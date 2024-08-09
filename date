@@ -21,9 +21,9 @@ while [[ $# -gt 0 ]]; do
             "dd-mm-yyyy"|"dd-mm-Y") date_format="%d-%m-%Y" ;;
             "dd/mm/yyyy"|"dd/mm/Y") date_format="%d/%m/%Y" ;;
             "dd.mm.yyyy"|"dd.mm.Y") date_format="%d.%m.%Y" ;;
-            "yyyy-mm-dd"|"Y-mm-dd") date_format="%Y-%m-%d" ;;
+            "yyyy-mm-dd"|"Y-mm-dd"|"Y-m-d") date_format="%Y-%m-%d" ;;
             "yyyy/mm/dd"|"Y/mm/dd") date_format="%Y/%m/%d" ;;
-            "yyyy.mm.dd"|"Y.mm.dd") date_format="%Y.%m.%d" ;;
+            "yyyy.mm.dd"|"Y.mm.dd"|"Y.m.d") date_format="%Y.%m.%d" ;;
             "yyyy-mm-ddThh:mm:ss"|"Y-mm-ddThh:mm:ss") date_format="%Y-%m-%dT%H:%M:%S" ;;
             "yyyy-mm-ddThh:mm:ssZ"|"Y-mm-ddThh:mm:ssZ") date_format="%Y-%m-%dT%H:%M:%SZ" ;;
             "yyyy-mm-dd hh:mm"|"Y-mm-dd hh:mm") date_format="%Y-%m-%d %H:%M" ;;
