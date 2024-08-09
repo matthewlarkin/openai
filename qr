@@ -11,12 +11,6 @@ else
   read -r link
 fi
 
-# Validate the URL
-if [[ -z "$link" ]] || ! [[ "$link" =~ ^https:// ]]; then
-  echo "Please provide a valid URL starting with https://"
-  exit 1
-fi
-
 output=".var/downloads/$(./bare random string 30).png"
 
 qrencode -o "$output" "$link"
