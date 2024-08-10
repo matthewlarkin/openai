@@ -13,16 +13,29 @@ Core `bare` commands are inspired by the Unix philosophy, accepting input from `
 ## Environment
 
 ### RC file
-Set your `.etc/barerc` file, and bare will source it for use through the system.
+Bare sources it's global variables and functions through a series of run command scripts. Each is sourced in the following order: `.lib/barerc`, `.etc/barerc`, `~/.barerc`. All global variables and functions are exported from `.lib/barerc` and can be overwritten in each subsequent rc file. If you want your own custom variables and functions available throughout the system, make sure to *`export`* them from either your `.etc/barerc` or `~/.barerc` file.
 
-```env
-export STRIPE_PUBLIC_KEY="xxxxx"
-export STRIPE_SECRET_KEY="xxxxx"
+**Sample `~/.barerc`**
+```bash
+# Core variable overwrites
 
-export OPENAI_API_KEY="xxxxx-xxxx-xxxxx"
+STRIPE_PUBLIC_KEY="xxxxx"
+STRIPE_SECRET_KEY="xxxxx"
 
-export BARE_EMAIL_FROM="xxxxx"
-export POSTMARK_API_TOKEN="xxxxx-xxxx-xxxxx"
+OPENAI_API_KEY="xxxxx-xxxx-xxxxx"
+
+BARE_EMAIL_FROM="xxxxx"
+POSTMARK_API_TOKEN="xxxxx-xxxx-xxxxx"
+
+# Custom values (note the exports); all downstream
+# bare scripts have access to them now. 👍
+
+MY_CUSTOM_VAR="xxxxx" && export MY_CUSTOM_VAR
+
+function MY_OWN_FUNCTION() {
+	echo "I'll echo whatever you pass me here: $1"
+	[[ -n $1 ]] && echo "Error: nothing passed in" && exit 1
+} && export -f MY_OWN_FUNCTION
 ```
 
 ### Third-party CLI tools
@@ -32,9 +45,9 @@ Various CLI tools are required in the bare ecosystem, mostly classics like `curl
 You can still use much of `bare` without most of these, but we recommend installing them to get the full experience. You can install them with a package manager such as `apt-get` on Ubuntu or `brew` on Mac.
 
 ```md
-- curl
+- curl (version 7.82+)
 - jq
-- coreutils
+- coreutils (if using macOS)
 - recutils
 - sqlite3
 - pandoc
