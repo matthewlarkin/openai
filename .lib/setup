@@ -153,6 +153,8 @@ setup() {
                         sudo mv sqlpage.bin /usr/local/bin/sqlpage
                         sudo chmod 755 /usr/local/bin/sqlpage
                         rm -rf sqlpage sqlpage-linux.tgz
+					elif [[ "$package" == 'coreutils' ]]; then
+						: # it's ubuntu, we've got coreutils
 					elif [[ "$package" == 'yq' ]]; then
 						sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
 						sudo chmod +x /usr/local/bin/yq

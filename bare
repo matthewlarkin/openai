@@ -45,7 +45,9 @@ touch .var/sync && {
 
 [[ $1 == '--version' || $1 == '-v' ]] && echo "$version" && exit 0
 
-[[ $1 == 'setup' ]] && {
+[[ $1 == '--upgrade' ]] && git pull origin root
+
+[[ $1 == '--setup' ]] && {
 	bash .lib/setup
 	exit 0
 }
