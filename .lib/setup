@@ -1,0 +1,206 @@
+#!/usr/bin/env bash
+
+# Colors for script output
+GREEN='\033[0;32m'
+YELLOW='\033[0;33m'
+BLUE='\033[0;34m'
+PINK='\033[0;35m'
+GRAY='\033[2;37m'
+RESET='\033[0m'
+
+# Detect the platform (Linux or macOS)
+OS=""
+if [[ "$OSTYPE" == "linux-gnu"* ]]; then
+    OS="Linux"
+elif [[ "$OSTYPE" == "darwin"* ]]; then
+    OS="macOS"
+fi
+sleep 0.05
+
+# Function to install sqlpage manually for macOS
+install_sqlpage_mac() {
+    echo -e " ${GRAY}|${RESET} ${BLUE}Installing SQLPage...${RESET}"
+    curl -L -o sqlpage-linux.tgz \
+        https://github.com/lovasoa/SQLpage/releases/download/v0.26.0/sqlpage-linux.tgz
+    tar -xzf sqlpage-linux.tgz
+    sudo mv sqlpage/sqlpage.bin /usr/local/bin/sqlpage
+    sudo chmod 755 /usr/local/bin/sqlpage
+    rm -rf sqlpage sqlpage-linux.tgz
+    sleep 0.05
+}
+
+# Function to check if everything is set up
+check_setup() {
+    echo -e " ${GRAY}|${RESET} ${BLUE}Checking current setup...${RESET}"
+    sleep 0.05
+
+    # Ensure .etc directory and barerc file exist
+    mkdir -p .etc
+    touch .etc/barerc
+    sleep 0.05
+
+    # Check if required variables are set
+    all_set=true
+    for var in "${required_variables[@]}"; do
+        if ! grep -q "^export $var=" .etc/barerc; then
+            echo -e " ${GRAY}|${RESET} 📝 $var is not set."
+            all_set=false
+        fi
+        sleep 0.05
+    done
+
+    # Check if dependencies are installed
+    for package in "${!dependencies[@]}"; do
+        command=${dependencies[$package]}
+        if ! command -v $command >/dev/null 2>&1; then
+            echo -e " ${GRAY}|${RESET} 📝 $command not found."
+            all_set=false
+        fi
+        sleep 0.05
+    done
+
+    if $all_set; then
+        echo ""
+        echo -e " ${GRAY}|${RESET} ${GREEN}All checks passed! ✅${RESET}"
+    else
+        echo ""
+        echo -e " ${GRAY}|${RESET} ${GRAY}Setup incomplete.${RESET}"
+        echo -e " ${GRAY}|${RESET} Continuing setup..."
+        echo ""
+    fi
+    sleep 0.05
+}
+
+# Function to prompt for sensitive input (like passwords)
+prompt_secret() {
+    read -rsp "$1" input
+    echo "$input"
+    sleep 0.05
+}
+
+# Required variables
+required_variables=("OPENAI_API_KEY" "POSTMARK_API_TOKEN" "BARE_EMAIL_FROM" "STRIPE_SECRET_KEY" "EDITOR")
+
+# List of dependencies and their associated commands
+declare -A dependencies=(
+    ["curl"]="curl"
+    ["jq"]="jq"
+    ["coreutils"]="gdate"
+    ["recutils"]="recsel"
+    ["sqlite3"]="sqlite3"
+    ["pandoc"]="pandoc"
+    ["yq"]="yq"
+    ["xxd"]="xxd"
+    ["php"]="php"
+    ["awk"]="awk"
+    ["perl"]="perl"
+    ["openssl"]="openssl"
+    ["imagemagick"]="magick"
+    ["ffmpeg"]="ffmpeg"
+    ["qrencode"]="qrencode"
+    ["yt-dlp"]="yt-dlp"
+    ["csvkit"]="csvcut"
+    ["sqlpage"]="sqlpage"
+)
+
+# Main setup process
+setup() {
+    echo ""
+    echo -e " ${GRAY}|${RESET} Welcome to ${GREEN}bare.sh${RESET}! 🙌"
+    sleep 0.05
+    echo -e " ${GRAY}|${RESET} Setting things up..."
+    echo ""
+
+    # Perform setup check
+    check_setup
+
+    # Ensure required variables are set
+    for var in "${required_variables[@]}"; do
+        if ! grep -q "^export $var=" .etc/barerc; then
+
+            echo -e " ${GRAY}|${RESET} ${YELLOW}Notice:${RESET} ${GREEN}$var${RESET} is not set."
+
+            read -rp $' \e[2;37m|\e[0m Set \e[32m'"$var"$'\e[0m now? (y/n): ' response
+            sleep 0.05
+            if [[ $response =~ ^[Yy]$ ]]; then
+                value=$(prompt_secret $' \e[2;37m|\e[0m \e[32m'"$var"$'\e[0m: ')
+                echo "export $var=\"$value\"" >> .etc/barerc
+            fi
+            sleep 0.05
+        fi
+    done
+
+    echo ""
+    echo -e " ${GRAY}|${RESET} ${BLUE}Checking dependencies...${RESET}"
+    sleep 0.05
+
+    # Check and install dependencies if needed
+    for package in "${!dependencies[@]}"; do
+        command=${dependencies[$package]}
+
+        if ! command -v $command >/dev/null 2>&1; then
+            echo -e " ${GRAY}|${RESET} ${YELLOW}$command missing.${RESET}"
+            read -rp $'\e[2;37m|\e[0m Install '"$package"'? (y/n): ' response
+            sleep 0.05
+            if [[ $response =~ ^[Yy]$ ]]; then
+                echo -e " ${GRAY}|${RESET} ${BLUE}Installing $package...${RESET}"
+                sleep 0.05
+                if [[ "$OS" == "Linux" ]]; then
+                    if [[ "$package" == "sqlpage" ]]; then
+                        curl -L -o sqlpage-linux.tgz \
+                            https://github.com/lovasoa/SQLpage/releases/download/v0.26.0/sqlpage-linux.tgz
+                        tar -xzf sqlpage-linux.tgz
+                        sudo mv sqlpage/sqlpage.bin /usr/local/bin/sqlpage
+                        sudo chmod 755 /usr/local/bin/sqlpage
+                        rm -rf sqlpage sqlpage-linux.tgz
+                    else
+                        sudo apt-get install -y $package || echo -e " ${GRAY}|${RESET} ${YELLOW}Install $package manually.${RESET}"
+                    fi
+                elif [[ "$OS" == "macOS" ]]; then
+                    if ! command -v brew >/dev/null 2>&1; then
+                        echo -e " ${GRAY}|${RESET} ${YELLOW}Homebrew not found.${RESET}"
+                        echo -e " ${GRAY}|${RESET} ${BLUE}Installing Homebrew...${RESET}"
+                        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+                        sleep 0.05
+                    fi
+                    if [[ "$package" == "coreutils" ]]; then
+                        brew install coreutils
+                    elif [[ "$package" == "sqlpage" ]]; then
+                        install_sqlpage_mac
+                    else
+                        brew install $package || echo -e " ${GRAY}|${RESET} ${YELLOW}Install $package manually.${RESET}"
+                    fi
+                fi
+                sleep 0.05
+            fi
+        else
+            echo -e " ${GRAY}|${RESET} ${GREEN}$command found.${RESET}"
+        fi
+        sleep 0.05
+    done
+
+    	# Determine the current shell and set the shell config file
+	if [ -n "$ZSH_VERSION" ]; then
+		SHELL_CONFIG="$HOME/.zshrc"
+	elif [ -n "$BASH_VERSION" ]; then
+		SHELL_CONFIG="$HOME/.bash_profile"
+	else
+		SHELL_CONFIG="$HOME/.profile"
+	fi
+	
+	# Final message
+	echo ""
+	echo -e " ${GRAY}|${RESET} ${GREEN}Setup complete! 🎉${RESET}"
+	echo ""
+	sleep 0.05
+	echo -e " ${GRAY}|${RESET} Consider aliasing '${GREEN}bare${RESET}' in your"
+	echo -e " ${GRAY}|${RESET} shell config to access bare wherever you are."
+	echo ""
+	echo -e " ${GRAY}|${RESET} You can run this in your terminal:"
+	echo -e " ${GRAY}|${RESET} echo \"alias bare='$(pwd)/bare'\" >> $SHELL_CONFIG"
+	echo ""
+	sleep 0.05
+}
+
+# Run setup
+setup
