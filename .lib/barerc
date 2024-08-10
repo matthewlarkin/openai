@@ -14,33 +14,13 @@ BASE_CONFIG=(
     ["POSTMARK_SERVER_TOKEN"]=""
     ["BARE_DIR"]=$(pwd)
     ["BARE_COLOR"]=0
+	["BARE_DEBUG"]=0
 )
 
 # Loop over the array and export each key-value pair
 for key in "${!BASE_CONFIG[@]}"; do
     export "$key"="${BASE_CONFIG[$key]}"
 done
-
-function gatherInput() {
-
-	remaining_args=() && while [[ $# -gt 0 ]]; do
-		case $1 in
-			--from-file-contents) catfile=1 ;;
-			--required) required=1 ;;
-			*) remaining_args+=("$1") ;;
-		esac && shift
-	done && set -- "${remaining_args[@]}"
-
-	[[ -t 0 ]] && input="$1" || input=$(cat)
-
-	[[ ($required == 1) ]] && [[ -z $input ]] && echo "Error: No input provided." && exit 1
-
-	[[ $catfile == 1 ]] && {
-		[[ ! -f $input ]] && echo "Error: input is not a file" && exit 1
-		input=$(cat "$input")
-	}
-
-} && export -f gatherInput
 
 # shellcheck disable=SC1091
 source "$BARE_DIR/.etc/barerc"

@@ -11,7 +11,7 @@ done && set -- "${remaining_args[@]}"
 
 scope="$1" && shift
 
-gatherInput --required "$@"
+[[ -t 0 ]] && input="$1" || input=$(cat)
 
 [[ -n $trim ]] && input=$(echo -n "$input" | awk '{$1=$1};1')
 

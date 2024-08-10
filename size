@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-gatherInput --required "$@"
+[[ -t 0 ]] && input="$1" || input=$(cat)
 
 # Check the OS type and set the appropriate stat command
 if [[ "$(uname)" == "Darwin" ]]; then
@@ -10,7 +10,7 @@ else
 fi
 
 # Calculate the total size
-# shellcheck disable=SC2154,SC2086 # (we have $input and want word splitting here)
+# shellcheck disable=SC2086 # (we want word splitting here)
 find "$input" -type f -exec $stat_cmd {} + | awk '{
     total += $1
 }
