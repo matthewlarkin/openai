@@ -197,12 +197,30 @@ setup() {
 	echo ""
 	echo -e " ${GRAY}|${RESET} ${GREEN}Setup complete! 🎉${RESET}"
 	echo ""
-	sleep 0.05
-	echo -e " ${GRAY}|${RESET} Consider aliasing '${GREEN}bare${RESET}' in your"
-	echo -e " ${GRAY}|${RESET} shell config to access bare wherever you are."
+	
+	# Check if 'bare' is already aliased to the current 'bare'
+	current_bare_path="$(pwd)/bare"
+	existing_bare_path="$(which bare 2>/dev/null || true)"
+	if [[ "$(realpath "$existing_bare_path" 2>/dev/null || true)" != "$current_bare_path" ]]; then
+		sleep 0.05
+		echo -e " ${GRAY}|${RESET} Consider aliasing '${GREEN}bare${RESET}' in your"
+		echo -e " ${GRAY}|${RESET} shell config to access bare wherever you are."
+		echo ""
+		echo -e " ${GRAY}|${RESET} You can run this in your terminal:"
+		echo -e " ${GRAY}|${RESET} echo \"alias bare='$(pwd)/bare'\" >> $SHELL_CONFIG"
+		echo ""
+		# would you like us to run that for you?
+		read -rp $' \e[2;37m|\e[0m Would you like us to run that for you? \e[2;37m(y/n)\e[0m : ' response
+		if [[ $response =~ ^[Yy]$ ]]; then
+			echo "alias bare='$(pwd)/bare'" >> "$SHELL_CONFIG"
+		fi
+	fi
+	if [[ "$(realpath "$existing_bare_path" 2>/dev/null || true)" == "$current_bare_path" ]]; then
+		echo -e " ${GRAY}|${RESET} '${GREEN}bare${RESET}' is aliased for use throughout the terminal. Nice 💪"
+		echo -e " ${GRAY}|${RESET} You can run \`${GREEN}bare${RESET}\` or \`${GREEN}bare terminal${RESET}\` from anywhere in your terminal now."
+	fi
 	echo ""
-	echo -e " ${GRAY}|${RESET} You can run this in your terminal:"
-	echo -e " ${GRAY}|${RESET} echo \"alias bare='$(pwd)/bare'\" >> $SHELL_CONFIG"
+	echo -e " ${GRAY}|${RESET} ${BLUE}Go conquer the world with ${GREEN}bare${RESET}."
 	echo ""
 	sleep 0.05
 }
