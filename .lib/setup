@@ -141,7 +141,7 @@ setup() {
 
         if ! command -v "$command" >/dev/null 2>&1; then
             echo -e " ${GRAY}|${RESET} ${YELLOW}$command missing.${RESET}"
-            read -rp " ${GRAY}|${RESET}[0m Install '"$package"'? (y/n): " response
+            read -rp " ${GRAY}|${RESET} Install '"$package"'? (y/n): " response
             sleep 0.05
             if [[ $response =~ ^[Yy]$ ]]; then
                 echo -e " ${GRAY}|${RESET} ${BLUE}Installing $package...${RESET}"
@@ -154,7 +154,7 @@ setup() {
                         sudo mv sqlpage.bin /usr/local/bin/sqlpage
                         sudo chmod 755 /usr/local/bin/sqlpage
                         rm -rf sqlpage sqlpage-linux.tgz
-					elif [[ "$package" == 'gdate' ]]; then
+					elif [[ "$package" == 'coreutils' ]]; then
 						: # it's ubuntu, we've got coreutils
 					elif [[ "$package" == 'yq' ]]; then
 						sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
