@@ -95,7 +95,7 @@ declare -A dependencies=(
     ["awk"]="awk"
     ["perl"]="perl"
     ["openssl"]="openssl"
-    ["imagemagick"]="magick"
+    ["imagemagick"]="convert"
     ["ffmpeg"]="ffmpeg"
     ["qrencode"]="qrencode"
     ["yt-dlp"]="yt-dlp"
@@ -138,9 +138,9 @@ setup() {
     for package in "${!dependencies[@]}"; do
         command=${dependencies[$package]}
 
-        if ! command -v $command >/dev/null 2>&1; then
+        if ! command -v "$command" >/dev/null 2>&1; then
             echo -e " ${GRAY}|${RESET} ${YELLOW}$command missing.${RESET}"
-            read -rp $'\e[2;37m|\e[0m Install '"$package"'? (y/n): ' response
+            read -rp $' \e[2;37m|\e[0m Install '"$package"'? (y/n): ' response
             sleep 0.05
             if [[ $response =~ ^[Yy]$ ]]; then
                 echo -e " ${GRAY}|${RESET} ${BLUE}Installing $package...${RESET}"
@@ -150,11 +150,14 @@ setup() {
                         curl -L -o sqlpage-linux.tgz \
                             https://github.com/lovasoa/SQLpage/releases/download/v0.26.0/sqlpage-linux.tgz
                         tar -xzf sqlpage-linux.tgz
-                        sudo mv sqlpage/sqlpage.bin /usr/local/bin/sqlpage
+                        sudo mv sqlpage.bin /usr/local/bin/sqlpage
                         sudo chmod 755 /usr/local/bin/sqlpage
                         rm -rf sqlpage sqlpage-linux.tgz
+					elif [[ "$package" == 'yq' ]]; then
+						sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
+						sudo chmod +x /usr/local/bin/yq
                     else
-                        sudo apt-get install -y $package || echo -e " ${GRAY}|${RESET} ${YELLOW}Install $package manually.${RESET}"
+                        sudo apt-get install -y "$package" || echo -e " ${GRAY}|${RESET} ${YELLOW}Install $package manually.${RESET}"
                     fi
                 elif [[ "$OS" == "macOS" ]]; then
                     if ! command -v brew >/dev/null 2>&1; then
@@ -168,7 +171,7 @@ setup() {
                     elif [[ "$package" == "sqlpage" ]]; then
                         install_sqlpage_mac
                     else
-                        brew install $package || echo -e " ${GRAY}|${RESET} ${YELLOW}Install $package manually.${RESET}"
+                        brew install "$package" || echo -e " ${GRAY}|${RESET} ${YELLOW}Install $package manually.${RESET}"
                     fi
                 fi
                 sleep 0.05
@@ -179,7 +182,7 @@ setup() {
         sleep 0.05
     done
 
-    	# Determine the current shell and set the shell config file
+	# Determine the current shell and set the shell config file
 	if [ -n "$ZSH_VERSION" ]; then
 		SHELL_CONFIG="$HOME/.zshrc"
 	elif [ -n "$BASH_VERSION" ]; then
