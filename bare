@@ -21,7 +21,7 @@ if [[ $(uname) == 'Darwin' ]]; then
     fi
 elif [[ $(uname) == 'Linux' ]]; then
     # Check that we have at least Bash 5.1+
-    if [[ $(version_ge "$current_version" "$required_version") != 1 ]]; then
+    if [[ $(perl -e "print 1 if '$current_version' ge '$required_version'") != 1 ]]; then
         echo "Error: Bash version 5.1+ required. Currently running $current_version."
         echo "To install Bash 5.1+, run the following command:"
         echo "  sudo apt-get update && sudo apt-get install bash"
