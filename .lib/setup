@@ -153,7 +153,7 @@ setup() {
                         sudo mv sqlpage.bin /usr/local/bin/sqlpage
                         sudo chmod 755 /usr/local/bin/sqlpage
                         rm -rf sqlpage sqlpage-linux.tgz
-					elif [[ "$package" == 'coreutils' ]]; then
+					elif [[ "$package" == 'gdate' ]]; then
 						: # it's ubuntu, we've got coreutils
 					elif [[ "$package" == 'yq' ]]; then
 						sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
@@ -174,7 +174,7 @@ setup() {
                         install_sqlpage_mac
                     else
                         brew install "$package" || echo -e " ${GRAY}|${RESET} ${YELLOW}Install $package manually.${RESET}"
-                    fi
+					fi
                 fi
                 sleep 0.05
             fi
@@ -186,9 +186,13 @@ setup() {
 
 	# Determine the current shell and set the shell config file
 	if [ -n "$ZSH_VERSION" ]; then
-		SHELL_CONFIG="$HOME/.zshrc"
+    	SHELL_CONFIG="$HOME/.zshrc"
 	elif [ -n "$BASH_VERSION" ]; then
-		SHELL_CONFIG="$HOME/.bash_profile"
+		if [ -f "$HOME/.bashrc" ]; then
+			SHELL_CONFIG="$HOME/.bashrc"
+		else
+			SHELL_CONFIG="$HOME/.bash_profile"
+		fi
 	else
 		SHELL_CONFIG="$HOME/.profile"
 	fi
@@ -198,10 +202,11 @@ setup() {
 	echo -e " ${GRAY}|${RESET} ${GREEN}Setup complete! 🎉${RESET}"
 	echo ""
 	
-	# Check if 'bare' is already aliased to the current 'bare'
-	current_bare_path="$(pwd)/bare"
-	existing_bare_path="$(which bare 2>/dev/null || true)"
-	if [[ "$(realpath "$existing_bare_path" 2>/dev/null || true)" != "$current_bare_path" ]]; then
+	current_dir=$(pwd)
+	cd ~ && bare_executable="$(command -v bare)"
+	cd "$current_dir" || exit
+
+	if [[ -z $bare_executable ]]; then
 		sleep 0.05
 		echo -e " ${GRAY}|${RESET} Consider aliasing '${GREEN}bare${RESET}' in your"
 		echo -e " ${GRAY}|${RESET} shell config to access bare wherever you are."
@@ -215,10 +220,12 @@ setup() {
 			echo "alias bare='$(pwd)/bare'" >> "$SHELL_CONFIG"
 		fi
 	fi
-	if [[ "$(realpath "$existing_bare_path" 2>/dev/null || true)" == "$current_bare_path" ]]; then
+	if [[ -n $bare_executable ]]; then
 		echo -e " ${GRAY}|${RESET} '${GREEN}bare${RESET}' is aliased for use throughout the terminal. Nice 💪"
-		echo -e " ${GRAY}|${RESET} You can run \`${GREEN}bare${RESET}\` or \`${GREEN}bare terminal${RESET}\` from anywhere in your terminal now."
+		echo -e " ${GRAY}|${RESET} Restart your shell to run \`${GREEN}bare${RESET}\` or \`${GREEN}bare terminal${RESET}\` from anywhere in your terminal."
+		echo ""
 	fi
+
 	echo ""
 	echo -e " ${GRAY}|${RESET} ${BLUE}Go conquer the world with ${GREEN}bare${RESET}."
 	echo ""
