@@ -1,15 +1,16 @@
 #!/usr/bin/env bash
 
-./deps yt-dlp # phantomjs is a temporary fix for nsig downloading issues (recommended by yt-dlp)
+deps yt-dlp
 
-command="$1"
-url="$2"
+command="$1" && shift
+
+[[ -t 0 ]] && url="$1" && shift || url=$(cat)
+
 quality="720" # Default quality for videos
-format="mp4" # Default format for videos
 thumbnail_quality="0" # Default quality for thumbnails (0 for default hd)
 
 if [[ ! "$url" =~ ^(https?://)?(www\.)?(m\.)?(youtube\.com|youtu\.be|youtube-nocookie\.com) ]]; then
-	echo "Invalid YouTube URL" && exit 1
+    echo "Invalid YouTube URL" && exit 1
 fi
 
 # Ensure .downloads directory exists
@@ -17,15 +18,20 @@ mkdir -p .var/downloads
 
 # Function to download video
 download_video() {
-	random_filename=$(./bare random string 32).$format
+	random_filename=$(random string 32)
 	output_path=".var/downloads/$random_filename"
+	
 	if [[ "$format" == "mp3" ]]; then
-		yt-dlp --no-part -x --audio-format mp3 -o "$output_path" "$url" &> /dev/null
+		final_output=$(yt-dlp --no-part -x --audio-format mp3 -o "$output_path.%(ext)s" --print after_move:filepath "$url" 2>/dev/null)
 	else
-		yt-dlp --no-part -S "height:${quality}" -o "$output_path" "$url" &> /dev/null
+		final_output=$(yt-dlp -f "bestvideo[height<=$quality]+bestaudio/best" -o "$output_path.%(ext)s" --print after_move:filepath "$url" 2>/dev/null)
 	fi
-	if [ -f "$output_path" ]; then
-		echo "$output_path"
+	
+	# Convert the full path to a relative path
+	relative_output="${final_output#"$(pwd)/"}"
+	
+	if [ -f "$relative_output" ]; then
+		echo "$relative_output"
 	else
 		echo "Error downloading video" && exit 1
 	fi
@@ -33,107 +39,98 @@ download_video() {
 
 # Function to extract YouTube video ID
 extract_id() {
-	echo "$url" | awk -F'[?&/=]' '{
-		for(i=1;i<=NF;i++) {
-			if ($i == "v") {
-				print $(i+1);
-				exit
-			}
-			if ($i == "embed" || $i == "shorts" || $i == "youtu.be") {
-				print $(i+1);
-				exit
-			}
-		}
-	}'
+    echo "$url" | awk -F'[?&/=]' '{
+        for(i=1;i<=NF;i++) {
+            if ($i == "v") {
+                print $(i+1);
+                exit
+            }
+            if ($i == "embed" || $i == "shorts" || $i == "youtu.be") {
+                print $(i+1);
+                exit
+            }
+        }
+    }'
 }
-
 
 # Function to download thumbnail
 download_thumbnail() {
-	video_id=$(extract_id)
-	case "$thumbnail_quality" in
-		"md")
-			thumbnail_url="https://i.ytimg.com/vi/${video_id}/mqdefault.jpg"
-			;;
-		"max")
-			thumbnail_url="https://i.ytimg.com/vi/${video_id}/maxresdefault.jpg"
-			;;
-		*)
-			thumbnail_url="https://i.ytimg.com/vi/${video_id}/hqdefault.jpg"
-			;;
-	esac
-	random_filename=$(./bare random string 32).jpg
-	output_path=".var/downloads/$random_filename"
-	curl -sL "$thumbnail_url" -o "$output_path"
-	echo "$output_path"
+    video_id=$(extract_id)
+    case "$thumbnail_quality" in
+        "md") thumbnail_url="https://i.ytimg.com/vi/${video_id}/mqdefault.jpg" ;;
+        "max") thumbnail_url="https://i.ytimg.com/vi/${video_id}/maxresdefault.jpg" ;;
+        *) thumbnail_url="https://i.ytimg.com/vi/${video_id}/hqdefault.jpg" ;;
+    esac
+    random_filename=$(./bare random string 32).jpg
+    output_path=".var/downloads/$random_filename"
+    curl -sL "$thumbnail_url" -o "$output_path"
+    echo "$output_path"
 }
 
 case "$command" in
-	download)
-		shift 2 # Remove the first two arguments
-		while [[ "$#" -gt 0 ]]; do
-			case "$1" in
-				--quality)
-					quality="$2"
-					shift 2
-					;;
-				--mp3)
-					format="mp3"
-					shift
-					;;
-				--thumbnail|--thumb)
-					shift
-					while [[ "$#" -gt 0 ]]; do
-						case "$1" in
-							--md)
-								thumbnail_quality="md"
-								shift
-								;;
-							--max)
-								thumbnail_quality="max"
-								shift
-								;;
-							*)
-								echo "Unknown option: $1" >&2
-								exit 1
-								;;
-						esac
-					done
-					download_thumbnail && exit 0
-					;;
-				*)
-					echo "Unknown option: $1" >&2
-					exit 1
-					;;
-			esac
-		done
-		download_video && exit 0
-		;;
+    download)
+        while [[ "$#" -gt 0 ]]; do
+            case "$1" in
+                --quality)
+                    quality="$2"
+                    shift 2
+                    ;;
+                --mp3)
+                    format="mp3"
+                    shift
+                    ;;
+                --thumbnail|--thumb)
+                    shift
+                    while [[ "$#" -gt 0 ]]; do
+                        case "$1" in
+                            --md)
+                                thumbnail_quality="md"
+                                shift
+                                ;;
+                            --max)
+                                thumbnail_quality="max"
+                                shift
+                                ;;
+                            *)
+                                echo "Unknown option: $1" >&2
+                                exit 1
+                                ;;
+                        esac
+                    done
+                    download_thumbnail && exit 0
+                    ;;
+                *)
+                    echo "Unknown option: $1" >&2
+                    exit 1
+                    ;;
+            esac
+        done
+        download_video && exit 0
+        ;;
 
-	id) extract_id && exit 0 ;;
+    id) extract_id && exit 0 ;;
 
-	thumbnail)
-		shift 2 # Remove the first two arguments
-		while [[ "$#" -gt 0 ]]; do
-			case "$1" in
-				--md)
-					thumbnail_quality="md"
-					shift
-					;;
-				--max)
-					thumbnail_quality="max"
-					shift
-					;;
-				*)
-					echo "Unknown option: $1" >&2
-					exit 1
-					;;
-			esac
-		done
-		download_thumbnail && exit 0
-		;;
+    thumbnail)
+        shift 2 # Remove the first two arguments
+        while [[ "$#" -gt 0 ]]; do
+            case "$1" in
+                --md)
+                    thumbnail_quality="md"
+                    shift
+                    ;;
+                --max)
+                    thumbnail_quality="max"
+                    shift
+                    ;;
+                *)
+                    echo "Unknown option: $1" >&2
+                    exit 1
+                    ;;
+            esac
+        done
+        download_thumbnail && exit 0
+        ;;
 
-	*) echo "Unknown command: $command" >&2 && exit 1 ;;
-	
+    *) echo "Unknown command: $command" >&2 && exit 1 ;;
+    
 esac
-

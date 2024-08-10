@@ -1,51 +1,28 @@
 #!/usr/bin/env bash
 
-# ideal usage
-# ./bare download https://mydownload.com/file.mp3 --title my-title --tags my-tag
-
 ./deps curl
 
-[[ -t 0 ]] && { url=$1; shift; } || url=$(cat)
+[[ -t 0 ]] && url=$1 && shift || url=$(cat)
 
 [[ -z $url ]] && echo "No URL provided" && exit 1
 
 [[ $(validate url "$url") == 'false' ]] && echo "Invalid URL" && exit 1
 
 # check if this is a YouTube link
-[[ "$(./bare youtube id "$url")" = 'Invalid YouTube URL' ]] && is_youtube=0 || is_youtube=1
+[[ "$(youtube id "$url")" = 'Invalid YouTube URL' ]] && is_youtube=0 || is_youtube=1
 
 # setup environment
-output_name="$(./bare random string 32)"
+output_name="$(random string 32)"
 temp_file=".var/downloads/${output_name}"
-
-while true; do # continue through remaining args
-  case $1 in
-    '') break ;;
-    --mp3) as_mp3=1 && shift ;;
-    --thumbnail|--thumb) as_thumbnail=1 && shift ;;
-    * ) echo "Unknown option: $1" && exit 1 ;;
-  esac
-done
 
 if [[ "$is_youtube" = 1 ]]; then
 
-    [[ "$as_mp3" ]] && {
-        ./bare youtube download "$url" --mp3
-        exit 0
-    }
-
-    [[ "$as_thumbnail" ]] && {
-        ./bare youtube download "$url" --thumbnail --max
-        exit 0
-    }
-
-    ./bare youtube download "$url"
-    exit 0
+	youtube download "$url" "$@" && exit 0
 
 else
 
 	# Download the file to a temporary location
-	./bare request "$url" --output "$temp_file"
+	request "$url" --output "$temp_file"
 
 	# Determine the MIME type
 	mime_type=$(file --mime-type -b "$temp_file")
