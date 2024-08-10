@@ -79,11 +79,6 @@ case $1 in
 				YELLOW='\\033[0;33m'
 				GRAY='\\033[2;37m'
 				RESET='\\033[0m'
-			else
-				GREEN=''
-				YELLOW=''
-				GRAY=''
-				RESET=''
 			fi
 
 			PS1="🐻 \[\${GREEN}\]\$(basename \$(pwd)) \[\${YELLOW}\]> \[\${RESET}\]"
