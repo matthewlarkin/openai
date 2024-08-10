@@ -175,17 +175,25 @@ case "$1" in
 			esac
 		done
 
+		payload=$(jq -n \
+			--arg model "$model" \
+			--arg input "$input" \
+			--arg voice "$voice" \
+			--arg response_format "$response_format" \
+			--arg speed "$speed" \
+		'{
+			model: $model,
+			input: $input,
+			voice: $voice,
+			response_format: $response_format,
+			speed: $speed
+		}')
+
 		curl -s https://api.openai.com/v1/audio/speech \
 			-H "Authorization: Bearer $OPENAI_API_KEY" \
 			-H "Content-Type: application/json" \
-			-d '{
-				"model": "'"$model"'",
-				"input": "'"$input"'",
-				"voice": "'"$voice"'",
-				"response_format": "'"$response_format"'",
-				"speed": "'"$speed"'"
-			}' \
-			--output ".var/downloads/$output"
+			-d "$payload" \
+			-o ".var/downloads/$output"
 
 		# Check if the file was created and is not empty
 		if [ ! -s ".var/downloads/$output" ]; then
