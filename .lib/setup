@@ -53,7 +53,7 @@ check_setup() {
     # Check if dependencies are installed
     for package in "${!dependencies[@]}"; do
         command=${dependencies[$package]}
-        if ! command -v $command >/dev/null 2>&1; then
+        if ! command -v "$command" >/dev/null 2>&1; then
             echo -e " ${GRAY}|${RESET} 📝 $command not found."
             all_set=false
         fi
