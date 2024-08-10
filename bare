@@ -64,12 +64,12 @@ case $1 in
 			# mostly for Macs running zsh by default
 			export BASH_SILENCE_DEPRECATION_WARNING=1
 
-			GREEN='\\033[40;32m'
-			YELLOW='\\033[40;33m'
-			GRAY='\\033[40;37m'
+			GREEN='\\033[0;32m'
+			YELLOW='\\033[0;33m'
+			GRAY='\\033[2;37m'
 			RESET='\\033[0m'
 
-			PS1="\[\${GREEN}\] 🐻 \$(basename \$(pwd)) \[\${YELLOW}\]> \[\${RESET}\]"
+			PS1="🐻 \[\${GREEN}\]\$(basename \$(pwd)) \[\${YELLOW}\]> \[\${RESET}\]"
 
 			printf "\n\${GRAY}entering bare terminal. type exit when ready to leave.\${RESET}\n"
 
