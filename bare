@@ -91,6 +91,8 @@ EOF
 
 		;;
 
+	*) script_name="$1" && shift && ./"$script_name" "$@"
+
 esac
 
 cd "$from_dir" || exit
