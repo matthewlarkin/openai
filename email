@@ -20,7 +20,6 @@ while [[ $# -gt 0 ]]; do
 		--from) from="$2"; shift 2 ;;
 		--reply-to) reply_to="$2"; shift 2 ;;
 		--template) template="$2"; shift 2 ;;
-		--debug) debug=true; shift ;;
 		*) break ;;
 	esac
 done
@@ -57,11 +56,6 @@ payload=$(jq -n \
 response=$(./bare request https://api.postmarkapp.com/email \
 	--json "$payload" \
 	--header "X-Postmark-Server-Token: $POSTMARK_SERVER_TOKEN");
-
-# if debug
-[ "$debug" ] && {
-	echo "$response" | jq
-} && exit 0
 
 # else
 echo "$response" | jq -r '.MessageID'
