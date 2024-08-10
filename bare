@@ -4,14 +4,14 @@ from_dir="$(pwd)"
 cd "$(dirname "$0")" || exit
 PATH="./:$PATH"
 
-# Check if the current Bash version is 5.2 or higher
-required_version="5.2"
+# Check if the current Bash version is 5.1 or higher
+required_version="5.1"
 current_version=$(echo "$BASH_VERSION" | sed -E 's/^([0-9]+\.[0-9]+).*/\1/')
 
 if [[ $(uname) == 'Darwin' ]]; then
     if [[ $current_version != "$required_version" ]]; then
-        echo "Error: Bash version 5.2 required. Currently running $current_version."
-        echo "To install Bash 5.2, run the following command:"
+        echo "Error: Bash version 5.1 required. Currently running $current_version."
+        echo "To install Bash 5.1, run the following command:"
         echo "  brew install bash"
         echo "Ensure that Homebrew's bin directory is in your PATH:"
         echo "  export PATH=\"/opt/homebrew/bin:\$PATH\"  # For Apple Silicon (M1+)"
@@ -20,8 +20,8 @@ if [[ $(uname) == 'Darwin' ]]; then
     fi
 elif [[ $(uname) == 'Linux' ]]; then
     if [[ $current_version != "$required_version" ]]; then
-        echo "Error: Bash version 5.2 required. Currently running $current_version."
-        echo "To install Bash 5.2, run the following command:"
+        echo "Error: Bash version 5.1 required. Currently running $current_version."
+        echo "To install Bash 5.1, run the following command:"
         echo "  sudo apt-get update && sudo apt-get install bash"
         exit 1
     fi
