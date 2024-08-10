@@ -4,6 +4,8 @@ from_dir="$(pwd)"
 cd "$(dirname "$0")" || exit
 PATH="./:$PATH"
 
+source .lib/barerc
+
 # Minimum required Bash version
 required_version="5.1"
 current_version=$(echo "$BASH_VERSION" | sed -E 's/^([0-9]+\.[0-9]+).*/\1/')
@@ -34,8 +36,6 @@ fi
 version=$(git log -1 --format=%ct)
 
 # Setup environment
-touch .etc/barerc && source .etc/barerc
-touch .lib/barerc && source .lib/barerc
 rsync -a --ignore-existing .lib/.var/ .var
 
 # check if we need to sync bare
@@ -64,14 +64,12 @@ case $1 in
 
 		shift && exec bash --rcfile <(cat << EOF
 
-			source ~/.bashrc
-			touch .etc/barerc && source .etc/barerc
-			touch .lib/barerc && source .lib/barerc
+			source .lib/barerc
 
-			# put all bare commands in context
-			PATH="$(pwd):\$PATH"
+			# put all bare commands in primary context
+			PATH="$BARE_DIR:\$PATH"
 
-			# mostly for Macs running zsh by default
+			# tell Macs to be quite about their zsh default
 			export BASH_SILENCE_DEPRECATION_WARNING=1
 
 			if [[ "$BARE_COLOR" == 1 ]]; then
