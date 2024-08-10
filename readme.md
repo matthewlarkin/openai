@@ -32,8 +32,9 @@ Various CLI tools are required in the bare ecosystem, mostly classics like `curl
 You can still use much of `bare` without most of these, but we recommend installing them to get the full experience. You can install them with a package manager such as `apt-get` on Ubuntu or `brew` on Mac.
 
 ```md
-- curl (7.82+)
+- curl
 - jq
+- coreutils
 - recutils
 - sqlite3
 - pandoc
