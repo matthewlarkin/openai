@@ -1,49 +1,99 @@
 #!/usr/bin/env bash
 
-# Usage: ./media merge 100 "file1.mp4" "file2.mp4" "output.mp4"
+./deps ffmpeg
 
-# Check if the first argument is "merge"
-if [ "$1" != "merge" ]; then
-	echo "The first argument must be 'merge'"
-	exit 1
+command="$1" && shift
+
+[[ -t 0 ]] && input="$1" && shift || input=$(cat)
+
+remaining_args=() && while [[ $# -gt 0 ]]; do
+	case $1 in
+		--cleanup) remove_original=1 && shift ;;
+		*) remaining_args+=("$1") && shift ;;
+	esac
+done && set -- "${remaining_args[@]}"
+
+case $command in
+
+    convert)
+
+		output_extension="$1"
+		output=".var/downloads/$(random string 32).$1"
+		
+		# Check if input file exists
+		if [[ ! -f "$input" ]]; then
+			echo "Error: Input file does not exist."
+			exit 1
+		fi
+		
+		if [[ "$output_extension" == "mp3" ]]; then
+			# Extract audio and convert to MP3
+			ffmpeg -y -i "$input" -vn -acodec libmp3lame "$output" -hide_banner -loglevel error
+		else
+			# Convert the input file to the desired output format
+			ffmpeg -y -i "$input" -c:v libx264 -crf 28 -preset fast -c:a copy "$output" -hide_banner -loglevel error
+		fi
+		
+		# Check if the output file was created
+		if [[ ! -f "$output" ]]; then
+			echo "Conversion failed."
+			exit 1
+		fi
+		
+		echo "$output"
+
+		;;
+
+	cut)
+				
+		extension="${input##*.}"
+		start_time="$1"
+		end_time="$2"
+		output="${3:-.var/downloads/$(random string 32).$extension}"
+		
+		# Determine the output format based on the file extension
+		extension="${input##*.}"
+		
+		case "$extension" in
+			mp3)
+				# Extract audio and cut to MP3
+				ffmpeg -y -ss "$start_time" -to "$end_time" -i "$input" -q:a 0 -map a "$output" -hide_banner -loglevel error
+				;;
+			m4a)
+				# Extract audio and cut to M4A
+				ffmpeg -y -ss "$start_time" -to "$end_time" -i "$input" -c:a aac -b:a 192k -map a "$output" -hide_banner -loglevel error
+				;;
+			wav)
+				# Extract audio and cut to WAV
+				ffmpeg -y -ss "$start_time" -to "$end_time" -i "$input" -c:a pcm_s16le -map a "$output" -hide_banner -loglevel error
+				;;
+			flac)
+				# Extract audio and cut to FLAC
+				ffmpeg -y -ss "$start_time" -to "$end_time" -i "$input" -c:a flac -map a "$output" -hide_banner -loglevel error
+				;;
+			*)
+				# Cut the input file to the desired output format
+				ffmpeg -y -ss "$start_time" -to "$end_time" -i "$input" -c copy "$output" -hide_banner -loglevel error
+				;;
+		esac
+		
+		# Check if the output file was created
+		if [[ ! -f "$output" ]]; then
+			echo "Cut failed."
+			exit 1
+		fi
+		
+		echo "$output"
+
+		;;
+
+    *)
+        exit 1
+        ;;
+esac
+
+if [[ "$remove_original" == '1' ]]; then
+	rm "$input"
 fi
 
-# Get the delay, input files, and output file from the arguments
-shift
-delay=$1
-shift
-input_files=("${@:1:$#-1}")
-output_file="${!#}"
-
-# Create a temporary file list
-temp_file=$(mktemp)
-
-# Create a black video clip of a certain duration
-black_clip=$(mktemp -t tmp.XXXXXXXXXX).mp4
-ffmpeg -loop 1 -i "$BARE_DIR/.etc/assets/black.png" -c:v libx264 -t $((delay/1000)) -pix_fmt yuv420p "$black_clip"
-
-for file in "${input_files[@]}"; do
-	# Convert relative paths to absolute paths
-	abs_path=$(realpath "$file")
-	echo "file '$abs_path'" >> "$temp_file"
-	echo "file '$black_clip'" >> "$temp_file"
-done
-
-# Check the type of the first input file
-file_type=$(file --mime-type -b "${input_files[0]}")
-
-# Run the ffmpeg command
-if [[ $file_type == audio/* ]]; then
-	# If it's an audio file, concatenate the files with the silent audio file in between
-	ffmpeg -f concat -safe 0 -i "$temp_file" -c:a libmp3lame -q:a 2 "${output_file}"
-elif [[ $file_type == video/* ]]; then
-	# If it's a video file, concatenate the files with the black video clip in between
-	ffmpeg -f concat -safe 0 -i "$temp_file" -c copy "${output_file}"
-else
-	echo "Unsupported file type: $file_type"
-	exit 1
-fi
-
-# Remove the temporary files
-rm "$temp_file"
-rm "$black_clip"
+exit 0
