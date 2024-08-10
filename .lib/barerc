@@ -4,3 +4,44 @@
 # configuration details. DO NOT sotre your API keys or other user specific
 # configuration details here, as they will be overwritten on bare update.
 
+# Define an associative array
+declare -A BASE_CONFIG
+
+# Set the values in the associative array
+BASE_CONFIG=(
+    ["OPENAI_API_KEY"]=""
+    ["STRIPE_SECRET_KEY"]=""
+    ["POSTMARK_SERVER_TOKEN"]=""
+    ["BARE_DIR"]=$(pwd)
+    ["BARE_COLOR"]=0
+)
+
+# Loop over the array and export each key-value pair
+for key in "${!BASE_CONFIG[@]}"; do
+    export "$key"="${BASE_CONFIG[$key]}"
+done
+
+function gatherInput() {
+
+	remaining_args=() && while [[ $# -gt 0 ]]; do
+		case $1 in
+			--from-file-contents) catfile=1 ;;
+			--required) required=1 ;;
+			*) remaining_args+=("$1") ;;
+		esac && shift
+	done && set -- "${remaining_args[@]}"
+
+	[[ -t 0 ]] && input="$1" || input=$(cat)
+
+	[[ ($required == 1) ]] && [[ -z $input ]] && echo "Error: No input provided." && exit 1
+
+	[[ $catfile == 1 ]] && {
+		[[ ! -f $input ]] && echo "Error: input is not a file" && exit 1
+		input=$(cat "$input")
+	}
+
+} && export -f gatherInput
+
+# shellcheck disable=SC1091
+source "$BARE_DIR/.etc/barerc"
+[[ -f ~/.barerc ]] && source ~/.barerc

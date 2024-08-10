@@ -1,12 +1,13 @@
 #!/usr/bin/env bash
 
 # Colors for script output
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-BLUE='\033[0;34m'
-PINK='\033[0;35m'
-GRAY='\033[2;37m'
-RESET='\033[0m'
+[[ $BARE_COLOR == 1 ]] && {
+	GREEN=$'\e[32m'
+	YELLOW=$'\e[33m'
+	BLUE=$'\e[34m'
+	GRAY=$'\e[2;37m'
+	RESET=$'\e[0m'
+}
 
 # Detect the platform (Linux or macOS)
 OS=""
@@ -106,7 +107,7 @@ declare -A dependencies=(
 # Main setup process
 setup() {
     echo ""
-    echo -e " ${GRAY}|${RESET} Welcome to ${GREEN}bare.sh${RESET}! 🙌"
+    echo -e " ${GRAY}|${RESET} Welcome to ${GREEN}bare${RESET}! 🙌"
     sleep 0.05
     echo -e " ${GRAY}|${RESET} Setting things up..."
     echo ""
@@ -120,10 +121,10 @@ setup() {
 
             echo -e " ${GRAY}|${RESET} ${YELLOW}Notice:${RESET} ${GREEN}$var${RESET} is not set."
 
-            read -rp $' \e[2;37m|\e[0m Set \e[32m'"$var"$'\e[0m now? (y/n): ' response
+            read -rp " ${GRAY}|${RESET} Set ${GREEN}$var${RESET} now? (y/n): " response
             sleep 0.05
             if [[ $response =~ ^[Yy]$ ]]; then
-                value=$(prompt_secret $' \e[2;37m|\e[0m \e[32m'"$var"$'\e[0m: ')
+                value=$(prompt_secret " ${GRAY}|${RESET} $var: ")
                 echo "export $var=\"$value\"" >> .etc/barerc
             fi
             sleep 0.05
@@ -140,7 +141,7 @@ setup() {
 
         if ! command -v "$command" >/dev/null 2>&1; then
             echo -e " ${GRAY}|${RESET} ${YELLOW}$command missing.${RESET}"
-            read -rp $' \e[2;37m|\e[0m Install '"$package"'? (y/n): ' response
+            read -rp " ${GRAY}|${RESET}[0m Install '"$package"'? (y/n): " response
             sleep 0.05
             if [[ $response =~ ^[Yy]$ ]]; then
                 echo -e " ${GRAY}|${RESET} ${BLUE}Installing $package...${RESET}"
@@ -202,28 +203,26 @@ setup() {
 	echo -e " ${GRAY}|${RESET} ${GREEN}Setup complete! 🎉${RESET}"
 	echo ""
 	
-	current_dir=$(pwd)
-	cd ~ && bare_executable="$(command -v bare)"
-	cd "$current_dir" || exit
+	# Define the alias string
+	ALIAS_STRING="alias bare='$BARE_DIR/bare'"
 
-	if [[ -z $bare_executable ]]; then
+	# Check if the alias is present in the shell configuration file
+	if ! grep -q "$ALIAS_STRING" "$SHELL_CONFIG"; then
 		sleep 0.05
 		echo -e " ${GRAY}|${RESET} Consider aliasing '${GREEN}bare${RESET}' in your"
 		echo -e " ${GRAY}|${RESET} shell config to access bare wherever you are."
 		echo ""
 		echo -e " ${GRAY}|${RESET} You can run this in your terminal:"
-		echo -e " ${GRAY}|${RESET} echo \"alias bare='$(pwd)/bare'\" >> $SHELL_CONFIG"
+		echo -e " ${GRAY}|${RESET} echo \"$ALIAS_STRING\" >> $SHELL_CONFIG"
 		echo ""
-		# would you like us to run that for you?
-		read -rp $' \e[2;37m|\e[0m Would you like us to run that for you? \e[2;37m(y/n)\e[0m : ' response
+		# Prompt the user to add the alias
+		read -rp " ${GRAY}|${RESET} Would you like us to run that for you? (y/n) : " response
 		if [[ $response =~ ^[Yy]$ ]]; then
-			echo "alias bare='$(pwd)/bare'" >> "$SHELL_CONFIG"
+			echo "$ALIAS_STRING" >> "$SHELL_CONFIG"
 		fi
-	fi
-	if [[ -n $bare_executable ]]; then
-		echo -e " ${GRAY}|${RESET} '${GREEN}bare${RESET}' is aliased for use throughout the terminal. Nice 💪"
+	else
+		echo -e " ${GRAY}|${RESET} ${GREEN}bare${RESET} is aliased for use throughout the terminal. Nice 💪"
 		echo -e " ${GRAY}|${RESET} Restart your shell to run \`${GREEN}bare${RESET}\` or \`${GREEN}bare terminal${RESET}\` from anywhere in your terminal."
-		echo ""
 	fi
 
 	echo ""
