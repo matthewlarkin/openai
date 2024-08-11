@@ -35,14 +35,9 @@ fi
 
 version=$(git log -1 --format=%ct)
 
-# Setup environment
-rsync -a --ignore-existing .lib/.var/ .var
-
 # check if we need to sync bare
-touch .var/sync && {
-	[[ $(cat .var/sync) -lt $version ]] && {
-		bash .lib/sync && echo "$version" > .var/sync
-	}
+[[ $(cat .var/sync) -lt $version ]] && {
+	bash .lib/sync && echo "$version" > .var/sync
 }
 
 [[ $1 == '--version' || $1 == '-v' ]] && echo "$version" && exit 0
