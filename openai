@@ -140,7 +140,15 @@ case "$1" in
 			recins -t ThreadMessage .var/bare.rec -f Thread -v "$thread_title" -f Author -v "${assistant_name-Assistant}" -f Contents -v "$response"
 		}
 
-		echo "$response"
+		GRAY='\033[40;37m'
+		RESET='\033[0m' 
+		
+		# Pipe the response through a sed to replace each new line start with a tab
+		formatted_response=$(echo "$response" | sed 's/^/\t/')
+
+		echo -e "${GRAY}\n\n$formatted_response"
+		echo -e "${RESET}\n"
+
 
         ;;
 
