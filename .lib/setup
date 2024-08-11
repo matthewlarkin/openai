@@ -18,18 +18,6 @@ elif [[ "$OSTYPE" == "darwin"* ]]; then
 fi
 sleep 0.05
 
-# Function to install sqlpage manually for macOS
-install_sqlpage_mac() {
-    echo -e " ${GRAY}|${RESET} ${BLUE}Installing SQLPage...${RESET}"
-    curl -L -o sqlpage-linux.tgz \
-        https://github.com/lovasoa/SQLpage/releases/download/v0.26.0/sqlpage-linux.tgz
-    tar -xzf sqlpage-linux.tgz
-    sudo mv sqlpage/sqlpage.bin /usr/local/bin/sqlpage
-    sudo chmod 755 /usr/local/bin/sqlpage
-    rm -rf sqlpage sqlpage-linux.tgz
-    sleep 0.05
-}
-
 # Function to check if everything is set up
 check_setup() {
     echo -e " ${GRAY}|${RESET} ${BLUE}Checking current setup...${RESET}"
@@ -79,6 +67,8 @@ prompt_secret() {
     sleep 0.05
 }
 
+touch .var/sync
+
 # Required variables
 required_variables=("OPENAI_API_KEY" "POSTMARK_API_TOKEN" "BARE_EMAIL_FROM" "STRIPE_SECRET_KEY" "EDITOR")
 
@@ -86,7 +76,6 @@ required_variables=("OPENAI_API_KEY" "POSTMARK_API_TOKEN" "BARE_EMAIL_FROM" "STR
 declare -A dependencies=(
     ["curl"]="curl"
     ["jq"]="jq"
-    ["coreutils"]="gdate"
     ["recutils"]="recsel"
     ["sqlite3"]="sqlite3"
     ["pandoc"]="pandoc"
@@ -139,51 +128,68 @@ setup() {
     for package in "${!dependencies[@]}"; do
         command=${dependencies[$package]}
 
-        if ! command -v "$command" >/dev/null 2>&1; then
-            echo -e " ${GRAY}|${RESET} ${YELLOW}$command missing.${RESET}"
-            read -rp " ${GRAY}|${RESET} Install '"$package"'? (y/n): " response
-            sleep 0.05
-            if [[ $response =~ ^[Yy]$ ]]; then
-                echo -e " ${GRAY}|${RESET} ${BLUE}Installing $package...${RESET}"
-                sleep 0.05
-                if [[ "$OS" == "Linux" ]]; then
-                    if [[ "$package" == "sqlpage" ]]; then
-                        curl -L -o sqlpage-linux.tgz \
-                            https://github.com/lovasoa/SQLpage/releases/download/v0.26.0/sqlpage-linux.tgz
-                        tar -xzf sqlpage-linux.tgz
-                        sudo mv sqlpage.bin /usr/local/bin/sqlpage
-                        sudo chmod 755 /usr/local/bin/sqlpage
-                        rm -rf sqlpage sqlpage-linux.tgz
-					elif [[ "$package" == 'coreutils' ]]; then
-						: # it's ubuntu, we've got coreutils
+		if ! command -v "$command" >/dev/null 2>&1; then
+			echo -e " ${GRAY}|${RESET} ${YELLOW}$command missing.${RESET}"
+			read -rp " ${GRAY}|${RESET} Install '$package'? (y/n): " response
+			sleep 0.05
+			if [[ $response =~ ^[Yy]$ ]]; then
+				echo -e " ${GRAY}|${RESET} ${BLUE}Installing $package...${RESET}"
+				sleep 0.05
+				if [[ "$OS" == "Linux" ]]; then
+					if [[ "$package" == "sqlpage" ]]; then
+						curl -sL -o sqlpage-linux.tgz \
+							https://github.com/lovasoa/SQLpage/releases/download/v0.26.0/sqlpage-linux.tgz
+						tar -xzf sqlpage-linux.tgz
+						sudo mv sqlpage.bin /usr/local/bin/sqlpage
+						sudo chmod 755 /usr/local/bin/sqlpage
+						rm -rf sqlpage sqlpage-linux.tgz
 					elif [[ "$package" == 'yq' ]]; then
 						sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
 						sudo chmod +x /usr/local/bin/yq
-                    else
-                        sudo apt-get install -y "$package" || echo -e " ${GRAY}|${RESET} ${YELLOW}Install $package manually.${RESET}"
-                    fi
-                elif [[ "$OS" == "macOS" ]]; then
-                    if ! command -v brew >/dev/null 2>&1; then
-                        echo -e " ${GRAY}|${RESET} ${YELLOW}Homebrew not found.${RESET}"
-                        echo -e " ${GRAY}|${RESET} ${BLUE}Installing Homebrew...${RESET}"
-                        /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-                        sleep 0.05
-                    fi
-                    if [[ "$package" == "coreutils" ]]; then
-                        brew install coreutils
-                    elif [[ "$package" == "sqlpage" ]]; then
-                        install_sqlpage_mac
-                    else
-                        brew install "$package" || echo -e " ${GRAY}|${RESET} ${YELLOW}Install $package manually.${RESET}"
+					elif [[ "$package" == 'curl' ]]; then
+						# if curl version is less than 7.82, upgrade with snap
+						curl_version=$(curl --version | head -n1 | awk '{print $2}')
+						if dpkg --compare-versions "$curl_version" lt 7.82; then
+							sudo snap install curl
+							echo "alias curl='/snap/bin/curl'" >> .var/barerc
+						fi
+					else
+						sudo apt-get install -y "$package" || echo -e " ${GRAY}|${RESET} ${YELLOW}Install $package manually.${RESET}"
 					fi
-                fi
-                sleep 0.05
-            fi
-        else
-            echo -e " ${GRAY}|${RESET} ${GREEN}$command found.${RESET}"
-        fi
+				elif [[ "$OS" == "macOS" ]]; then
+					if ! command -v brew >/dev/null 2>&1; then
+						echo -e " ${GRAY}|${RESET} ${YELLOW}Homebrew not found.${RESET}"
+						echo -e " ${GRAY}|${RESET} ${BLUE}Installing Homebrew...${RESET}"
+						/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+						echo -e " ${GRAY}|${RESET} ${GREEN}Homebrew installed.${RESET}"
+						echo -e " ${GRAY}|${RESET} ${BLUE}You may need to add Homebrew to your PATH. Follow the instructions provided by the Homebrew installer.${RESET}"
+						sleep 0.05
+					fi
+					brew install "$package" || echo -e " ${GRAY}|${RESET} ${YELLOW}Install $package manually.${RESET}"
+				fi
+				sleep 0.05
+			fi
+		else
+			echo -e " ${GRAY}|${RESET} ${GREEN}$command found.${RESET}"
+		fi
         sleep 0.05
     done
+
+	# do one more check if os is mac for coreutils (if gdate is missing)
+	if [[ "$OS" == "macOS" ]]; then
+		if ! command -v gdate >/dev/null 2>&1; then
+
+			echo -e " ${GRAY}|${RESET} ${YELLOW}gdate missing.${RESET}"
+			read -rp " ${GRAY}|${RESET} Install 'coreutils'? (y/n): " response
+			sleep 0.05
+			if [[ $response =~ ^[Yy]$ ]]; then
+				echo -e " ${GRAY}|${RESET} ${BLUE}Installing coreutils...${RESET}"
+				sleep 0.05
+				brew install coreutils
+			fi
+
+		fi
+	fi
 
 	# Determine the current shell and set the shell config file
 	if [ -n "$ZSH_VERSION" ]; then
