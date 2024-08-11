@@ -68,6 +68,9 @@ prompt_secret() {
 }
 
 touch .var/sync
+touch .etc/barerc
+touch .var/sync
+touch .var/bare.rec
 
 # Required variables
 required_variables=("OPENAI_API_KEY" "POSTMARK_API_TOKEN" "BARE_EMAIL_FROM" "STRIPE_SECRET_KEY" "EDITOR")
