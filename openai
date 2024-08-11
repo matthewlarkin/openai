@@ -5,7 +5,7 @@
 	exit 1;
 }
 
-./deps curl jq openssl
+deps curl jq openssl
 
 # capture assistant name
 remaining_args=() && while [[ "$#" -gt 0 ]]; do
