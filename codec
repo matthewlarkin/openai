@@ -2,8 +2,6 @@
 
 ./deps jq xxd php awk perl
 
-. lib/codec.
-
 function lines.json() {
 	# Function to convert a list of items into a JSON array
 	convert_to_json_array() {
