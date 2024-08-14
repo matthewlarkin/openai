@@ -1,21 +1,45 @@
 #!/usr/bin/env bash
 
-script=$1 && shift
+# Read input from stdin if not provided as an argument
 
-remaining_args=()
-csv=""
+function main() {
+	local script="$1" && shift
+	# Parse arguments
+	remaining_args=() && while [[ $# -gt 0 ]]; do
+		case $1 in
+			by) shift && by='1' ;;
+			over) shift && over='1' ;;
+			loop) shift && loop='1' ;;
+			with)
+				shift
+				[[ $1 == 'named' && $2 == 'arguments' ]] && {
+					with_named_arguments='1'
+				} && shift 2
+				# if $3 is a file and it's a .csv
+				if [[ -f $1 && $1 == *.csv ]]; then
+					input=$(cat "$1") && shift
+				fi
+				;;
+			*) remaining_args+=("$1") && shift ;;
+		esac
+	done && set -- "${remaining_args[@]}"
 
-while [[ $# -gt 0 ]]; do
-    case $1 in
-        --over-csv) shift && [[ -t 0 ]] && csv=$(cat "$1") && shift || csv=$(cat) ;;
-        *) remaining_args+=("$1") && shift ;;
-    esac
-done
+	# If input is a file, read its contents
+	[[ -f $input ]] && input=$(cat "$input")
 
-set -- "${remaining_args[@]}"
+	# If 'over' flag is set, iterate over each word in the input
+	if [[ $with_named_arguments == '1' ]]; then
+		echo "$input" | loop "$script"
+	elif [[ $loop == '1' ]]; then
+		for item in $input; do
+			interpret "$script" "$item"
+		done
+	elif [[ $by == '1' || $over == '1' ]]; then
+		interpret "$script" "$@"
+	else
+		interpret "$script" "$@"
+	fi
 
-if [[ -n $csv ]]; then
-    echo "$csv" | ./bare loop "$script"
-else
-    ./bare interpret "$script" "$@"
-fi
+}
+
+run_script "$@"

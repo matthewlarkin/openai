@@ -3,129 +3,87 @@
 # Capture input if piped
 [[ -t 0 ]] || input=$(cat)
 
+# set system timezone temporarily
+TZ="$BARE_TIMEZONE"
+
+# Determine the correct date command based on the operating system
+if [[ "$OS" == "macOS" ]]; then
+    DATE_CMD="gdate"
+else
+    DATE_CMD="date"
+fi
+
 # Initialize empty array for remaining arguments
 remaining_args=()
 
 date_format="%Y-%m-%d %H:%M:%S"
 input_format="%Y-%m-%d %H:%M:%S"
+offset=""
 
 # Process arguments
 while [[ $# -gt 0 ]]; do
   case $1 in
-    -F|--format|--formatted)
+    as|-F|--format|--formatted) # can't do -f here since native date relies on this
         custom_format=1 && shift
-        case $1 in
-			"mm-dd-yyyy"|"mm-dd-Y") date_format="%m-%d-%Y" ;;
-			"mm/dd/yyyy"|"mm/dd/Y") date_format="%m/%d/%Y" ;;
-			"mm.dd.yyyy"|"mm.dd.Y") date_format="%m.%d.%Y" ;;
-			"dd-mm-yyyy"|"dd-mm-Y") date_format="%d-%m-%Y" ;;
-			"dd/mm/yyyy"|"dd/mm/Y") date_format="%d/%m/%Y" ;;
-			"dd.mm.yyyy"|"dd.mm.Y") date_format="%d.%m.%Y" ;;
-			"yyyy-mm-dd"|"Y-mm-dd") date_format="%Y-%m-%d" ;;
-			"yyyy/mm/dd"|"Y/mm/dd") date_format="%Y/%m/%d" ;;
-			"yyyy.mm.dd"|"Y.mm.dd") date_format="%Y.%m.%d" ;;
-			"yyyy-mm-ddThh:mm:ss"|"Y-mm-ddThh:mm:ss") date_format="%Y-%m-%dT%H:%M:%S" ;;
-			"yyyy-mm-ddThh:mm:ssZ"|"Y-mm-ddThh:mm:ssZ") date_format="%Y-%m-%dT%H:%M:%SZ" ;;
-			"yyyy-mm-dd hh:mm"|"Y-mm-dd hh:mm") date_format="%Y-%m-%d %H:%M" ;;
-			"yyyy-mm-dd h:mm"|"Y-mm-dd h:mm") date_format="%Y-%m-%d %-H:%M" ;;
-			"yyyy-mm-dd hh:mm am/pm"|"Y-mm-dd hh:mm am/pm"|"Y-m-d hh:mm am/pm") date_format="%Y-%m-%d %I:%M %p" ;;
-			"yyyy-mm-dd h:mm am/pm"|"Y-mm-dd h:mm am/pm") date_format="%Y-%m-%d %-l:%M %p" ;;
-			"yyyy-mm-dd hh:mm:ss"|"Y-mm-dd hh:mm:ss") date_format="%Y-%m-%d %H:%M:%S" ;;
-			"yyyy-mm-dd h:mm:ss"|"Y-mm-dd h:mm:ss") date_format="%Y-%m-%d %-H:%M:%S" ;;
-			"mm-dd-yyyy hh:mm:ss"|"mm-dd-Y hh:mm:ss") date_format="%m-%d-%Y %H:%M:%S" ;;
-			"mm-dd-yyyy h:mm:ss"|"mm-dd-Y h:mm:ss") date_format="%m-%d-%Y %-H:%M:%S" ;;
-			"mm/dd/yyyy hh:mm:ss"|"mm/dd/Y hh:mm:ss") date_format="%m/%d/%Y %H:%M:%S" ;;
-			"mm/dd/yyyy h:mm:ss"|"mm/dd/Y h:mm:ss") date_format="%m/%d/%Y %-H:%M:%S" ;;
-			"dd-mm-yyyy hh:mm:ss"|"dd-mm-Y hh:mm:ss") date_format="%d-%m-%Y %H:%M:%S" ;;
-			"dd-mm-yyyy h:mm:ss"|"dd-mm-Y h:mm:ss") date_format="%d-%m-%Y %-H:%M:%S" ;;
-			"dd/mm/yyyy hh:mm:ss"|"dd/mm/Y hh:mm:ss") date_format="%d/%m/%Y %H:%M:%S" ;;
-			"dd/mm/yyyy h:mm:ss"|"dd/mm/Y h:mm:ss") date_format="%d/%m/%Y %-H:%M:%S" ;;
-			"mm/dd/yyyy hh:mm am/pm"|"mm/dd/Y hh:mm am/pm") date_format="%m/%d/%Y %I:%M %p" ;;
-			"mm/dd/yyyy h:mm am/pm"|"mm/dd/Y h:mm am/pm") date_format="%m/%d/%Y %-l:%M %p" ;;
-			"m/d/yyyy"|"m/d/Y") date_format="%-m/%-d/%Y" ;;
-			"m/d/yyyy hh:mm am/pm"|"m/d/Y hh:mm am/pm") date_format="%-m/%-d/%Y %I:%M %p" ;;
-			"m/d/yyyy h:mm am/pm"|"m/d/Y h:mm am/pm") date_format="%-m/%-d/%Y %-l:%M %p" ;;
-			"m/d/yyyy hh:mm:ss"|"m/d/Y hh:mm:ss") date_format="%-m/%-d/%Y %H:%M:%S" ;;
-			"m/d/yyyy h:mm:ss"|"m/d/Y h:mm:ss") date_format="%-m/%-d/%Y %-H:%M:%S" ;;
-			"yyyy-mm-dd hh:mm:ss Z"|"Y-mm-dd hh:mm:ss Z") date_format="%Y-%m-%d %H:%M:%S %z" ;;
-			"yyyy-mm-dd h:mm:ss Z"|"Y-mm-dd h:mm:ss Z") date_format="%Y-%m-%d %-H:%M:%S %z" ;;
-			"yyyy-mm-ddThh:mm:ss+hh:mm"|"Y-mm-ddThh:mm:ss+hh:mm") date_format="%Y-%m-%dT%H:%M:%S%z" ;;
-			"yyyy-mm-dd hh:mm:ss z"|"Y-mm-dd hh:mm:ss z") date_format="%Y-%m-%d %H:%M:%S %Z" ;;
-			"yyyy-mm-dd h:mm:ss z"|"Y-mm-dd h:mm:ss z") date_format="%Y-%m-%d %-H:%M:%S %Z" ;;
-			"yyyy/mm/dd hh:mm:ss Z"|"Y/mm/dd hh:mm:ss Z") date_format="%Y/%m/%d %H:%M:%S %z" ;;
-			"yyyy/mm/dd h:mm:ss Z"|"Y/mm/dd h:mm:ss Z") date_format="%Y/%m/%d %-H:%M:%S %z" ;;
-			"yyyy.mm.dd hh:mm:ss Z"|"Y.mm.dd hh:mm:ss Z") date_format="%Y.%m.%d %H:%M:%S %z" ;;
-			"yyyy.mm.dd h:mm:ss Z"|"Y.mm.dd h:mm:ss Z") date_format="%Y.%m.%d %-H:%M:%S %z" ;;
-			"dd.mm.yyyy hh:mm:ss"|"dd.mm.Y hh:mm:ss") date_format="%d.%m.%Y %H:%M:%S" ;;
-			"dd.mm.yyyy h:mm:ss"|"dd.mm.Y h:mm:ss") date_format="%d.%m.%Y %-H:%M:%S" ;;
-			"dd/mm/yyyy hh:mm:ss Z"|"dd/mm/Y hh:mm:ss Z") date_format="%d/%m/%Y %H:%M:%S %z" ;;
-			"dd/mm/yyyy h:mm:ss Z"|"dd/mm/Y h:mm:ss Z") date_format="%d/%m/%Y %-H:%M:%S %z" ;;
-			"yy/mm/dd"|"y/m/d") date_format="%y/%m/%d" ;;
-			"yy-mm-dd"|"y-m-d") date_format="%y-%m-%d" ;;
-			"dd/mm/yy"|"d/m/y") date_format="%d/%m/%y" ;;
-			"mm/dd/yy"|"m/d/y") date_format="%m/%d/%y" ;;
-			"m/d/yy"|"m/d/y") date_format="%-m/%-d/%y" ;;
-			"yyyy-Www-d"|"Y-Www-d") date_format="%G-W%V-%u" ;;
-			"yyyy-ww"|"Y-ww") date_format="%G-%V" ;;
-			"yyyy-ww-d"|"Y-ww-d") date_format="%G-%V-%u" ;;
-			"yyyy-mm-dd (ddd)"|"Y-mm-dd (ddd)") date_format="%Y-%m-%d (%a)" ;;
-			"ddd, yyyy-mm-dd"|"ddd, Y-mm-dd") date_format="%a, %Y-%m-%d" ;;
-			"ddd mm/dd/yyyy"|"ddd mm/dd/Y") date_format="%a %m/%d/%Y" ;;
-			"hh:mm:ss") date_format="%H:%M:%S" ;;
-			"h:mm:ss") date_format="%-H:%M:%S" ;;
-			"hh:mm") date_format="%H:%M" ;;
-			"h:mm") date_format="%-H:%M" ;;
-			"hh:mm am/pm") date_format="%I:%M %p" ;;
-			"h:mm am/pm") date_format="%-l:%M %p" ;;
-			"hh:mm:ss.SSS") date_format="%H:%M:%S.%3N" ;;
-			"hh:mm:ss.SSS am/pm") date_format="%I:%M:%S.%3N %p" ;;
-			"hh:mm:ss TZD") date_format="%H:%M:%S %Z" ;;
-			"hh:mm:ss z") date_format="%H:%M:%S %z" ;;
-			"yyyyMMdd"|"YMMdd") date_format="%Y%m%d" ;;
-			"MMddyyyy"|"Mdyyyy") date_format="%m%d%Y" ;;
-			"ddMMyyyy"|"dMyyyy") date_format="%d%m%Y" ;;
-			"yyyyMMddHHmmss"|"YMMddHHmmss") date_format="%Y%m%d%H%M%S" ;;
-			"MMddyyyyHHmmss"|"MdyyyyHHmmss") date_format="%m%d%Y%H%M%S" ;;
-			"ddMMyyyyHHmmss"|"dMyyyyHHmmss") date_format="%d%m%Y%H%M%S" ;;
-			*) echo "Invalid format" && exit 1 ;;
-		esac
+        read -r -a format_parts <<< "$1"  # Allows us to handle date and time dynamically as parts
+        date_format=""
+        for part in "${format_parts[@]}"; do
+            case $part in
 
+                'U') date_format+="%s " ;;  # 1628841600
 
+                'Y-M-D') date_format+="%Y-%m-%d " ;;  # 2024-08-13
+                'M-D-Y') date_format+="%m-%d-%Y " ;;  # 08-13-2024
+                'M/D/Y') date_format+="%m/%d/%Y " ;;  # 08/13/2024
+
+                # Additional formats to handle leading zeroes
+                'Y-m-d') date_format+="%Y-%-m-%-d " ;;  # 2024-8-13
+                'y-m-d') date_format+="%y-%-m-%-d " ;;  # 24-8-13
+                'd-m-Y') date_format+="%-d-%-m-%Y " ;;  # 13-8-2024
+                'm-d-Y') date_format+="%-m-%-d-%Y " ;;  # 8-13-2024
+                'd/m/Y') date_format+="%-d/%-m/%Y " ;;  # 13/8/2024
+                'm/d/Y') date_format+="%-m/%-d/%Y " ;;  # 8/13/2024
+
+                # times
+                'H:M:S'|'H:m:s') date_format+="%H:%M:%S " ;; # 14:30:00
+                'H:M'|'H:m') date_format+="%H:%M " ;; # 14:30
+                'h:m:s'|'h:M:S'|'h:M:s'|'h:m:S') date_format+="%-I:%M:%S %p " ;; # 2:30:00 PM
+                'h:m'|'h:M') date_format+="%-I:%M %p " ;; # 2:30 PM
+
+                *) echo "Invalid format" && exit 1 ;;
+
+            esac
+        done
+        date_format="${date_format% }"  # Remove trailing space
+        shift
+        ;;
+    --offset)
+        shift
+        offset="$1"
         shift
         ;;
     *)
         remaining_args+=("$1")
+        shift
         ;;
   esac
-  shift
 done
 
 # Set the remaining arguments
 set -- "${remaining_args[@]}"
 
 # If no arguments or input, default to today's date
-[[ -z $input && $# -eq 0 ]] && input=$(gdate +"%Y-%m-%d %H:%M:%S")
+[[ -z $input && $# -eq 0 ]] && input=$(TZ=$TZ gdate +"%Y-%m-%d %H:%M:%S")
 [[ -z $input ]] && input="$1"
 
-
 # Detect the operating system
 os_type=$(uname)
 
 # Get today's date in yyyy-mm-dd format
 if [ "$os_type" = "Darwin" ] && command -v gdate &> /dev/null; then
-    today=$(gdate +"%Y-%m-%d")
+    today=$(TZ=$TZ gdate +"%Y-%m-%d")
 else
-    today=$(date +"%Y-%m-%d")
-fi
-
-# Detect the operating system
-os_type=$(uname)
-
-# Get today's date in yyyy-mm-dd format
-if [ "$os_type" = "Darwin" ] && command -v gdate &> /dev/null; then
-    today=$(gdate +"%Y-%m-%d")
-else
-    today=$(date +"%Y-%m-%d")
+    today=$(TZ=$TZ date +"%Y-%m-%d")
 fi
 
 # condition yyyy-mm-dd
@@ -144,32 +102,28 @@ elif [[ $(validate date "$input" --format 'hh:mm') == 'true' ]]; then
 # hh:mm:ss
 elif [[ $(validate date "$input" --format 'hh:mm:ss') == 'true' ]]; then
     input="$today $input"
+# yyyy-mm-ddThh:mm:ssZ
+elif [[ $(validate date "$input" --format 'Y-m-d\Thh:mm:ss\Z') == 'true' ]]; then
+    :
 fi
 
 # Validate the date and time
-os_type=$(uname)
 if [[ $# -eq 1 ]]; then
-  if [ "$os_type" = "Darwin" ]; then
-    # macOS date validation
-    gdate -d "$input_format" "$input" &> /dev/null && valid_date="true"
-  elif [ "$os_type" = "Linux" ]; then
-    # Linux date validation
-    gdate -d "$input" &> /dev/null && valid_date="true"
-  fi
+    if [ "$OS" = "macOS" ]; then
+        gdate -d "$input_format" "$input" &> /dev/null && valid_date="true"
+    else
+        gdate -d "$input" &> /dev/null && valid_date="true"
+    fi
 fi
 
 # Format and print the date using the specified format, or default to standard
 if [[ $custom_format == 1 ]]; then
-    # Detect the operating system
-    if [[ "$os_type" == "Darwin" ]]; then
-        # macOS
-        formatted_date=$(gdate -d "$input" +"$date_format")
+    if [[ "$OS" == "macOS" ]]; then
+        formatted_date=$(TZ=$TZ gdate -d "$input" +"$date_format")
     else
-        # Assume Linux (Ubuntu)
-        formatted_date=$(gdate -d "$input" +"$date_format")
+        formatted_date=$(TZ=$TZ gdate -d "$input" +"$date_format")
     fi
-    
     echo "$formatted_date" && exit 0
 else
-    /bin/date "$@"
+    TZ=$TZ /bin/date "$@"
 fi

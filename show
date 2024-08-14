@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 
-[[ -t 0 ]] && input=$1 || input=$(cat)
+function main() {
 
-# catch no input && exit
-[[ -n $input ]] || { echo "No input provided"; exit 1; }
+	[[ -t 0 ]] && input=$1 || input=$(cat)
 
-echo "$input"
+	# catch no input && exit
+	[[ -n $input ]] || { echo "No input provided"; exit 1; }
+
+	echo "$input"
+	
+}

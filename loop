@@ -1,11 +1,19 @@
 #!/usr/bin/env bash
 
+remaining_args=() && while [[ $# -gt 0 ]]; do
+	case $1 in
+		over) shift ;;
+		*) remaining_args+=("$1") && shift ;;
+	esac
+done && set -- "${remaining_args[@]}"
+
 [[ -t 0 ]] && csv=$(cat "$1") && shift || csv=$(cat)
 
 script="$1" && shift
 
 # Read the CSV file and process each row
 echo "$csv" | csvjson --snifflimit 0 --no-inference | jq -c '.[]' | while read -r row; do
+
     # Use jq to extract all keys and values in one go
     declare -A row_data
     while IFS="=" read -r key value; do
@@ -18,6 +26,7 @@ echo "$csv" | csvjson --snifflimit 0 --no-inference | jq -c '.[]' | while read -
         export "$var_name=${row_data[$key]}"
     done
 
-    # Call the script with the variables
-    ./bare interpret "$script"
+	# clear stdin for script call
+	echo "" | interpret "$script"
+
 done

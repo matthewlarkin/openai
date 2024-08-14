@@ -1,46 +1,13 @@
 #!/usr/bin/env bash
 
-from_dir="$(pwd)"
-cd "$(dirname "$0")" || exit
+USER_DIR="$(pwd)"
+cd "$(dirname "$0")" || exit 1
 PATH="./:$PATH"
 
 source .lib/barerc
+source .lib/functions
 
-# Minimum required Bash version
-required_version="5.1"
-current_version=$(echo "$BASH_VERSION" | sed -E 's/^([0-9]+\.[0-9]+).*/\1/')
-
-if [[ $(uname) == 'Darwin' ]]; then
-    # Check that we have at least Bash 5.1+
-    if [[ $(perl -e "print 1 if '$current_version' ge '$required_version'") != 1 ]]; then
-        echo "Error: Bash version 5.1+ required. Currently running $current_version."
-        echo "To install Bash 5.1+, run the following command:"
-        echo "  brew install bash"
-        echo "Ensure that Homebrew's bin directory is in your PATH:"
-        echo "  export PATH=\"/opt/homebrew/bin:\$PATH\"  # For Apple Silicon (M1+)"
-        echo "  export PATH=\"/usr/local/bin:\$PATH\"    # For Intel Macs"
-        exit 1
-    fi
-elif [[ $(uname) == 'Linux' ]]; then
-    # Check that we have at least Bash 5.1+
-    if [[ $(perl -e "print 1 if '$current_version' ge '$required_version'") != 1 ]]; then
-        echo "Error: Bash version 5.1+ required. Currently running $current_version."
-        echo "To install Bash 5.1+, run the following command:"
-        echo "  sudo apt-get update && sudo apt-get install bash"
-        exit 1
-    fi
-fi
-
-./deps git
-
-version=$(git log -1 --format=%ct)
-
-# check if we need to sync bare
-[[ $(cat .var/sync) -lt $version ]] && {
-	bash .lib/sync && echo "$version" > .var/sync
-}
-
-[[ $1 == '--version' || $1 == '-v' ]] && echo "$version" && exit 0
+[[ $1 == '--version' || $1 == '-v' ]] && echo "$BARE_VERSION" && exit 0
 
 [[ $1 == '--upgrade' ]] && git pull origin root
 
@@ -59,12 +26,10 @@ case $1 in
 
 		shift && exec bash --rcfile <(cat << EOF
 
-			source .lib/barerc
-
 			# put all bare commands in primary context
 			PATH="$BARE_DIR:\$PATH"
 
-			# tell Macs to be quite about their zsh default
+			# tell Macs to be quiet about their zsh default
 			export BASH_SILENCE_DEPRECATION_WARNING=1
 
 			if [[ "$BARE_COLOR" == 1 ]]; then
@@ -78,7 +43,6 @@ case $1 in
 
 			printf "\n\${GRAY}entering bare terminal. type exit when ready to leave.\${RESET}\n"
 
-
 EOF
 		);
 
@@ -88,4 +52,4 @@ EOF
 
 esac
 
-cd "$from_dir" || exit
+cd "$USER_DIR" || exit

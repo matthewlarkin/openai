@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 
-input="$([[ -t 0 ]] || cat)"
+[[ -t 0 ]] && input="$1" || input=$(cat)
 
 [[ "$#" -eq 0 && -z $input ]] && echo "No file given" && exit 1
 
-[[ -f $input ]] && cat "$input" && echo ""
+[[ -f $input ]] && cat "$input" && exit 0
 
 for file in "$@"; do
 	[[ ! -f "$file" ]] && echo "File '$file' not found" && continue

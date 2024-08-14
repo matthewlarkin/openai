@@ -13,6 +13,19 @@
 
 
 
+# touch and secure profiles and database
+
+	touch .var/sync
+	touch .etc/barerc && chmod 600 .etc/barerc
+	touch .var/bare.rec && chmod 600 .var/bare.rec
+
+	if [[ "$OS" == "macOS" ]]; then
+		touch ~/.bash_profile;
+		else touch ~/.bashrc;
+	fi
+
+
+
 # sync recfiles
 
 	# Read the content of .etc/bare.rec and .var/bare.rec

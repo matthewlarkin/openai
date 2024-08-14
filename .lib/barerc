@@ -1,27 +1,39 @@
 #!/usr/bin/env bash
 
-# This is the bare run command file and is used to store global bare
-# configuration details. DO NOT sotre your API keys or other user specific
-# configuration details here, as they will be overwritten on bare update.
+# Primary entry point and initialization for global config.
+# DO NOT put your API keys or other user user config here,
+# as this file will be overwritten on bare update.
 
-# Define an associative array
-declare -A BASE_CONFIG
+deps git
+
+# Detect macOS, Ubuntu, or Other
+OS=$({
+	[[ $(uname) == 'Linux' ]] \
+		&& grep -q 'Ubuntu' /etc/os-release \
+		&& echo "Ubuntu"
+	[[ $(uname) == 'Darwin' ]] && echo "macOS"
+} || echo "Other") && export OS
 
 # Set the values in the associative array
-BASE_CONFIG=(
+declare -A BASE_CONFIG && BASE_CONFIG=(
+	["BARE_VERSION"]=$(git log -1 --format=%ct)
+    ["BARE_DIR"]=$(pwd)
+	["BARE_TIMEZONE"]=UTC
+    ["BARE_COLOR"]=0
+	["BARE_DEBUG"]=0
     ["OPENAI_API_KEY"]=""
     ["STRIPE_SECRET_KEY"]=""
     ["POSTMARK_SERVER_TOKEN"]=""
-    ["BARE_DIR"]=$(pwd)
-    ["BARE_COLOR"]=0
-	["BARE_DEBUG"]=0
-)
-
-# Loop over the array and export each key-value pair
-for key in "${!BASE_CONFIG[@]}"; do
+	["TOMORROW_WEATHER_API_KEY"]=""
+) && for key in "${!BASE_CONFIG[@]}"; do
     export "$key"="${BASE_CONFIG[$key]}"
 done
 
-# shellcheck disable=SC1091
-source "$BARE_DIR/.etc/barerc"
-[[ -f ~/.barerc ]] && source ~/.barerc
+# check if we need to sync bare
+[[ $(cat .var/sync) -lt $BARE_VERSION ]] && {
+	bash .lib/sync && echo "$BARE_VERSION" > .var/sync
+}
+
+# shellcheck disable=1091
+source .etc/barerc
+source .lib/functions

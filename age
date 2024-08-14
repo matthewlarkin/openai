@@ -1,0 +1,118 @@
+#!/usr/bin/env bash
+
+[[ -t 0 ]] && input="$1" && shift || input=$(cat)
+
+[[ -z $input ]] && echo "No input provided" && exit 1
+
+# Check if gdate and gstat are available, otherwise use date and stat
+if command -v gdate &> /dev/null; then
+    DATE_CMD="gdate"
+else
+    DATE_CMD="date"
+fi
+
+if command -v gstat &> /dev/null; then
+    STAT_CMD="gstat"
+else
+    STAT_CMD="stat"
+fi
+
+# Function to validate date input strictly for yyyy-mm-dd or yyyy-mm-dd hh:mm:ss
+validate_date() {
+    local date_input="$1"
+    if [[ "$date_input" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || [[ "$date_input" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}\ [0-9]{2}:[0-9]{2}:[0-9]{2}$ ]]; then
+        $DATE_CMD -d "$date_input" +"%Y-%m-%d %H:%M:%S" >/dev/null 2>&1
+        return $?
+    else
+        return 1
+    fi
+}
+
+# Function to get the timestamp from a date string
+get_date_timestamp() {
+    local date_input="$1"
+    echo $($DATE_CMD -d "$date_input" +%s)
+}
+
+# Function to get the file's creation or modification timestamp
+get_file_timestamp() {
+    local file_path="$1"
+    local variant="$2"
+    
+    if [[ $variant == "modified" ]]; then
+        echo $($STAT_CMD -c %Y "$file_path")
+    else
+        # Some systems don't have birth time (%W), fallback to %Y if not available
+        birth_time=$($STAT_CMD -c %W "$file_path" 2>/dev/null)
+        [[ -z "$birth_time" || "$birth_time" == "0" ]] && birth_time=$($STAT_CMD -c %Y "$file_path")
+        echo "$birth_time"
+    fi
+}
+
+# Default values
+output="0"
+in="seconds"
+variant="birth"
+
+# Gather flags
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --modified) variant="modified"; shift ;;
+        --years) in="years"; shift ;;
+        --months) in="months"; shift ;;
+        --weeks) in="weeks"; shift ;;
+        --days) in="days"; shift ;;
+        --hours) in="hours"; shift ;;
+        --minutes) in="minutes"; shift ;;
+        --date|--birth) in="date"; shift ;;
+        *) echo "Unknown option: $1"; exit 1 ;;
+    esac
+done
+
+# Determine if the input is a file or a date
+if [[ -f $input ]]; then
+    # It's a file, get the appropriate timestamp
+    file_timestamp=$(get_file_timestamp "$input" "$variant")
+    current_timestamp=$($DATE_CMD +%s)
+    output=$((current_timestamp - file_timestamp))
+elif validate_date "$input"; then
+    # It's a date string, convert to timestamp
+    date_timestamp=$(get_date_timestamp "$input")
+    current_timestamp=$($DATE_CMD +%s)
+    output=$((current_timestamp - date_timestamp))
+else
+    echo "Invalid input: expected file or date format (yyyy-mm-dd or yyyy-mm-dd hh:mm:ss)"
+    exit 1
+fi
+
+# Function to convert time based on the selected unit
+convert_time() {
+    local unit_seconds=$1
+    echo "scale=2; $output / $unit_seconds" | bc
+}
+
+# Define time units in seconds
+declare -A time_units=(
+    [years]=31536000
+    [months]=2592000
+    [weeks]=604800
+    [days]=86400
+    [hours]=3600
+    [minutes]=60
+)
+
+# Convert the output if needed
+if [[ -n ${time_units[$in]} ]]; then
+    output=$(convert_time "${time_units[$in]}")
+fi
+
+# Handle --date option to display the file's modification or creation date
+if [[ $in == "date" ]]; then
+	if [[ "$OS" == "macOS" ]]; then
+		output=$(stat -f %Sm -t "%Y-%m-%d %H:%M:%S" "$input")
+	else
+		output=$(stat -c %y "$input" | cut -d'.' -f1)
+	fi
+fi
+
+echo "$output"

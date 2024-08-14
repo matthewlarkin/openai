@@ -11,7 +11,14 @@ done && set -- "${remaining_args[@]}"
 
 scope="$1" && shift
 
-[[ -t 0 ]] && input="$1" || input=$(cat)
+if [[ -t 0 ]]; then
+	input=$1
+else
+	input=$(cat)
+	if [[ -z $input ]]; then
+		input=$1
+	fi
+fi
 
 [[ -n $trim ]] && input=$(echo -n "$input" | awk '{$1=$1};1')
 

@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+function run_script() {
+	if [[ -t 0 ]]; then
+		main "$@";
+	else
+		cat | while read -r line; do cat > /dev/null; main "$@" "$line"; done;
+	fi
+} && export -f run_script
