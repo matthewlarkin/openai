@@ -201,9 +201,9 @@ case $command in
 				fi
 			fi
 		done <<< "$schema_blocks"
-		
-		# Write the output back to the recfile
-		echo "$output" > "$recfile"
+
+		# trim any newlines that has a newline directly after it with sed
+		echo "$output" | sed '/^$/N;/^\n$/D' > "$recfile"
 
 		;;
 
