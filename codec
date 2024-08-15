@@ -5,28 +5,34 @@
 function lines.json() {
 	# Function to convert a list of items into a JSON array
 	convert_to_json_array() {
-		local input="$1"
-		output=$(echo -n "$input" | jq -R -s -c 'split("\n") | map(select(length > 0) | gsub("^\\s+|\\s+$"; ""))')
+		output=$(echo -n "$1" | jq -R -s -c 'split("\n") | map(select(length > 0) | gsub("^\\s+|\\s+$"; ""))')
 	}
 
 	# Function to handle JSON string input
 	handle_json_string() {
-		local input="$1"
-		output=$(echo -n "$input" | jq -s -c '.')
+		output=$(echo -n "$1" | jq -s -c '.')
 	}
 
 	# Check if the input is a JSON string or a list of items
-	if echo -n "$input" | jq empty 2>/dev/null; then
-		handle_json_string "$input"
+	if echo -n "$1" | jq empty 2>/dev/null; then
+		handle_json_string "$1"
 	else
-		convert_to_json_array "$input"
+		convert_to_json_array "$1"
 	fi
 }
 
 function items.index() {
+
+	local input
+	local index
+	local json_array
+	local output
+	local start
+	local end
+
 	input=$(cat)
 	index="$1" && shift
-	json_array=$(echo -n "$input" | sed 's/ /", "/g; s/^/["/; s/$/"]/')
+	json_array=$(echo -n "$1" | sed 's/ /", "/g; s/^/["/; s/$/"]/')
 	
 	output=""
 	if [[ -z "$index" ]]; then
@@ -51,15 +57,15 @@ function items.index() {
 		done
 
 		# Trim the trailing newline from the final output
-		output="${output%"${output##*[![:space:]]}"}"
+		echo "${output%"${output##*[![:space:]]}"}"
 	fi
 }
 
 function lines.index() {
-	# Read the index and shift arguments
-	index="$1" && shift
-	# Process the input, trim white spaces, remove empty lines, and join with newline character
-	lines=$(echo -n "$input" | awk '{$1=$1;print}' | jq -R -s -c 'split("\n") | map(select(length > 0))')
+
+	local index="$1" && shift
+	local lines
+	lines=$(echo -n "$1" | awk '{$1=$1;print}' | jq -R -s -c 'split("\n") | map(select(length > 0))')
 
 	output=""
 	if [[ -z "$index" ]]; then
@@ -93,67 +99,59 @@ function lines.index() {
 		done
 
 		# Trim the trailing newline from the final output
-		output="${output%"${output##*[![:space:]]}"}"
+		echo "${output%"${output##*[![:space:]]}"}"
 	fi
 }
 
 function item.raw() {
-	# strips the outer quotes off items " and '
-	output=$(echo -n "$input" | jq -r)
+	jq -r <<< "$1"
 }
 
 function lines.markdown() {
-	output="${input//$'\n'/$'  \n'}"
+	echo "${1//$'\n'/$'  \n'}"
 }
 
 function lines.items() {
-	output=$(echo -n "$input" | awk '{$1=$1;print}' | jq -R -s -c 'split("\n") | map(select(length > 0) | @json) | join(" ")' | sed 's/\\\"/\"/g' | sed 's/^"//;s/"$//')
+	echo "$1" | awk '{$1=$1;print}' | jq -R -s -c 'split("\n") | map(select(length > 0) | @json) | join(" ")' | sed 's/\\\"/\"/g' | sed 's/^"//;s/"$//'
 }
 
 function text.filesafe() {
-	output=$(echo -n "$input" | sed 's/ /-/g; s/[^a-zA-Z0-9._-]//g')
+	sed 's/ /-/g; s/[^a-zA-Z0-9._-]//g' <<< "$1"
 }
 
 function json.encode() {
-	output=$(echo -n "$input" | jq -s -R -r @json)
+	jq -s -R -r @json <<< "$1"
 }
 
 function json.decode() {
-	output=$(echo -n "$input" | jq -r .)
+	jq -r . <<< "$1"
 }
 
 function newlines.encode() {
-	# Read input line by line, including the last line whether it ends with a newline or not
-	output=$(
-		while IFS= read -r line || [[ -n "$line" ]]; do
-			# Print the line with a \n at the end
-			printf '%s\\n' "$line"
-		done <<< "$input"
-	)
+	while IFS= read -r line || [[ -n "$line" ]]; do
+		printf '%s\\n' "$line"
+	done <<< "$1"
 }
 
 function newlines.decode() {
-	output=$(echo -e "$input")
+	echo -e "$1"
 }
 
 function url.encode() {
-	output=$(echo -n "$input" | jq -s -R -r @uri)
+	jq -s -R -r @uri <<< "$1"
 }
 
 function url.decode() {
-	output=$(echo -n "$input" | perl -pe 'chomp; s/%([0-9a-f]{2})/sprintf("%s", pack("H2",$1))/eig')
+	perl -pe 'chomp; s/%([0-9a-f]{2})/sprintf("%s", pack("H2",$1))/eig' <<< "$1"
 }
 
 function form-data.encode() {
-	if [[ -n "$input" ]]; then
-		output=$(echo -n "$input" | jq -r 'to_entries | map("\(.key)=\(.value|@uri)") | join("&")')
-	else
-		output="No input provided."
-	fi
+	jq -r 'to_entries | map("\(.key)=\(.value|@uri)") | join("&")' <<< "$1"
 }
 
 function form-data.decode() {
-	IFS='&' read -ra key_value_pairs <<< "$input"
+
+	IFS='&' read -ra key_value_pairs <<< "$1"
 	
 	json_object="{"
 	for key_value_pair in "${key_value_pairs[@]}"; do
@@ -177,100 +175,41 @@ function form-data.decode() {
 	done
 	json_object="${json_object%,}}"
 	
-	output=$(echo -n "$json_object" | jq -cM .)
+	jq -cM . <<< "$json_object"
 }
 
 function base64.encode() {
-	output=$(echo -n "$input" | jq -s -R -r @base64)
+	perl -MMIME::Base64 -ne 'print encode_base64($_)' <<< "$1"
 }
 
 function base64.decode() {
-	output=$(echo -n "$input" | perl -MMIME::Base64 -ne 'print decode_base64($_)')
+	perl -MMIME::Base64 -ne 'print decode_base64($_)' <<< "$1"
 }
 
 function hex.encode() {
-	output=$(echo -n "$input" | xxd -ps)
+	xxd -ps <<< "$1"
 }
 
 function hex.decode() {
-	output=$(echo -n "$input" | xxd -r -p)
+	xxd -r -p <<< "$1"
 }
 
-function html.encode() {
-	# Base64 encode the input to avoid issues with special characters
-	encoded_input=$(echo -n "$input" | base64)
-
-	# Decode from base64 and then encode to HTML
-	output=$(echo -n "$encoded_input" | base64 --decode | jq -j -s -R -r @html)
+function html_encode() { # shellcheck disable=SC2016
+	php -R 'echo htmlentities($argn, ENT_QUOTES|ENT_HTML5) . "\n";' <<< "$1"
 }
 
-function html.decode() {
-	output=$(echo -n "$input" | php -R 'echo html_entity_decode($argn, ENT_QUOTES|ENT_HTML5) . "\n";')
+function html.decode() { # shellcheck disable=SC2016
+	php -R 'echo html_entity_decode($argn, ENT_QUOTES|ENT_HTML5) . "\n";' <<< "$1"
 }
 
-remaining_args=() && while [[ $# -gt 0 ]]; do
-    case $1 in
-        --trim) trim=1 && shift ;;
-        *) remaining_args+=("$1") && shift ;;
-    esac
-done && set -- "${remaining_args[@]}"
+function main() {
+	
+	local command=$1 && shift
+	
+	[[ $(type -t "$command") != "function" ]] && echo "Invalid command: $command" && exit 1
 
-scope="$1" && shift
+	"$command" "$@"
 
-if [[ -t 0 ]]; then
-	input=$1
-else
-	input=$(cat)
-	if [[ -z $input ]]; then
-		input=$1
-	fi
-fi
+}
 
-[[ -n $trim ]] && input=$(echo -n "$input" | awk '{$1=$1};1')
-
-output=""
-
-case $scope in
-
-	items.index) items.index "$@" ;;
-	item.raw) item.raw "$@" ;;
-
-	lines.index) lines.index "$@" ;;
-	lines.json) lines.json ;;
-	lines.markdown) lines.markdown ;;
-    lines.arguments|lines.items) lines.items ;;
-
-    text.filesafe ) text.filesafe ;;
-
-    json.encode ) json.encode ;;
-    json.decode ) json.decode ;;
-
-    newlines.encode ) newlines.encode ;;
-    newlines.decode ) newlines.decode ;;
-
-    url.encode ) url.encode ;;
-    url.decode ) url.decode ;;
-
-    form-data.encode ) form-data.encode ;;
-    form-data.decode ) form-data.decode ;;
-
-    base64.encode ) base64.encode ;;
-    base64.decode ) base64.decode ;;
-
-    hex.encode ) hex.encode ;;
-    hex.decode ) hex.decode ;;
-
-    html.encode ) html.encode ;;
-    html.decode ) html.decode ;;
-
-	*) echo "ERROR: Invalid scope provided." && exit 1 ;;
-
-esac
-
-[[ $trim ]] && output=$(echo -n "$output" | awk '{$1=$1};1')
-
-if [[ $trim ]]; then
-    echo -n "$output"
-else
-    echo "$output"
-fi
+run_script "$@"
