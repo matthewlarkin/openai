@@ -3,14 +3,15 @@
 ./deps jq xxd php awk perl
 
 function lines.json() {
+
 	# Function to convert a list of items into a JSON array
 	convert_to_json_array() {
-		output=$(echo -n "$1" | jq -R -s -c 'split("\n") | map(select(length > 0) | gsub("^\\s+|\\s+$"; ""))')
+		jq -R -s -c 'split("\n") | map(select(length > 0) | gsub("^\\s+|\\s+$"; ""))' <<< "$1"
 	}
 
 	# Function to handle JSON string input
 	handle_json_string() {
-		output=$(echo -n "$1" | jq -s -c '.')
+		jq -s -c '.' <<< "$1"
 	}
 
 	# Check if the input is a JSON string or a list of items
@@ -19,6 +20,7 @@ function lines.json() {
 	else
 		convert_to_json_array "$1"
 	fi
+	
 }
 
 function items.index() {
