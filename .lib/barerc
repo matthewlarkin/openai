@@ -20,6 +20,7 @@ declare -A BASE_CONFIG && BASE_CONFIG=(
     ["BARE_DIR"]=$(pwd)
 	["BARE_TIMEZONE"]=UTC
     ["BARE_COLOR"]=0
+	["BARE_PADDING"]=0
 	["BARE_DEBUG"]=0
     ["OPENAI_API_KEY"]=""
     ["STRIPE_SECRET_KEY"]=""
