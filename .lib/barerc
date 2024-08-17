@@ -22,10 +22,14 @@ declare -A BASE_CONFIG && BASE_CONFIG=(
     ["BARE_COLOR"]=0
 	["BARE_PADDING"]=0
 	["BARE_DEBUG"]=0
-    ["OPENAI_API_KEY"]=""
-    ["STRIPE_SECRET_KEY"]=""
-    ["POSTMARK_SERVER_TOKEN"]=""
-	["TOMORROW_WEATHER_API_KEY"]=""
+	["HETZNER_API_TOKEN"]=''
+	["DIGITALOCEAN_API_TOKEN"]=''
+	["LINODE_API_TOKEN"]=''
+	["VULTR_API_TOKEN"]=''
+    ["OPENAI_API_KEY"]=''
+    ["STRIPE_SECRET_KEY"]=''
+    ["POSTMARK_SERVER_TOKEN"]=''
+	["TOMORROW_WEATHER_API_KEY"]=''
 ) && for key in "${!BASE_CONFIG[@]}"; do
     export "$key"="${BASE_CONFIG[$key]}"
 done
