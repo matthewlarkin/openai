@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 
 function main() {
+	
 	# Default command
 	local command='string'
 	local length='16'
 	local constraint=''
+
 	# Parse arguments
 	while [[ $# -gt 0 ]]; do
 		case $1 in
@@ -29,6 +31,7 @@ function main() {
 
 	# Generate random string
 	LC_ALL=C tr -dc "$constraint" < /dev/urandom | head -c "$length"; echo
+	
 }
 
 run_script "$@"
