@@ -95,7 +95,6 @@ case $1 in
 		cache_append=".forecast"
 		;;
 	* )
-		echo "wttr.in/${location}?uQ${color_code}F" && exit 0
 		response=$(curl -sL "wttr.in/${location}?uQ${color_code}F" | head -n 5)
 		cache_append=".now"
 esac
@@ -105,7 +104,6 @@ esac
 	if [[ ! -f "${cache_path}${cache_append}" ]]; then
 		mkdir -p .var/.cache/weather
 		echo "$response" > "${cache_path}${cache_append}"
-		echo "$response" && exit 0
 	fi
 }
 
