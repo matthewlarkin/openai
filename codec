@@ -2,6 +2,28 @@
 
 ./deps jq xxd php awk perl
 
+function hash() {
+	# shellcheck disable=2005
+    echo "$(php -r "
+\$password = '$1';
+\$hash = password_hash(\$password, PASSWORD_ARGON2ID, ['time_cost' => 3, 'memory_cost' => 65540, 'threads' => 4]);
+echo \$hash;
+")"
+}
+
+function hash.verify() {
+	# shellcheck disable=2005
+    echo "$(php -r "
+\$password = '$1';
+\$hash = '$2';
+if (password_verify(\$password, \$hash)) {
+    echo 'true';
+} else {
+    echo 'false';
+}
+")"
+}
+
 function lines.json() {
 
 	# Function to convert a list of items into a JSON array
