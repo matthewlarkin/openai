@@ -115,10 +115,16 @@ case $command in
 		;;
 
 	--from-json)
-    
+		
 		[[ -f "$1" ]] && input="$(cat "$1")" && shift
 		[[ -z $input ]] && echo "ERROR: no input provided" && exit 1
-		# convert given input to csv
+		
+		# Check if the input is an object or an array
+		if echo "$input" | jq -e 'type == "object"' > /dev/null; then
+			input="[$input]"
+		fi
+		
+		# Convert given input to CSV
 		output=$(echo "$input" | jq -r '(.[0] | keys_unsorted) as $keys | $keys, map([.[ $keys[] ]])[] | @csv' | csv2rec)
 		[[ -n $1 ]] && echo "$output" >> "$1" || echo "$output"
 

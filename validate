@@ -4,9 +4,11 @@
 
 function main() {
 
-	local type=$1 && shift
-	local input=$2 && shift
-	output="false"
+	local type=$1
+	local input=$2
+	shift 2
+
+	local output="false"
 
 	# Output approach: store output, then check if output exists
 
@@ -43,7 +45,9 @@ function main() {
 			done
 
 			[[ -n $explain ]] && echo "$response" | jq -r '.reasoning' && exit 0
-			echo "$response" | jq -r '.answer' && exit 0 ;;
+			echo "$response" | jq -r '.answer' && exit 0
+			
+			;;
 
 
 		alpha|alphabetic)
@@ -101,10 +105,10 @@ function main() {
 			;;
 
 		integer|int|digit)
-			if echo "$input" | grep -Eq '^-?[0-9]+$'; then
-				output="true"
+            if echo "$input" | grep -Eq '^-?[0-9]+$'; then
+                output="true"
 			fi
-			;;
+            ;;
 
 		email|email-address)
 			if echo "$input" | grep -Eq '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'; then
