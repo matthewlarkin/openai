@@ -1,43 +1,61 @@
 #!/usr/bin/env bash
 
+set -e
+
 deps dig
 
 output_format="english"
+model=${OPENAI_DEFAULT_MODEL:-'gpt-4o'}
 
 remaining_args=() && while [[ $# -gt 0 ]]; do
-	case $1 in
-		from|--from) input_format="from $2" && shift 2 ;;
-		to|--to) output_format=$2 && shift 2 ;;
-		--explain) explain_reasoning='true' && shift ;;
-		--*) output_format="${1#--}" && shift ;;
-		*) remaining_args+=("$1") && shift ;;
-	esac
+    case $1 in
+        from|--from) input_format="from $2" && shift 2 ;;
+        to|--to) output_format=$2 && shift 2 ;;
+        --explain) explain_reasoning='true' && shift ;;
+		--model) model="$2" && shift 2 ;;
+        --*) output_format="${1#--}" && shift ;;
+        *) remaining_args+=("$1") && shift ;;
+    esac
 done && set -- "${remaining_args[@]}"
 
 if [[ -z $input ]]; then
-	[[ -t 0 ]] && input="$1" && shift || input=$(cat);
+    [[ -t 0 ]] && input="$1" && shift || input=$(cat);
 fi
 
 [[ -z $input ]] && echo "Error: requires input" && exit 1
 
 case $output_format in
 
-	ip)
+    ip|IP|ip-address)
 
-		[[ $(validate domain "$input") == 'false' ]] && echo "Error: invalid domain name" && exit 1
+        [[ $(validate domain "$input") == 'false' ]] && echo "Error: invalid domain name" && exit 1
 
-		dig +short "$input"
+        dig +short "$input"
 
-		;;
+        ;;
 
-	*)
+    *)
 
-		response=$(openai chat --high-powered --json "$(codec url.encode "Please translate this CONTENT $input_format into $output_format. Return a two properties: 'reasoning' and 'translation'. IMPORTANT: the 'translation' property should only contain the translation (no fluff or explanation here), and the 'reasoning' property should contain your reasoning along with the translation. CONTENT: $input")")
+        runs_remaining=3
 
-		[[ $explain_reasoning == 'true' ]] && echo "$response" | jq -r '.reasoning' && exit 0
+        while [ $runs_remaining -gt 0 ]; do
+            response="$(openai chat "You are an expert translator. Your task is to translate, reword, or otherwise transform the source material into the requested output format. Respond with one JSON object containing two properties: 'reasoning <string>' and 'translation <string>' where 'reasoning' contains your reasoning and 'translation' is your translation of the source material. - - - ###--### - - - OUTPUT_FORMAT: $output_format - - - SOURCE MATERIAL: $input - - - ###--### - - - Remember, return a raw, one dimensional JSON object, containing only the 'reasoning' and 'translation' properties. DO NOT return a markdown code block." --model "$model" --json)"
 
-		echo "$response" | jq -r '.translation'
+            # Validate that response JSON object contains just two properties (reasoning and translation)
+            if [[ $(echo "$response" | jq 'keys | length') -eq 2 && $(echo "$response" | jq -r 'has("reasoning")') == 'true' && $(echo "$response" | jq -r 'has("translation")') == 'true' ]]; then
+                runs_remaining=0  # Valid response, exit the loop
+            else
+                runs_remaining=$((runs_remaining - 1))  # Invalid response, decrement runs_remaining
+                if [ $runs_remaining -eq 0 ]; then
+                    echo "Sorry, we're having a hard time responding to this request. Maybe try rephrasing." && exit 1
+                fi
+            fi
+        done
 
-		;;
+        [[ $explain_reasoning == 'true' ]] && echo "$response" | jq -r '.reasoning' && exit 0
+
+        echo "$response" | jq -r '.translation'
+
+        ;;
 
 esac

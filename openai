@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+set -e
+
 [ -z "$OPENAI_API_KEY" ] && {
 	echo "OPENAI_API_KEY is not defined";
 	exit 1;
@@ -102,7 +104,7 @@ case "$1" in
 
 		fi
 
-		[[ -n $json_mode ]] && system_prompt="$system_prompt. Return as a raw JSON object (not a json code block). If the user does not specify a property to put the response in, put the response in a property named 'response'."
+		[[ -n $json_mode ]] && system_prompt="$system_prompt. Return as a raw JSON object (not a json code block). If the user does not specify a property to put the response in, put the response in a property named 'response'. IMPORTANT: DO NOT RETURN A MARKDOWN CODE BLOCK; RETURN A VALID JSON STRING."
 		
 		# Construct the messages array if not provided
 		if [ -z "$messages" ]; then
