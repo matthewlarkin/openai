@@ -1,0 +1,43 @@
+#!/usr/bin/env bash
+
+deps dig
+
+output_format="english"
+
+remaining_args=() && while [[ $# -gt 0 ]]; do
+	case $1 in
+		from|--from) input_format="from $2" && shift 2 ;;
+		to|--to) output_format=$2 && shift 2 ;;
+		--explain) explain_reasoning='true' && shift ;;
+		--*) output_format="${1#--}" && shift ;;
+		*) remaining_args+=("$1") && shift ;;
+	esac
+done && set -- "${remaining_args[@]}"
+
+if [[ -z $input ]]; then
+	[[ -t 0 ]] && input="$1" && shift || input=$(cat);
+fi
+
+[[ -z $input ]] && echo "Error: requires input" && exit 1
+
+case $output_format in
+
+	ip)
+
+		[[ $(validate domain "$input") == 'false' ]] && echo "Error: invalid domain name" && exit 1
+
+		dig +short "$input"
+
+		;;
+
+	*)
+
+		response=$(openai chat --high-powered --json "$(codec url.encode "Please translate this CONTENT $input_format into $output_format. Return a two properties: 'reasoning' and 'translation'. IMPORTANT: the 'translation' property should only contain the translation (no fluff or explanation here), and the 'reasoning' property should contain your reasoning along with the translation. CONTENT: $input")")
+
+		[[ $explain_reasoning == 'true' ]] && echo "$response" | jq -r '.reasoning' && exit 0
+
+		echo "$response" | jq -r '.translation'
+
+		;;
+
+esac

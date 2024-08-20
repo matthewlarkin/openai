@@ -16,6 +16,8 @@ remaining_args=() && while [[ "$#" -gt 0 ]]; do
 		--thread) thread_title="$2"; shift 2 ;;
 		--threads) list_threads=1 && shift ;;
 		--json) json_mode=1 && shift ;;
+		--debug) debug='true' && shift ;;
+		--high-powered) mode='high-powered'; shift 2 ;;
 		*) remaining_args+=("$1"); shift ;;
 	esac
 done && set -- "${remaining_args[@]}"
@@ -56,7 +58,11 @@ case "$1" in
 
         shift
 		# Initialize variables
-		model=${OPENAI_DEFAULT_MODEL:-'gpt-4o-mini'}
+		if [[ $mode == 'high-powered' ]]; then
+			model="gpt-4o"
+		else
+			model=${OPENAI_DEFAULT_MODEL:-'gpt-4o-mini'}
+		fi
 		system_prompt="$assistant_prompt"
 		user_messages=()
 		assistant_messages=()
@@ -96,7 +102,7 @@ case "$1" in
 
 		fi
 
-		[[ -n $json_mode ]] && system_prompt="$system_prompt. And return as JSON. If the user does not specify a property to put the response in, put the response in a property named 'response'."
+		[[ -n $json_mode ]] && system_prompt="$system_prompt. Return as a raw JSON object (not a json code block). If the user does not specify a property to put the response in, put the response in a property named 'response'."
 		
 		# Construct the messages array if not provided
 		if [ -z "$messages" ]; then
@@ -133,6 +139,11 @@ case "$1" in
 
 		# if json_mode append "response_format": { "type": "json_object" } to payload
 		[[ -n $json_mode ]] && payload=$(echo "$payload" | jq '. + {response_format: {type: "json_object"}}')
+
+		[[ $debug == 'true' ]] && {
+			./request "https://api.openai.com/v1/chat/completions" --token "$OPENAI_API_KEY" --json "$payload" | jq
+			exit 0
+		}
 		
 		response=$(./request "https://api.openai.com/v1/chat/completions" --token "$OPENAI_API_KEY" --json "$payload" | jq -r '.choices[0].message.content');
 

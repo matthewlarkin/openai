@@ -15,6 +15,94 @@ done && set -- "${remaining_args[@]}"
 
 case $command in
 
+		examine)
+	
+		# Check if the input file exists
+		[[ ! -f $input ]] && echo "Error: expected file input" && exit 1
+	
+		# Create a temporary directory for the extracted image
+		tmp_dir=$(mktemp -d)
+		
+		# Extract the cover image from the MP3 file
+		cover_image_path="$tmp_dir/cover.jpg"
+		ffmpeg -i "$input" -an -vcodec copy "$cover_image_path" -y 2>/dev/null
+	
+		# Check if the cover image was successfully extracted
+		[[ ! -f "$cover_image_path" ]] && cover_image_path="null"
+	
+		# Extract basic metadata using ffprobe and format as a single JSON object
+		metadata=$(ffprobe -v quiet -print_format json -show_format "$input" | jq -r \
+		--arg cover_image_path "$cover_image_path" \
+			'{
+				title: .format.tags.title,
+				artist: .format.tags.artist,
+				album: .format.tags.album,
+				track: .format.tags.track,
+				year: .format.tags.date,
+				cover: $cover_image_path
+			}'
+		)
+	
+		# Output the metadata as a JSON object
+		echo "$metadata" | rec --from-json
+	
+		;;
+	
+	detail)
+	
+		# takes a given mp3 file and adds metadata (album artwork, title, composer, etc) via ffmpeg
+		[[ ! -f $input ]] && echo "Error: expected file input" && exit 1
+	
+		# now, examine the file in case some of these
+		# are already set and use those as default
+		title=$(media examine "$input" | recsel -P title)
+		album=$(media examine "$input" | recsel -P album)
+		artist=$(media examine "$input" | recsel -P artist)
+		output=$input
+	
+		remaining_args=() && while [[ $# -gt 0 ]]; do
+			case $1 in
+				--title) title="$2" && shift 2 ;;
+				--album) album="$2" && shift 2 ;;
+				--year) year="$2" && shift 2 ;;
+				--artist) artist="$2" && shift 2 ;;
+				--cover) cover="$2" && shift 2 ;;
+				--track) track="$2" && shift 2 ;;
+				--output) output="$2" && shift 2 ;;
+				*) remaining_args+=("$1") && shift ;;
+			esac
+		done && set -- "${remaining_args[@]}"
+		
+		[[ -z $title ]] && echo "Error: title is required" && exit 1
+		[[ -z $album ]] && echo "Error: album is required" && exit 1
+		[[ -z $artist ]] && echo "Error: artist is required" && exit 1
+		
+		ffmpeg_command=("ffmpeg" "-y" "-i" "$input")
+		
+		[[ -n $cover ]] && ffmpeg_command+=("-i" "$cover" "-map" "0:0" "-map" "1:0")
+		
+		ffmpeg_command+=("-c" "copy" "-id3v2_version" "3" \
+			"-metadata" "title=$title" \
+			"-metadata" "album=$album" \
+			"-metadata" "artist=$artist")
+		
+		[[ -n $year ]] && ffmpeg_command+=("-metadata" "year=$year")
+		
+		[[ -n $track ]] && ffmpeg_command+=("-metadata" "track=$track")
+		
+		[[ -n $cover ]] && ffmpeg_command+=("-metadata:s:v" "title=Album cover" "-metadata:s:v" "comment=Cover (front)")
+		
+		ffmpeg_command+=("$output.tmp.mp3")
+		
+		"${ffmpeg_command[@]}" > /dev/null 2>&1
+	
+		# Move the temporary output file to the original input file location
+		mv "$output.tmp.mp3" "$output"
+	
+		echo "$output"
+	
+		;;
+
     convert)
 
 		output_extension="$1"
