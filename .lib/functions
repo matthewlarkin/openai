@@ -4,6 +4,6 @@ function run_script() {
 	if [[ -t 0 ]]; then
 		main "$@";
 	else
-		cat | while read -r line; do main "$@" "$line"; done;
+		cat | while read -r line; do main "$line" "$@"; done;
 	fi
 } && export -f run_script
