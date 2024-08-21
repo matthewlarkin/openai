@@ -39,17 +39,25 @@ case $output_format in
         runs_remaining=3
 
         while [ $runs_remaining -gt 0 ]; do
-            response="$(openai chat "You are an expert translator. Your task is to translate, reword, or otherwise transform the source material into the requested output format. Respond with one JSON object containing two properties: 'reasoning <string>' and 'translation <string>' where 'reasoning' contains your reasoning and 'translation' is your translation of the source material. - - - ###--### - - - OUTPUT_FORMAT: $output_format - - - SOURCE MATERIAL: $input - - - ###--### - - - Remember, return a raw, one dimensional JSON object, containing only the 'reasoning' and 'translation' properties. DO NOT return a markdown code block." --model "$model" --json)"
+
+			message="You are an expert translator. Your task is to translate, reword, or otherwise transform the source material into the requested output format. Respond with one JSON object containing two properties: 'reasoning <string>' and 'translation <string>' where 'reasoning' contains your reasoning for the translation (what choices you made and why you chose to interpret it this way plus any caveats or gotchas) and 'translation' is your translation of the source material.\n- - - \n######\n - - -\n OUTPUT_FORMAT: {{ $output_format }} - - - SOURCE MATERIAL: {{ $input }}\n - - - \n######\n - - -\n Remember, return a raw, one dimensional JSON object, containing only the 'reasoning' and 'translation' properties. DO NOT return a markdown code block."
+
+            response="$(openai chat "$message" --model "$model" --json)"
 
             # Validate that response JSON object contains just two properties (reasoning and translation)
-            if [[ $(echo "$response" | jq 'keys | length') -eq 2 && $(echo "$response" | jq -r 'has("reasoning")') == 'true' && $(echo "$response" | jq -r 'has("translation")') == 'true' ]]; then
-                runs_remaining=0  # Valid response, exit the loop
+            if [[
+				$(echo "$response" | jq 'keys | length') -eq 2 && \
+				$(echo "$response" | jq -r 'has("reasoning")') == 'true' && \
+				$(echo "$response" | jq -r 'has("translation")') == 'true'
+			]]; then
+				runs_remaining=0  # Valid response, exit the loop
             else
                 runs_remaining=$((runs_remaining - 1))  # Invalid response, decrement runs_remaining
                 if [ $runs_remaining -eq 0 ]; then
                     echo "Sorry, we're having a hard time responding to this request. Maybe try rephrasing." && exit 1
                 fi
             fi
+
         done
 
         [[ $explain_reasoning == 'true' ]] && echo "$response" | jq -r '.reasoning' && exit 0
