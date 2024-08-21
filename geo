@@ -4,20 +4,38 @@
 touch .var/.cache/geo.txt
 
 format_location() {
+	local location
+
 	if [[ -z $1 ]]; then
-		curl -sL https://ipinfo.io/ip
+		location=$(curl -sL https://ipinfo.io/ip)
 	else
-		# Replace comma space with plus before encoding the location
-		local location=${1//, /+}
-		./codec url.encode "$location"
+		location=${1//, /+}
+		echo "$location"
 	fi
 }
 
 get_coordinates() {
-	local location=$1
-	local type=$2
-	local decimals=${3:-2}
+
+	local location
+	local type
+	local decimals
 	local coordinates
+
+	remaining_args=() && while [[ $# -gt 0 ]]; do
+		case $1 in
+			--decimals) decimals=$2 && shift 2 ;;
+			--type) type=$2 && shift 2 ;;
+			--location) location=$2 && shift 2 ;;
+			*) remaining_args+=("$1") && shift ;;
+		esac
+	done && set -- "${remaining_args[@]}"
+
+	[[ -z $location ]] && location=${1:-asheville-nc}
+	[[ -z $type ]] && type="city"
+	[[ -z $decimals ]] && decimals=2
+
+	location=$(format_location "$location")
+	[[ $location =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] && type="ip" || type="city"
 
 	# Check if the location is in the geo.txt file
 	if grep -q "^$location " .var/.cache/geo.txt; then
@@ -42,7 +60,10 @@ get_coordinates() {
 	echo "$coordinates"
 }
 
-location=$(format_location "$1")
-[[ $location =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] && type="ip" || type="city"
+function main() {
 
-get_coordinates "$location" "$type" "$2"
+	get_coordinates "$@"
+
+}
+
+run_script "$@"
