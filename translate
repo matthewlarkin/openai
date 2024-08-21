@@ -9,7 +9,6 @@ model=${OPENAI_DEFAULT_MODEL:-'gpt-4o'}
 
 remaining_args=() && while [[ $# -gt 0 ]]; do
     case $1 in
-        from|--from) input_format="from $2" && shift 2 ;;
         to|--to) output_format=$2 && shift 2 ;;
         --explain) explain_reasoning='true' && shift ;;
 		--model) model="$2" && shift 2 ;;
@@ -25,6 +24,31 @@ fi
 [[ -z $input ]] && echo "Error: requires input" && exit 1
 
 case $output_format in
+
+	# measurements
+
+	kg|kilograms) 
+
+		input_format=$1 && shift
+
+		[[ $(validate number "$input") == 'false' ]] && echo "Error: invalid number" && exit 1
+
+		case $input_format in
+
+			grams) echo "$input * 1000" | bc -l ;;
+
+			pounds) echo "$input * 2.20462" | bc -l ;;
+
+			ounces) echo "$input * 35.274" | bc -l ;;
+
+			tons) echo "$input * 0.00110231" | bc -l ;;
+
+			*) echo "Error: invalid input format" && exit 1 ;;
+
+		esac
+
+		;;
+
 
     ip|IP|ip-address)
 
