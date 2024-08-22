@@ -1,9 +1,16 @@
 #!/usr/bin/env bash
 
 function run_script() {
+
+	[[ $1 == 'line-by-line' ]] && line_by_line=1 && shift
+
 	if [[ -t 0 ]]; then
 		main "$@";
 	else
-		cat | while read -r line; do main "$line" "$@"; done;
+		[[ $line_by_line == '1' ]] && {
+			cat | while read -r line; do main "$@" "$line"  ; done;
+		} || {
+			main "$(cat)" "$@"
+		}
 	fi
 } && export -f run_script
