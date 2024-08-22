@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+cd "$(dirname "$0")" && source .lib/barerc || exit 1
+
 [[ -t 0 ]] || input=$(cat)
 
 format='text' # Default format
@@ -66,7 +68,7 @@ case $format in
 
   text)
     case $variant in
-		squish) echo "$input" | tr -d '[:space:]' && echo "" ;;
+		squish) echo "$input" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//' ;;
       	uppercase) echo "$input" | tr '[:lower:]' '[:upper:]' ;;
       	lowercase) echo "$input" | tr '[:upper:]' '[:lower:]' ;;
       	capitalize)
