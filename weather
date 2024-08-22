@@ -17,15 +17,15 @@ cache_path=".var/.cache/weather/$(codec text.filesafe "$location")"
 
 remaining_args=() && while [[ $# -gt 0 ]]; do
 	case $1 in
-		--no-color) color='0' && shift ;;
-		--concise) json_requested='1'; concise='1' && shift ;;
-		--json) json_requested='1'; json='1' && shift ;;
-		--sunrise) json_requested='1'; sunrise='1' && shift ;;
-		--sunset) json_requested='1'; sunset='1' && shift ;;
-		--moonrise) json_requested='1'; moonrise='1' && shift ;;
-		--moonset) json_requested='1'; moonset='1' && shift ;;
-		--cloud-cover|--cloud-coverage) json_requested='1'; cloud_cover='1' && shift ;;
-		--at) json_requested='1'; time="$(date "$2" --format 'hh:mm')" && shift 2 ;;
+		--no-color|no-color) color='0' && shift ;;
+		--concise|concise) json_requested='1'; concise='1' && shift ;;
+		--json|json) json_requested='1'; json='1' && shift ;;
+		--sunrise|sunrise) json_requested='1'; sunrise='1' && shift ;;
+		--sunset|sunset) json_requested='1'; sunset='1' && shift ;;
+		--moonrise|moonrise) json_requested='1'; moonrise='1' && shift ;;
+		--moonset|moonset) json_requested='1'; moonset='1' && shift ;;
+		--cloud-cover|--cloud-coverage|cloud-cover) json_requested='1'; cloud_cover='1' && shift ;;
+		--at|at) json_requested='1'; time="$(date "$2" --format 'hh:mm')" && shift 2 ;;
 		*) remaining_args+=("$1") && shift ;;
 	esac
 done && set -- "${remaining_args[@]}"
