@@ -1,31 +1,35 @@
 #!/usr/bin/env bash
 
-./deps pandoc || exit 1
+deps pandoc
 
-# Initialize flags
-[[ -t 0 ]] && content="$(cat ".var/$1")" && shift || content="$(cat)"
-to_html=0
-inline=0
+function main() {
 
-# Process arguments to handle flags and content
-args=()
-for arg in "$@"; do
-	case "$arg" in
-		--to-html|--as-html)
-			to_html=1 && shift
-			;;
-		*)
-			args+=("$arg")
-			;;
-	esac
-done
+	# Process arguments to handle flags and content
+	args=() && for arg in "$@"; do
+		case "$arg" in
+			--to-html|--as-html)
+				to_html=1 && shift
+				;;
+			--pretty)
+				deps glow
+				pretty=1 && shift
+				;;
+			*) args+=("$arg") && shift ;;
+		esac
+	done && set -- "${args[@]}"
 
-# echo all remaining args
-set -- "${args[@]}"
+	content=$1 && shift
+	to_html=0
 
-# Output content, converting to HTML if required
-if [[ $to_html -eq 1 ]]; then
-	echo "$content" | pandoc
-else
-	echo "$content"
-fi
+	# Output content, converting to HTML if required
+	if [[ $to_html -eq 1 ]]; then
+		echo "$content" | pandoc
+	elif [[ $pretty -eq 1 ]]; then
+		echo "$content" | glow
+	else
+		echo "$content"
+	fi
+
+}
+
+run_script "$@"
