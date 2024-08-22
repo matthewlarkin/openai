@@ -101,7 +101,9 @@ function hetzner_createFirewall() {
 
 }
 
-function hetzner_listFirewalls() {}
+function hetzner_listFirewalls() {
+	:
+}
 
 function hetzner_createServer() {
 
