@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
-./deps jq xxd php awk perl
+cd "$(dirname "$0")" && source .lib/barerc || exit 1
+
+deps jq xxd php awk perl
 
 function hash() {
 	# shellcheck disable=2005
@@ -162,45 +164,116 @@ function newlines.decode() {
 }
 
 function url.encode() {
-	jq -s -R -r @uri <<< "$1"
+	echo -n "$1" | jq -s -R -r @uri
 }
 
 function url.decode() {
 	perl -pe 'chomp; s/%([0-9a-f]{2})/sprintf("%s", pack("H2",$1))/eig' <<< "$1"
+	echo ""
 }
 
 function form-data.encode() {
-	jq -r 'to_entries | map("\(.key)=\(.value|@uri)") | join("&")' <<< "$1"
+    input_string="$1"
+    python3 - <<END
+import json
+import urllib.parse
+
+def flatten(d, parent_key=''):
+    items = []
+    for k, v in d.items():
+        new_key = f"{parent_key}[{k}]" if parent_key else k
+        if isinstance(v, dict):
+            items.extend(flatten(v, new_key).items())
+        elif isinstance(v, list):
+            for i, sub_v in enumerate(v):
+                items.extend(flatten({str(i): sub_v}, new_key).items())
+        else:
+            items.append((new_key, v))
+    return dict(items)
+
+# Load JSON from input string
+input_string = """$input_string"""
+json_obj = json.loads(input_string)
+
+# Flatten the JSON
+flat_json = flatten(json_obj)
+
+# Encode as form-data
+encoded = "&".join(f"{k}={urllib.parse.quote_plus(str(v))}" for k, v in flat_json.items())
+print(encoded)
+END
 }
+
 
 function form-data.decode() {
 
-	IFS='&' read -ra key_value_pairs <<< "$1"
-	
-	json_object="{"
-	for key_value_pair in "${key_value_pairs[@]}"; do
-		IFS='=' read -r key value <<< "$key_value_pair"
-		
-		# Decode the key and value from URL encoding
-		decoded_key=$(echo -e "$(sed 's/+/ /g;s/%\(..\)/\\x\1/g' <<< "$key")")
-		decoded_value=$(echo -e "$(sed 's/+/ /g;s/%\(..\)/\\x\1/g' <<< "$value")")
-		
-		# Ensure keys are URI encoded for JSON keys
-		json_key=$(jq -Rr @uri <<<"$decoded_key")
-		
-		# Check if decoded_value is a JSON array or object
-		if [[ $decoded_value == \{* ]] || [[ $decoded_value == \[* ]]; then
-			# It's a JSON array or object, add it directly
-			json_object+="\"$json_key\":$decoded_value,"
-		else
-			# It's a regular string, format it for JSON
-			json_object+="\"$json_key\":$(jq -Rr @json <<<"$decoded_value"),"
-		fi
-	done
-	json_object="${json_object%,}}"
-	
-	jq -cM . <<< "$json_object"
+    input_string="$1"
+
+    # Use Python to parse the input and convert it to JSON
+    python3 - <<END
+import urllib.parse
+import json
+import re
+
+# Input string from Bash
+input_string = "$input_string"
+
+# Parse the query string
+parsed = urllib.parse.parse_qsl(input_string)
+
+# Initialize a dictionary to hold the final JSON structure
+json_obj = {}
+
+# Function to set nested keys in the dictionary
+def set_nested_value(d, keys, value):
+    for key in keys[:-1]:
+        if key.isdigit():
+            key = int(key)
+        if isinstance(d, list) and isinstance(key, int):
+            while len(d) <= key:
+                d.append({})
+            d = d[key]
+        else:
+            d = d.setdefault(key, {})
+    final_key = keys[-1]
+    if final_key.isdigit():
+        final_key = int(final_key)
+    if isinstance(d, list) and isinstance(final_key, int):
+        while len(d) <= final_key:
+            d.append({})
+        d[final_key] = value
+    else:
+        d[final_key] = value
+
+# Loop through the parsed key-value pairs and structure them into nested JSON
+for key, value in parsed:
+    # Split the key into parts based on bracket notation
+    parts = re.findall(r'\w+', key)
+    set_nested_value(json_obj, parts, value)
+
+# Convert dictionaries with integer keys into lists
+def convert_to_list(obj):
+    if isinstance(obj, dict):
+        keys = obj.keys()
+        if all(isinstance(k, int) for k in keys):
+            max_index = max(keys)
+            lst = [obj.get(i, {}) for i in range(max_index + 1)]
+            return [convert_to_list(v) for v in lst]
+        else:
+            return {k: convert_to_list(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_to_list(v) for v in obj]
+    else:
+        return obj
+
+# Convert and print the final JSON output
+final_json = convert_to_list(json_obj)
+print(json.dumps(final_json, indent=2))
+END
 }
+
+
+
 
 function base64.encode() {
 	perl -MMIME::Base64 -ne 'print encode_base64($_)' <<< "$1"
@@ -227,13 +300,50 @@ function html.decode() { # shellcheck disable=SC2016
 }
 
 function main() {
-	
-	local command=$1 && shift
-	
-	[[ $(type -t "$command") != "function" ]] && echo "Invalid command: $command" && exit 1
 
-	"$command" "$@"
-
+    	# Use mapfile to read function names into an array
+	mapfile -t function_names < <(declare -F | awk '{print $3}')
+	
+	# Function to check if a command is a valid function
+	is_valid_function() {
+		local command=$1
+		for func in "${function_names[@]}"; do
+			if [[ "$func" == "$command" ]]; then
+				return 0
+			fi
+		done
+		return 1
+	}
+	
+	# Initialize variables
+	command=""
+	source_material=""
+	
+	# Loop through arguments to find the command and source material
+	while [[ $# -gt 0 ]]; do
+		if is_valid_function "$1"; then
+			command="$1"
+		else
+			source_material="$1"
+		fi
+		shift
+	done
+	
+	# Check if a valid command was found
+	if [[ -z "$command" ]]; then
+		echo "Invalid command: No valid function found in arguments"
+		exit 1
+	fi
+	
+	# Check if source material is provided
+	if [[ -z "$source_material" ]]; then
+		echo "No source material provided"
+		exit 1
+	fi
+	
+	# Call the function with the source material
+	"$command" "$source_material"
 }
-
+	
+# Run the main function with all script arguments
 run_script "$@"
