@@ -2,17 +2,54 @@
 
 [[ $OS == 'macOS' ]] && deps gdate
 
+[[ -t 0 ]] || input=$(cat)
+
 function main() {
 
-	local type=$1
-	local input=$2
-	shift 2
-
-	local output="false"
-
-	# Output approach: store output, then check if output exists
+	local type output
+	
+	type=$1 && shift
+	[[ -z $input ]] && input=$1 && shift
+	output="false"
 
 	case $type in
+
+		json|json-format)
+
+			[[ -f $input ]] && input=$(cat "$input")
+
+			if jq . <<< "$input" &>/dev/null; then
+				output="true"
+			fi
+
+			;;
+
+		csv|csv-format)
+
+			[[ -f $input ]] && input=$(cat "$input")
+
+			if [[ $(echo "$input" | csvclean --dry-run) == 'No errors.' ]]; then
+				output="true"
+			fi
+
+			;;
+
+		dir|directory|folder)
+
+			if [[ -d $input ]]; then
+				output="true"
+			fi
+
+			;;
+
+
+		file)
+
+			if [[ -f $input ]]; then
+				output="true"
+			fi
+
+			;;
 
 		ai)
 
@@ -156,12 +193,9 @@ function main() {
 		date)
 
 			date_format="%Y-%m-%d"
-			custom_format=0  # Initialize custom_format flag
 
-			# Parse the format argument
 			case $1 in
 				--format)
-					custom_format=1 && shift
 					case $1 in
 						"mm-dd-yyyy"|"mm-dd-Y") date_format="%m-%d-%Y" ;;
 						"mm/dd/yyyy"|"mm/dd/Y") date_format="%m/%d/%Y" ;;
@@ -213,23 +247,15 @@ function main() {
 					shift 2
 					;;
 			esac
-			
-			# Detect the operating system
+
 			os_type=$(uname)
 
-			# Initialize output to false
-			output="false"
-
-			# Attempt to parse the date based on the OS
 			if [ "$os_type" = "Darwin" ]; then
-				# macOS
 				parsed_date=$(gdate -d "$input" +"$date_format" 2>/dev/null)
 			else
-				# Assume Linux (GNU date)
 				parsed_date=$(gdate -d "$input" +"$date_format" 2>/dev/null)
 			fi
 
-			# Strictly compare the original input with the parsed date
 			if [[ "$parsed_date" == "$input" ]]; then
 				output="true"
 			fi
@@ -239,18 +265,17 @@ function main() {
 		time)
 		
 			time_format="%H:%M"  # Default time format
-			custom_format=0  # Initialize custom_format flag
+
 
 			# Parse the format argument
 			case $1 in
 				--format)
-					custom_format=1 && shift
 					case $1 in
 						"24-hour"|"hh:mm") time_format="%H:%M" ;; # e.g., 13:45
 						"24-hour-seconds"|"hh:mm:ss") time_format="%H:%M:%S" ;; # e.g., 13:45:30
 						"12-hour"|"hh:mm am/pm") time_format="%I:%M %p" ;; # e.g., 01:45 PM
 						"12-hour-seconds"|"hh:mm:ss am/pm") time_format="%I:%M:%S %p" ;; # e.g., 01:45:30 PM
-						*) time_format="$1" ;; # Use provided format
+						*) time_format="$2" ;; # Use provided format
 					esac
 					shift 2
 					;;
