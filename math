@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-source .lib/barerc
+cd "$(dirname "$0")" && source .lib/barerc || exit 1
 
 function main() {
 

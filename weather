@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+cd "$(dirname "$0")" && source .lib/barerc || exit 1
+
 [[ -t 0 ]] && input="$1" && shift || input=$(cat)
 
 # detect if input is a lat,long

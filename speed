@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
-./deps ffmpeg openssl
+cd "$(dirname "$0")" && source .lib/barerc || exit 1
+
+deps ffmpeg openssl
 
 # Default values
 speed_factor=${1:-'0.5'}

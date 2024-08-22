@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+cd "$(dirname "$0")" && source .lib/barerc || exit 1
+
 [ -z "$STRIPE_SECRET_KEY" ] && {
 	echo "STRIPE_SECRET_KEY is not defined";
 	exit 1;

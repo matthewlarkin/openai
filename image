@@ -1,10 +1,12 @@
 #!/bin/bash
 
-./deps magick
+cd "$(dirname "$0")" && source .lib/barerc || exit 1
 
-command="$1" && shift;
+deps magick
 
-case "$command" in
+command=$1 && shift;
+
+case $command in
 
 	crop )
 	

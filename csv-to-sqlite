@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+cd "$(dirname "$0")" && source .lib/barerc || exit 1
+
 # usage: ./csv-to-sqlite -d database.db -t table_name -f file.csv
 
 case "$1" in

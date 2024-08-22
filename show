@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+cd "$(dirname "$0")" && source .lib/barerc || exit 1
+
 function main() {
 
 	[[ -t 0 ]] && input=$1 || input=$(cat)

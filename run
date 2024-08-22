@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+cd "$(dirname "$0")" && source .lib/barerc || exit 1
+
 # Read input from stdin if not provided as an argument
 
 function main() {

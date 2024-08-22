@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
-./deps rec2csv csvlook
+cd "$(dirname "$0")" && source .lib/barerc || exit 1
+
+deps rec2csv csvlook
 
 if [[ -f $1 ]]; then
 	input=$(cat "$1") && shift;

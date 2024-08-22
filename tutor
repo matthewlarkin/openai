@@ -1,1 +1,3 @@
 #!/usr/bin/env bash
+
+cd "$(dirname "$0")" && source .lib/barerc || exit 1

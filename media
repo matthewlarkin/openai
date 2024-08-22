@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 
-./deps ffmpeg
+cd "$(dirname "$0")" && source .lib/barerc || exit 1
 
-command="$1" && shift
+deps ffmpeg
+
+command=$1 && shift
 
 [[ -t 0 ]] && input="$1" && shift || input=$(cat)
 

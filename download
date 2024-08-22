@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
-./deps curl
+cd "$(dirname "$0")" && source .lib/barerc || exit 1
+
+deps curl
 
 [[ -t 0 ]] && url=$1 && shift || url=$(cat)
 

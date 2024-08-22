@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+cd "$(dirname "$0")" && source .lib/barerc || exit 1
+
 remaining_args=() && while true; do
 	case $1 in
 		'') break ;;

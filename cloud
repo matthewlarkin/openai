@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 
-deps curl jq
+cd "$(dirname "$0")" && source .lib/barerc || exit 1
 
-set -e
+deps curl jq
 
 function getCloudProvider() {
 

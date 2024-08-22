@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
-./deps curl jq
+cd "$(dirname "$0")" && source .lib/barerc || exit 1
+
+deps curl jq
 touch .var/.cache/geo.txt
 
 format_location() {

@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
-./deps jq
+cd "$(dirname "$0")" && source .lib/barerc || exit 1
+
+deps jq
 
 [[ -z "$POSTMARK_SERVER_TOKEN" ]] && {
 	echo "POSTMARK_SERVER_TOKEN is not set"

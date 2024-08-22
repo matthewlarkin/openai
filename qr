@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
-./deps qrencode
+cd "$(dirname "$0")" && source .lib/barerc || exit 1
+
+deps qrencode
 
 # Attempt to read from stdin, if nothing is piped in, use $1
 if [ -t 0 ]; then

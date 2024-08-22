@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
-./deps sqlite3
+cd "$(dirname "$0")" && source .lib/barerc || exit 1
+
+deps sqlite3
 
 # initialize db if needed
 [[ ! -f .var/www/sqlpage/sqlpage.db ]] && ./bare serve --briefly

@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 
-./deps sqlpage
+cd "$(dirname "$0")" && source .lib/barerc || exit 1
+
+deps sqlpage
 
 export PORT=8282
 export allow_exec=true

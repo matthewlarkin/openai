@@ -1,11 +1,6 @@
 #!/usr/bin/env bash
 
-USER_DIR="$(pwd)"
-cd "$(dirname "$0")" || exit 1
-PATH="./:$PATH"
-
-source .lib/barerc
-source .lib/functions
+cd "$(dirname "$0")" && source .lib/barerc || exit 1
 
 [[ $1 == '--version' || $1 == '-v' ]] && echo "$BARE_VERSION" && exit 0
 
@@ -51,5 +46,3 @@ EOF
 	*) script_name="$1" && shift && ./"$script_name" "$@"
 
 esac
-
-cd "$USER_DIR" || exit

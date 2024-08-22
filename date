@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+cd "$(dirname "$0")" && source .lib/barerc || exit 1
+
 # Capture input if piped
 [[ -t 0 ]] || input=$(cat)
 

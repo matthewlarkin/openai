@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
 
+cd "$(dirname "$0")" && source .lib/barerc || exit 1
+
 [[ -t 0 ]] && file=$1 || file=$(cat)
 
 [[ $# == 2 ]] && destination="$2" || destination="$1"

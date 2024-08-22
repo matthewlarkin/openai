@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -e
+cd "$(dirname "$0")" && source .lib/barerc || exit 1
 
 deps dig
 

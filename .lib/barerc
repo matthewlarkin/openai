@@ -4,6 +4,8 @@
 # DO NOT put your API keys or other user user config here,
 # as this file will be overwritten on bare update.
 
+PATH="./:$PATH"
+
 deps git
 
 # Detect macOS, Ubuntu, or Other
