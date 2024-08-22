@@ -49,16 +49,19 @@ assistant_prompt="You are a helpful assistant.";
 }' && exit 0
 
 
+command="chat"
 
+args=() && for arg in "$@"; do
+	case $arg in
+		chat|voice|listen|transcribe) command=$arg && shift ;;
+		*) args+=("$arg") && shift ;;
+	esac
+done && set -- "${args[@]}"
 
-
-# Cycle through commands
-
-case "$1" in 
+case $command in 
 
     "chat" )
 
-        shift
 		# Initialize variables
 		if [[ $mode == 'high-powered' ]]; then
 			model="gpt-4o"
@@ -160,7 +163,6 @@ case "$1" in
 
 	"voice" )
 		
-		shift
 		model='tts-1'
 		voice='alloy'
 		response_format='mp3'
@@ -226,7 +228,6 @@ case "$1" in
 
 	"transcribe" )
 
-		shift
 		model='whisper-1'
 		language='en'
 		prompt=''
@@ -285,8 +286,6 @@ case "$1" in
 		echo "$response" | jq -r '.text'
 		;;
 
-	* )
-		echo "Invalid argument"
-		exit 1
-		;;
+	* ) echo "Invalid command" && exit 1 ;;
+
 esac
