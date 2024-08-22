@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+
+deps glow
+
+function main() {
+	echo "$@" | glow
+}
+
+run_script "$@"
