@@ -5,41 +5,43 @@ cd "$(dirname "$0")" && source .lib/barerc || exit 1
 # Read input from stdin if not provided as an argument
 
 function main() {
-	local script="$1" && shift
-	# Parse arguments
-	remaining_args=() && while [[ $# -gt 0 ]]; do
+
+	local args script csv
+
+	args=() && while [[ $# -gt 0 ]]; do
 		case $1 in
-			by) shift && by='1' ;;
-			over) shift && over='1' ;;
-			loop) shift && loop='1' ;;
-			with)
-				shift
-				[[ $1 == 'named' && $2 == 'arguments' ]] && {
-					with_named_arguments='1'
-				} && shift 2
-				# if $3 is a file and it's a .csv
-				if [[ -f $1 && $1 == *.csv ]]; then
-					input=$(cat "$1") && shift
-				fi
-				;;
-			*) remaining_args+=("$1") && shift ;;
+			:over) csv=$2 && shift 2 ;;
+			*) args+=("$1") && shift ;;
 		esac
-	done && set -- "${remaining_args[@]}"
+	done && set -- "${args[@]}"
 
-	# If input is a file, read its contents
-	[[ -f $input ]] && input=$(cat "$input")
+	script="$1" && shift
 
-	# If 'over' flag is set, iterate over each word in the input
-	if [[ $with_named_arguments == '1' ]]; then
-		echo "$input" | loop "$script"
-	elif [[ $loop == '1' ]]; then
-		for item in $input; do
-			interpret "$script" "$item"
+	if [[ -n $csv && -f $csv ]]; then
+
+		csv=$(cat "$csv")
+
+		IFS=',' read -r -a fields <<< "$(echo "$csv" | head -n 1)"
+
+		echo "$csv" | tail -n +2 | while IFS=',' read -r line; do
+
+			IFS=',' read -r -a values <<< "$line"
+			
+			for ((i=0; i<${#fields[@]}; i++)); do
+				field_name="${fields[$i]}"
+				field_value="${values[$i]}"
+				field_value=$(echo "$field_value" | xargs | sed 's/^"\|"$//g')
+				export "$field_name"="$field_value"
+			done
+
+			interpret "$script" "$@"
+
 		done
-	elif [[ $by == '1' || $over == '1' ]]; then
-		interpret "$script" "$@"
+
 	else
+
 		interpret "$script" "$@"
+
 	fi
 
 }

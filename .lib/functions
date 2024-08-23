@@ -2,15 +2,44 @@
 
 function run_script() {
 
-	[[ $1 == 'line-by-line' ]] && line_by_line=1 && shift
+	local args mode
+
+	mode='prepend'
+
+	args=() && for arg in "$@"; do
+		case $arg in
+			line-by-line|--line-by-line) mode='line-by-line' ;;
+			--prepend-input) mode='prepend' ;;
+			--append-input) mode='append' ;;
+			--as-arguments) mode='arguments' ;;
+			--named) mode='named' ;;
+			*) args+=("$arg") ;;
+		esac
+	done && set -- "${args[@]}"
 
 	if [[ -t 0 ]]; then
 		main "$@";
 	else
-		[[ $line_by_line == '1' ]] && {
-			cat | while read -r line; do main "$@" "$line"  ; done;
+		[[ $mode == 'line-by-line' ]] && {
+			while read -r line; do
+				[[ $mode == 'prepend' ]] && \
+					main  "$line" "$@" && exit 0
+				[[ $mode == 'append' ]] && \
+					main "$@" "$line" && exit 0
+				[[ $mode == 'arguments' ]] && \
+					main "$@" $line && exit 0
+				[[ $mode == 'named' ]] && \
+					main "$@" --input "$line" && exit 0
+			done < <(cat)
 		} || {
-			main "$(cat)" "$@"
+			[[ $mode == 'prepend' ]] && \
+				main  "$(cat)" "$@" && exit 0
+			[[ $mode == 'append' ]] && \
+				main "$@" "$(cat)" && exit 0
+			[[ $mode == 'arguments' ]] && \
+				main "$@" $(cat) && exit 0
+			[[ $mode == 'named' ]] && \
+				main "$@" --input "$(cat)" && exit 0
 		}
 	fi
 } && export -f run_script
