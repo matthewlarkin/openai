@@ -32,7 +32,6 @@ Below are some of the core bare scripts callable by `./bare`.
 - [geo](/commands/?script=geo)
 - [image](/commands/?script=image)
 - [interpret](/commands/?script=interpret)
-- [loop](/commands/?script=loop)
 - [lowercase](/commands/?script=lowercase)
 - [media](/commands/?script=media)
 - [note](/commands/?script=note)
