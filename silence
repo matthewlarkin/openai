@@ -1,5 +1,0 @@
-#!/usr/bin/env bash
-
-cd "$(dirname "$0")" && source .lib/barerc || exit 1
-
-echo "$1" >> /dev/null && exit 0

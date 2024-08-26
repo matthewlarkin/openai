@@ -1,6 +1,201 @@
 #!/usr/bin/env bash
 
-cd "$(dirname "$0")" || exit 1
+cd "$(dirname "$0")" || return 1
+BARE_DIR=$(pwd) && export BARE_DIR
+
+function bareHealthCheck() {
+
+	[[ ! -f bare.sh ]] && { echo "Error: not in bare directory"; return 1; }
+
+	local item
+
+	mkdir -p home && cd home || return 1
+	mkdir -p .cache .lib .logs desktop downloads recfiles scripts && cd .. || return 1
+	touch home/.barerc
+	for item in document openai; do
+		mkdir -p home/recfiles/$item; done
+	for item in list tags; do
+		touch home/recfiles/document/$item.rec; done;
+	for item in assistants messages threads; do
+		touch home/recfiles/openai/$item.rec; done
+
+}
+
+
+
+function bareRunCommands() {
+
+	# Detect macOS, Ubuntu, or Other
+	local OS
+	OS=$({
+		[[ $(uname) == 'Linux' ]] \
+			&& grep -q 'Ubuntu' /etc/os-release \
+			&& echo "Ubuntu"
+		[[ $(uname) == 'Darwin' ]] && echo "macOS"
+	} || echo "Other") && export OS
+
+	# Set the values in the associative array
+	local -A BASE_CONFIG
+	BASE_CONFIG=(
+		["BARE_VERSION"]=$(git log -1 --format=%ct)
+		["BARE_DIR"]=$(pwd)
+		["BARE_TIMEZONE"]=UTC
+		["BARE_COLOR"]=0
+		["BARE_DEBUG"]=0
+		["BARE_REMOTE"]=''
+		["HETZNER_API_TOKEN"]=''
+		["DIGITALOCEAN_API_TOKEN"]=''
+		["LINODE_API_TOKEN"]=''
+		["VULTR_API_TOKEN"]=''
+		["OPENAI_API_KEY"]=''
+		["STRIPE_SECRET_KEY"]=''
+		["POSTMARK_SERVER_TOKEN"]=''
+		["TOMORROW_WEATHER_API_KEY"]=''
+	) && for key in "${!BASE_CONFIG[@]}"; do
+		export "$key"="${BASE_CONFIG[$key]}"
+	done
+
+	# shellcheck disable=SC1091
+	source "$BARE_DIR/home/.barerc"
+
+	# Colors for script output
+	local RED GREEN YELLOW BLUE GRAY RESET
+	[[ $BARE_COLOR == 1 ]] && {
+		RED=$'\e[31m'
+		GREEN=$'\e[32m'
+		YELLOW=$'\e[33m'
+		BLUE=$'\e[34m'
+		GRAY=$'\e[2;37m'
+		RESET=$'\e[0m'
+		export RED GREEN YELLOW BLUE GRAY RESET
+	}
+
+	bareHealthCheck
+
+}
+
+
+
+
+function setup() {
+
+	function setCoreVariables() {
+
+		local variables logfile steps_required
+
+		steps_required='false'
+
+		variables=(
+			"OPENAI_API_KEY"
+			"POSTMARK_API_TOKEN"
+			"BARE_EMAIL_FROM"
+			"STRIPE_SECRET_KEY"
+			"EDITOR"
+		)
+
+		logfile="$BARE_DIR/home/.logs/system-report.$(date +%Y-%m-%d).md"
+
+		echo ""
+		echo "${BLUE}Checking core variables ...${RESET}"
+		echo ""
+		sleep 0.2
+
+		echo "System Report $(date)" > "$logfile"
+		echo "- - - - -" >> "$logfile"
+
+		# Verify that core variables exist in $BARE_DIR/home/.barerc
+		for var in "${variables[@]}"; do
+			if ! grep -q "^$var=" "$BARE_DIR/home/.barerc"; then
+				echo "$var=''" >> "$BARE_DIR/home/.barerc"
+				sleep 0.2
+				echo "- Variable *'$var'* is missing. It has been added with an empty value to *$BARE_DIR/home/.barerc*." >> "$logfile"
+				steps_required='true'
+			fi
+		done
+
+		sleep 0.2
+
+		if [[ "$steps_required" == 'true' ]]; then
+			echo " | ${RED}Extra steps required${RESET}: a system report with missing variables was written to:"
+			echo " | ${GRAY}$logfile${RESET}."
+		else
+			echo -e " | ${GREEN}All core variables are set!${RESET}"
+		fi
+	}
+
+	function checkDependencies() {
+
+		local dependencies logfile steps_required
+
+		steps_required='false'
+
+		declare -A dependencies=(
+			["jq"]="jq"
+			["yq"]="yq"
+			["yt-dlp"]="yt-dlp"
+			["curl"]="curl"
+			["ffmpeg"]="ffmpeg"
+			["recsel"]="recutils"
+			["sqlite3"]="sqlite3"
+			["httpd"]="apache2"
+			["pandoc"]="pandoc"
+			["xxd"]="xxd"
+			["php"]="php"
+			["awk"]="awk"
+			["perl"]="perl"
+			["openssl"]="openssl"
+			["magick"]="imagemagick"
+			["qrencode"]="qrencode"
+			["csvcut"]="csvkit"
+		)
+
+		# Only add gdate for macOS
+		if [[ "$OS" != "Ubuntu" ]]; then
+			dependencies["gdate"]="coreutils"
+		fi
+
+		logfile="$BARE_DIR/home/.logs/system-report.$(date +%Y-%m-%d).md"
+
+		echo ""
+		echo "${BLUE}Checking dependencies ...${RESET}"
+		echo ""
+		sleep 0.2
+
+		echo "System Report $(date)" > "$logfile"
+		echo "- - - - -" >> "$logfile"
+
+		# Check and log missing dependencies
+		for package in "${!dependencies[@]}"; do
+			if ! command -v "$package" &> /dev/null; then
+				sleep 0.2
+				echo "- Dependency *'$package'* not found. Please install *'${dependencies[$package]}'* manually." >> "$logfile"
+				steps_required='true'
+			fi
+		done
+
+		sleep 0.2
+
+		if [[ "$steps_required" == 'true' ]]; then
+			echo " | ${RED}Extra steps required${RESET}: a system report with recommendations was written to:"
+			echo " | ${GRAY}$logfile${RESET}."
+		else
+			echo -e " | ${GREEN}All good!${RESET}"
+		fi
+	}
+
+	checkDependencies
+	setCoreVariables
+
+	echo ""
+	echo "${GREEN}System check complete.${RESET}"
+	echo ""
+
+	unset -f checkDependencies
+	unset -f setCoreVariables
+
+}
+
+
 
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -8,29 +203,21 @@ cd "$(dirname "$0")" || exit 1
 # HELPER FUNCTIONS
 
 
-
-function getInput() {
-	[[ -t 0 ]] || cat
-}
-
-
-
 function isValidFunc() {
 
-	local command
-	local function_names
+	local command function_names func
 
-	command=$1
+	command="$1"
 	mapfile -t function_names < <(declare -F | awk '{print $3}')
 
 	for func in "${function_names[@]}"; do
 		if [[ "$func" == "$command" ]]; then
-			return 0
+			echo 'true' && return 0
 		fi
 	done
 
 	return 1
-	
+
 }
 
 
@@ -50,6 +237,72 @@ function runBareTerminal() {
 		echo "PS1=\"🐻 \[\${GREEN}\]\$(basename \$(pwd)) \[\${YELLOW}\]> \[\${RESET}\]\""
 		echo "printf \"\n\${GRAY}entering bare terminal. type exit to leave.\${RESET}\n\""
 	})
+}
+
+
+
+function bareSync() {
+
+	# sync www
+	rsync -a --ignore-existing .lib/.var/ .var >> /dev/null
+	mkdir -p ".var/www" && rsync -av ".lib/.var/www/" ".var/www/" >> /dev/null
+
+	# touch and secure profiles and database
+	touch .var/sync
+	touch ~/.barerc && chmod 600 ~/.barerc
+	touch .var/bare.rec && chmod 600 .var/bare.rec
+
+	if [[ "$OS" == "macOS" ]]; then
+		touch ~/.bash_profile
+	else
+		touch ~/.bashrc
+	fi
+
+	# sync recfiles
+	local recdefs recfile recdefs_blocks recfile_trimmed output rec_type block
+
+	# Read the content of .etc/bare.rec and .var/bare.rec
+	recdefs=$(cat .etc/bare.rec)
+	recfile=$(cat .var/bare.rec)
+
+	# Extract and prepare %rec: blocks from recdefs
+	recdefs_blocks=$(echo "$recdefs" | awk '/^%rec:/ {if (rec) print rec; rec=$0; next} /^%/ {rec=rec"\n"$0} END {print rec}')
+
+	# Function to get a block from recdefs by type
+	get_rec_block() {
+		local type=$1
+		echo "$recdefs_blocks" | awk -v type="$type" '
+		$1 == "%rec:" && $2 == type {
+			rec=$0
+			while (getline > 0) {
+				if ($1 == "%rec:") break
+				rec=rec"\n"$0
+			}
+			print rec
+			exit
+		}'
+	}
+
+	# Trim the recfile to remove any lines that start with % (except those that start with %rec:)
+	recfile_trimmed=$(echo "$recfile" | sed '/^%[^r]/d')
+
+	# Process recfile_trimmed to insert corresponding %rec: blocks
+	output=""
+	while IFS= read -r line; do
+		if [[ $line =~ ^%rec: ]]; then
+			rec_type=$(echo "$line" | cut -d' ' -f2)
+			block=$(get_rec_block "$rec_type")
+			output+="$block"$'\n'
+		else
+			output+="$line"$'\n'
+		fi
+	done <<< "$recfile_trimmed"
+
+	echo "$output" > .var/bare.rec
+
+	# clean up
+	unset -f get_rec_block
+
 }
 
 
@@ -75,16 +328,11 @@ function renew() { # alias for refresh, quicker to type
 
 function age() {
 
-	local input
-	local date_cmd
-	local stat_cmd
-	local output
-	local in
-	local variant
+	local input date_cmd stat_cmd output in variant
 
-	input=$(getInput)
+	[[ -p /dev/stdin ]] && input=$(cat) || input=$1 && shift
 
-	[[ -z $input ]] && echo "No input provided"
+	[[ -z "$input" ]] && echo "No input provided"
 
 	# Check if gdate and gstat are available, otherwise use date and stat
 	if command -v gdate &> /dev/null; then
@@ -103,7 +351,7 @@ function age() {
 	validate_date() {
 		local date_input="$1"
 		if [[ "$date_input" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || [[ "$date_input" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}\ [0-9]{2}:[0-9]{2}:[0-9]{2}$ ]]; then
-			$date_cmd -d "$date_input" +"%Y-%m-%d %H:%M:%S" >/dev/null 2>&1
+			"$date_cmd" -d "$date_input" +"%Y-%m-%d %H:%M:%S" >/dev/null 2>&1
 			return $?
 		else
 			return 1
@@ -118,8 +366,7 @@ function age() {
 
 	# Function to get the file's creation or modification timestamp
 	get_file_timestamp() {
-		local file_path="$1"
-		local variant="$2"
+		local file_path="$1" variant="$2"
 		
 		if [[ $variant == "modified" ]]; then
 			"$stat_cmd" -c %Y "$file_path"
@@ -137,22 +384,22 @@ function age() {
 	variant="birth"
 
 	# Gather flags
-	while [[ $# -gt 0 ]]; do
-		case "$1" in
-			--modified) variant="modified"; shift ;;
-			--years) in="years"; shift ;;
-			--months) in="months"; shift ;;
-			--weeks) in="weeks"; shift ;;
-			--days) in="days"; shift ;;
-			--hours) in="hours"; shift ;;
-			--minutes) in="minutes"; shift ;;
-			--date|--birth) in="date"; shift ;;
-			*) echo "Unknown option: $1"; exit 1 ;;
-		esac
+	for arg in "$@"; do
+	    case "$arg" in
+	        --modified) variant="modified" ;;
+	        --years) in="years" ;;
+	        --months) in="months" ;;
+	        --weeks) in="weeks" ;;
+	        --days) in="days" ;;
+	        --hours) in="hours" ;;
+	        --minutes) in="minutes" ;;
+	        --date|--birth) in="date" ;;
+	        *) echo "Unknown option: $arg" && return 0 ;;
+	    esac
 	done
 
 	# Determine if the input is a file or a date
-	if [[ -f $input ]]; then
+	if [[ -f "$input" ]]; then
 		# It's a file, get the appropriate timestamp
 		file_timestamp=$(get_file_timestamp "$input" "$variant")
 		current_timestamp=$($date_cmd +%s)
@@ -164,7 +411,6 @@ function age() {
 		output=$((current_timestamp - date_timestamp))
 	else
 		echo "Invalid input: expected file or date format (yyyy-mm-dd or yyyy-mm-dd hh:mm:ss)"
-		exit 1
 	fi
 
 	# Function to convert time based on the selected unit
@@ -199,27 +445,29 @@ function age() {
 
 	echo "$output"
 
+	unset -f validate_date
+	unset -f get_date_timestamp
+	unset -f get_file_timestamp
+	unset -f convert_time
+
 }
 
 
 function capitalize() {
 
-	local all
-	local input
-	local remaining_args
+	local all input args
 
-	remaining_args=() && while true; do
+	args=() && while [[ $# -gt 0 ]]; do
 		case $1 in
-			'') break ;;
 			--all) all=1 && shift ;;
-			*) remaining_args+=("$1") && shift ;;
+			*) args+=("$1") && shift ;;
 		esac
-	done && set -- "${remaining_args[@]}"
+	done && set -- "${args[@]}"
 
-	[[ -t 0 ]] && input=$* || input=$(cat)
+	[[ -p /dev/stdin ]] && input=$(cat) || input=$*
 
 	# if 'all', capitalize all words
-	if [[ -n $all ]]; then
+	if [[ -n "$all" ]]; then
 		transform "$input" --capitalize --all
 	else
 		transform "$input" --capitalize
@@ -228,15 +476,14 @@ function capitalize() {
 }
 
 
-
 function cloud() {
 
 	function getCloudProvider() {
 
-		[[ -n $HETZNER_API_TOKEN ]] && echo "hetzner"
-		[[ -n $DIGITALOCEAN_API_TOKEN ]] && echo "digitalocean"
-		[[ -n $LINODE_API_TOKEN ]] && echo "linode"
-		[[ -n $VULTR_API_TOKEN ]] && echo "vultr"
+		[[ -n "$HETZNER_API_TOKEN" ]] && echo "hetzner" && exit 0
+		[[ -n "$DIGITALOCEAN_API_TOKEN" ]] && echo "digitalocean" && exit 0
+		[[ -n "$LINODE_API_TOKEN" ]] && echo "linode" && exit 0
+		[[ -n "$VULTR_API_TOKEN" ]] && echo "vultr" && exit 0
 		{
 			echo "Error: no cloud provider set."
 			echo ""
@@ -269,8 +516,7 @@ function cloud() {
 	# shellcheck disable=SC2317
 	function hetzner_createSSH() {
 
-		local public_key
-		local name
+		local public_key name response
 
 		public_key=${1-""}
 		name=${2-"$(random string)"}
@@ -279,7 +525,6 @@ function cloud() {
 			echo "Error: public_key is required." >&2
 		fi
 
-		local response
 		response=$(curl -sL -X POST \
 			-H "Authorization: Bearer $HETZNER_API_TOKEN" \
 			-H "Content-Type: application/json" \
@@ -306,9 +551,7 @@ function cloud() {
 	# shellcheck disable=SC2317
 	function hetzner_createFirewall() {
 
-		local name
-		local rules
-		local response
+		local name rules response
 
 		name=$1
 		rules=$2
@@ -339,9 +582,7 @@ function cloud() {
 	# shellcheck disable=SC2317
 	function hetzner_createServer() {
 
-		local name
-		local key
-		local response
+		local name key response
 
 		name=$1
 		key=$2
@@ -377,10 +618,7 @@ function cloud() {
 
 	}
 
-	local cloud_provider
-	local command
-	local name
-	local key
+	local cloud_provider command name key
 
 	cloud_provider=$(getCloudProvider)
 	command=$1
@@ -426,17 +664,21 @@ function cloud() {
 
 
 
+
 function codec() {
 
-	local command
-	command=$1
+	local input command index json_array output lines start end reverse_flag
+
+	command=$1 && shift
+
+	[[ -p /dev/stdin ]] && input=$(cat) || input=$1 && shift
 
 	case $command in
 
 		hash)
 			# shellcheck disable=2005
 			echo "$(php -r "
-				\$password = '$1';
+				\$password = '$input';
 				\$hash = password_hash(\$password, PASSWORD_ARGON2ID, ['time_cost' => 3, 'memory_cost' => 65540, 'threads' => 4]);
 				echo \$hash;
 			")"
@@ -446,7 +688,7 @@ function codec() {
 			# shellcheck disable=2005
 			echo "$(php -r "
 				\$password = '$1';
-				\$hash = '$2';
+				\$hash = '$input';
 				if (password_verify(\$password, \$hash)) {
 					echo 'true';
 				} else {
@@ -476,57 +718,63 @@ function codec() {
 			else
 				convert_to_json_array "$1"
 			fi
-			
 			;;
 
 		items.index)
 
-			local input index json_array output
-			input=$(cat)
-			index="$1" && shift
-			json_array=$(echo -n "$1" | sed 's/ /", "/g; s/^/["/; s/$/"]/')
+			index=$1
+
+			json_array=$(echo -n "$input" | sed 's/ /", "/g; s/^/["/; s/$/"]/')
 			
 			output=""
 			if [[ -z "$index" ]]; then
 				# No index given, return all items
-				output=$(echo -n "$json_array" | jq -r '.[]')
+				echo -n "$json_array" | jq -r '.[]'
 			else
-				local indices
+				local indices array_length
 				IFS=',' read -ra indices <<< "$index"
+				array_length=$(echo -n "$json_array" | jq 'length')
 
 				for idx in "${indices[@]}"; do
+					reverse_flag=false
+					if [[ "$idx" =~ ^- ]]; then
+						reverse_flag=true
+						idx="${idx#-}"
+						json_array=$(echo -n "$json_array" | jq 'reverse')
+					fi
+
 					if [[ "$idx" =~ ^[0-9]+$ ]]; then
-						# Single index given
 						output+=$(echo -n "$json_array" | jq -r --argjson n "$idx" '.[$n]')$'\n'
 					elif [[ "$idx" =~ ^[0-9]+-[0-9]+$ ]]; then
-						local start end
 						start=$(echo -n "$idx" | cut -d'-' -f1)
 						end=$(echo -n "$idx" | cut -d'-' -f2)
 						output+=$(echo -n "$json_array" | jq -r --argjson start "$start" --argjson end "$end" '.['"$start"':'"$end"'+1][]')$'\n'
 					else
 						echo -n "Invalid index format: $idx"
-						exit 1
+					fi
+
+					if $reverse_flag; then
+						json_array=$(echo -n "$json_array" | jq 'reverse')
 					fi
 				done
 
 				# Trim the trailing newline from the final output
 				echo "${output%"${output##*[![:space:]]}"}"
 			fi
-
 			;;
 
 		lines.index)
 
-			local index lines output
-			index="$1" && shift
-			lines=$(echo -n "$1" | awk '{$1=$1;print}' | jq -R -s -c 'split("\n") | map(select(length > 0))')
+			index=$1
+
+			lines=$(echo -n "$input" | awk '{$1=$1;print}' | jq -R -s -c 'split("\n") | map(select(length > 0))')
 
 			output=""
+			
 			if [[ -z "$index" ]]; then
 				# No index given, return all lines
-				output=$(echo -n "$lines" | jq -r '.[]' | codec newlines.decode)
+				echo -n "$lines" | jq -r '.[]' | codec newlines.decode
 			else
-				local indices reverse_flag start end
 				IFS=',' read -ra indices <<< "$index"
 
 				for idx in "${indices[@]}"; do
@@ -545,7 +793,6 @@ function codec() {
 						output+=$(echo -n "$lines" | jq -r --argjson start "$start" --argjson end "$end" '.['"$start"':'"$end"'+1][]')$'\n'
 					else
 						echo -n "Invalid index format: $idx"
-						exit 1
 					fi
 
 					if $reverse_flag; then
@@ -556,207 +803,169 @@ function codec() {
 				# Trim the trailing newline from the final output
 				echo "${output%"${output##*[![:space:]]}"}"
 			fi
-
 			;;
 
-		item.raw) 
-			local input
-			input="$1"
-			jq -r <<< "$input" 
+		item.raw)
+			jq -r <<< "$input"
 			;;
 
-		lines.markdown) 
-			local input
-			input="$1"
-			echo "${input//$'\n'/$'  \n'}" 
+		lines.markdown)
+			echo "${input//$'\n'/$'  \n'}"
 			;;
 
 		lines.items)
-			local input
-			input="$1"
 			echo "$input" | awk '{$1=$1;print}' | jq -R -s -c 'split("\n") | map(select(length > 0) | @json) | join(" ")' | sed 's/\\\"/\"/g' | sed 's/^"//;s/"$//'
 			;;
 
-		text.filesafe) 
-			local input
-			input="$1"
-			sed 's/ /-/g; s/[^a-zA-Z0-9._-]//g' <<< "$input" 
+		text.filesafe)
+			sed 's/ /-/g; s/[^a-zA-Z0-9._-]//g' <<< "$input"
 			;;
 
-		json.encode) 
-			local input
-			input="$1"
-			jq -s -R -r @json <<< "$input" 
+		json.encode)
+			jq -s -R -r @json <<< "$input"
 			;;
 
-		json.decode) 
-			local input
-			input="$1"
-			jq -r . <<< "$input" 
+		json.decode)
+			jq -r . <<< "$input"
 			;;
 
 		newlines.encode)
-			local input
-			input="$1"
 			while IFS= read -r line || [[ -n "$line" ]]; do
 				printf '%s\\n' "$line"
 			done <<< "$input"
 			;;
 
-		newlines.decode) 
-			local input
-			input="$1"
-			echo -e "$input" 
+		newlines.decode)
+			echo -e "$input"
 			;;
 
-		url.encode) 
-			local input
-			input="$1"
-			echo -n "$input" | jq -s -R -r @uri 
+		url.encode)
+			echo -n "$input" | jq -s -R -r @uri
 			;;
 
-		url.decode) 
-			local input
-			input="$1"
-			perl -pe 'chomp; s/%([0-9a-f]{2})/sprintf("%s", pack("H2",$1))/eig' <<< "$input" && echo "" 
+		url.decode)
+			perl -pe 'chomp; s/%([0-9a-f]{2})/sprintf("%s", pack("H2",$1))/eig' <<< "$input" && echo ""
 			;;
 
 		form-data.encode)
-			local input_string
-			input_string="$1"
 			python3 - <<END
-			import json
-			import urllib.parse
+import json
+import urllib.parse
 
-			def flatten(d, parent_key=''):
-				items = []
-				for k, v in d.items():
-					new_key = f"{parent_key}[{k}]" if parent_key else k
-					if isinstance(v, dict):
-						items.extend(flatten(v, new_key).items())
-					elif isinstance(v, list):
-						for i, sub_v in enumerate(v):
-							items.extend(flatten({str(i): sub_v}, new_key).items())
-					else:
-						items.append((new_key, v))
-				return dict(items)
+def flatten(d, parent_key=''):
+	items = []
+	for k, v in d.items():
+		new_key = f"{parent_key}[{k}]" if parent_key else k
+		if isinstance(v, dict):
+			items.extend(flatten(v, new_key).items())
+		elif isinstance(v, list):
+			for i, sub_v in enumerate(v):
+				items.extend(flatten({str(i): sub_v}, new_key).items())
+		else:
+			items.append((new_key, v))
+	return dict(items)
 
-			# Load JSON from input string
-			input_string = """$input_string"""
-			json_obj = json.loads(input_string)
+# Load JSON from input string
+input_string = """$input"""
+json_obj = json.loads(input_string)
 
-			# Flatten the JSON
-			flat_json = flatten(json_obj)
+# Flatten the JSON
+flat_json = flatten(json_obj)
 
-			# Encode as form-data
-			encoded = "&".join(f"{k}={urllib.parse.quote_plus(str(v))}" for k, v in flat_json.items())
-			print(encoded)
+# Encode as form-data
+encoded = "&".join(f"{k}={urllib.parse.quote_plus(str(v))}" for k, v in flat_json.items())
+print(encoded)
 END
 			;;
 
 		form-data.decode)
-			local input_string
-			input_string="$1"
-
 			# Use Python to parse the input and convert it to JSON
 			python3 - <<END
-			import urllib.parse
-			import json
-			import re
+import urllib.parse
+import json
+import re
 
-			# Input string from Bash
-			input_string = "$input_string"
+# Input string from Bash
+input_string = "$input"
 
-			# Parse the query string
-			parsed = urllib.parse.parse_qsl(input_string)
+# Parse the query string
+parsed = urllib.parse.parse_qsl(input_string)
 
-			# Initialize a dictionary to hold the final JSON structure
-			json_obj = {}
+# Initialize a dictionary to hold the final JSON structure
+json_obj = {}
 
-			# Function to set nested keys in the dictionary
-			def set_nested_value(d, keys, value):
-				for key in keys[:-1]:
-					if key.isdigit():
-						key = int(key)
-					if isinstance(d, list) and isinstance(key, int):
-						while len(d) <= key:
-							d.append({})
-						d = d[key]
-					else:
-						d = d.setdefault(key, {})
-				final_key = keys[-1]
-				if final_key.isdigit():
-					final_key = int(final_key)
-				if isinstance(d, list) and isinstance(final_key, int):
-					while len(d) <= final_key:
-						d.append({})
-					d[final_key] = value
-				else:
-					d[final_key] = value
+# Function to set nested keys in the dictionary
+def set_nested_value(d, keys, value):
+	for key in keys[:-1]:
+		if key.isdigit():
+			key = int(key)
+		if isinstance(d, list) and isinstance(key, int):
+			while len(d) <= key:
+				d.append({})
+			d = d[key]
+		else:
+			d = d.setdefault(key, {})
+	final_key = keys[-1]
+	if final_key.isdigit():
+		final_key = int(final_key)
+	if isinstance(d, list) and isinstance(final_key, int):
+		while len(d) <= final_key:
+			d.append({})
+		d[final_key] = value
+	else:
+		d[final_key] = value
 
-			# Loop through the parsed key-value pairs and structure them into nested JSON
-			for key, value in parsed:
-				# Split the key into parts based on bracket notation
-				parts = re.findall(r'\w+', key)
-				set_nested_value(json_obj, parts, value)
+# Loop through the parsed key-value pairs and structure them into nested JSON
+for key, value in parsed:
+	# Split the key into parts based on bracket notation
+	parts = re.findall(r'\w+', key)
+	set_nested_value(json_obj, parts, value)
 
-			# Convert dictionaries with integer keys into lists
-			def convert_to_list(obj):
-				if isinstance(obj, dict):
-					keys = obj.keys()
-					if all(isinstance(k, int) for k in keys):
-						max_index = max(keys)
-						lst = [obj.get(i, {}) for i in range(max_index + 1)]
-						return [convert_to_list(v) for v in lst]
-					else:
-						return {k: convert_to_list(v) for k, v in obj.items()}
-				elif isinstance(obj, list):
-					return [convert_to_list(v) for v in obj]
-				else:
-					return obj
+# Convert dictionaries with integer keys into lists
+def convert_to_list(obj):
+	if isinstance(obj, dict):
+		keys = obj.keys()
+		if all(isinstance(k, int) for k in keys):
+			max_index = max(keys)
+			lst = [obj.get(i, {}) for i in range(max_index + 1)]
+			return [convert_to_list(v) for v in lst]
+		else:
+			return {k: convert_to_list(v) for k, v in obj.items()}
+	elif isinstance(obj, list):
+		return [convert_to_list(v) for v in obj]
+	else:
+		return obj
 
-			# Convert and print the final JSON output
-			final_json = convert_to_list(json_obj)
-			print(json.dumps(final_json, indent=2))
+# Convert and print the final JSON output
+final_json = convert_to_list(json_obj)
+print(json.dumps(final_json, indent=2))
 END
 			;;
 
-		base64.encode) 
-			local input
-			input="$1"
-			perl -MMIME::Base64 -ne 'print encode_base64($_)' <<< "$input" 
+		base64.encode)
+			perl -MMIME::Base64 -ne 'print encode_base64($_)' <<< "$input"
 			;;
 
-		base64.decode) 
-			local input
-			input="$1"
-			perl -MMIME::Base64 -ne 'print decode_base64($_)' <<< "$input" 
+		base64.decode)
+			perl -MMIME::Base64 -ne 'print decode_base64($_)' <<< "$input"
 			;;
 
-		hex.encode) 
-			local input
-			input="$1"
-			xxd -ps <<< "$input" 
+		hex.encode)
+			xxd -ps <<< "$input"
 			;;
 
 		hex.decode) 
-			local input
-			input="$1"
-			xxd -r -p <<< "$input" 
+			xxd -r -p <<< "$input"
 			;;
 
-		html.encode) 
-			local input
-			input="$1"
+		html.encode)
 			# shellcheck disable=SC2016
-			php -R 'echo htmlentities($argn, ENT_QUOTES|ENT_HTML5) . "\n";' <<< "$input" 
+			php -R 'echo htmlentities($argn, ENT_QUOTES|ENT_HTML5) . "\n";' <<< "$input"
 			;;
 
 		html.decode) 
-			local input
-			input="$1"
 			# shellcheck disable=SC2016
-			php -R 'echo html_entity_decode($argn, ENT_QUOTES|ENT_HTML5) . "\n";' <<< "$input" 
+			php -R 'echo html_entity_decode($argn, ENT_QUOTES|ENT_HTML5) . "\n";' <<< "$input"
 			;;
 
 	esac
@@ -765,21 +974,24 @@ END
 
 
 
+
 function copy() {
 
-	local file
-	local destination
+	local file destination
 
-	[[ -t 0 ]] && file=$1 || file=$(cat)
+	[[ -p /dev/stdin ]] && file=$(cat) || file=$1
 
-	[[ $# == 2 ]] && destination="$2" || destination="$1"
+	while [[ $# -gt 1 ]]; do shift; done;
+	destination=$1
 
-	[[ ! -f "$file" ]] && echo "Error: file '$file' does not exist." && exit 1
-	[[ -z $destination ]] && echo "Error: destination not provided." && exit 1
+
+	[[ ! -f "$file" ]] && { echo "Error: file '$file' does not exist."; return 1; }
+	[[ -z $destination ]] && { echo "Error: destination not provided."; return 1; }
 
 	cp "$file" "$destination"
 
 }
+
 
 
 
@@ -793,7 +1005,8 @@ function date() {
 	local custom_format
 	local format_parts
 
-	input=$(getInput)
+
+	[[ -p /dev/stdin ]] && input=$(cat) || input=$1 && shift
 
 	# set system timezone temporarily
 	TZ="$BARE_TIMEZONE"
@@ -934,7 +1147,6 @@ function deps() {
 				printf '%s, ' "$dep"
 			fi
 		done && echo "."
-		exit 1
 	fi
 
 }
@@ -954,9 +1166,9 @@ function download() {
 
 	[[ -t 0 ]] && url=$1 && shift || url=$(cat)
 
-	[[ -z $url ]] && echo "No URL provided" && exit 1
+	[[ -z $url ]] && echo "No URL provided"
 
-	[[ $(validate url "$url") == 'false' ]] && echo "Invalid URL" && exit 1
+	[[ $(validate url "$url") == 'false' ]] && echo "Invalid URL"
 
 	# check if this is a YouTube link
 	[[ "$(youtube id "$url")" = 'Invalid YouTube URL' ]] && is_youtube=0 || is_youtube=1
@@ -967,7 +1179,7 @@ function download() {
 
 	if [[ "$is_youtube" = 1 ]]; then
 
-		youtube download "$url" "$@" && exit 0
+		youtube download "$url" "$@"
 
 	else
 
@@ -996,7 +1208,7 @@ function download() {
 
 		extension="${mime_extension_map[$mime_type]}"
 
-		[[ -z "$extension" ]] && echo "Unsupported MIME type: $mime_type" && exit 1
+		[[ -z "$extension" ]] && echo "Unsupported MIME type: $mime_type"
 
 		# Construct the final output file name with the correct extension
 		output_file=".var/downloads/${output_name}.${extension}"
@@ -1017,7 +1229,7 @@ function email() {
 
 	[[ -z "$POSTMARK_SERVER_TOKEN" ]] && {
 		echo "POSTMARK_SERVER_TOKEN is not set"
-	} && exit 1
+	}
 
 	# set default from to BARE_EMAIL_FROM
 	from=$BARE_EMAIL_FROM
@@ -1028,7 +1240,6 @@ function email() {
 			--subject) subject="$2"; shift 2 ;;
 			--body) body="$2"; shift 2 ;;
 			--cc) cc="$2"; shift 2 ;;
-			--attachment) attachment="$2"; shift 2 ;;
 			--bcc) bcc="$2"; shift 2 ;;
 			--from) from="$2"; shift 2 ;;
 			--reply-to) reply_to="$2"; shift 2 ;;
@@ -1040,9 +1251,9 @@ function email() {
 	[[ -n "$template" ]] && body=$(render "$template" "$@" --to-html);
 
 	# Single email mode
-	[[ -z "$to" ]] && echo "No recipient specified, use --to to specify a recipient" && exit 1
-	[[ -z "$subject" ]] && echo "No subject specified, use --subject to specify a subject" && exit 1
-	[[ -z "$body" ]] && echo "No body specified, use --body to specify a body" && exit 1
+	[[ -z "$to" ]] && echo "No recipient specified, use --to to specify a recipient"
+	[[ -z "$subject" ]] && echo "No subject specified, use --subject to specify a subject"
+	[[ -z "$body" ]] && echo "No body specified, use --body to specify a body"
 
 	# if .var/email/signature.md exists, append it to the end of the email body
 	[[ -f ".var/email/signature.md" ]] && body="$body<p>- - -</p>$(render email/signature.md --to-html)";
@@ -1098,7 +1309,7 @@ function filter() {
 
 			;;
 
-		*) echo "Invalid filter: $filter"; exit 1 ;;
+		*) echo "Invalid filter: $command" ;;
 
 	esac
 
@@ -1109,55 +1320,57 @@ function filter() {
 function geo() {
 
 	deps curl jq
-	touch .var/.cache/geo.txt
+	touch home/.cache/geo.txt
 
 	format_location() {
-		local location
+		local loc="$1"
 
-		if [[ -z $1 ]]; then
-			location=$(curl -sL https://ipinfo.io/ip)
+		if [[ -z "$loc" ]]; then
+			loc=$(curl -sL https://ipinfo.io/ip)
 		else
-			location=${1//, /+}
-			echo "$location"
+			loc=${loc//, /+}
 		fi
+
+		echo "$loc"
 	}
 
 	local location
 	local type
 	local decimals
 	local coordinates
-	local remaining_args
+	local args
 
-	remaining_args=() && while [[ $# -gt 0 ]]; do
+	args=() && while [[ $# -gt 0 ]]; do
 		case $1 in
-			--decimals) decimals=$2 && shift 2 ;;
-			--type) type=$2 && shift 2 ;;
-			--location) location=$2 && shift 2 ;;
-			*) remaining_args+=("$1") && shift ;;
+			--decimals) decimals="$2"; shift 2 ;;
+			--type) type="$2"; shift 2 ;;
+			--location) location="$2"; shift 2 ;;
+			*) args+=("$1"); shift ;;
 		esac
-	done && set -- "${remaining_args[@]}"
+	done && set -- "${args[@]}"
 
-	[[ -z $location ]] && location=${1:-asheville-nc}
-	[[ -z $type ]] && type="city"
-	[[ -z $decimals ]] && decimals=2
+	# Set defaults
+	[[ -z "$location" ]] && location=${1:-asheville-nc}
+	[[ -z "$type" ]] && type="city"
+	[[ -z "$decimals" ]] && decimals=2
 
 	location=$(format_location "$location")
 	[[ $location =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] && type="ip" || type="city"
 
 	# Check if the location is in the geo.txt file
-	if grep -q "^$location " .var/.cache/geo.txt; then
+	if grep -q "^$location " home/.cache/geo.txt; then
 		# If the location is in the file, get the coordinates from the file
-		coordinates=$(grep "^$location " .var/.cache/geo.txt | cut -d ' ' -f 2)
+		coordinates=$(grep "^$location " home/.cache/geo.txt | cut -d ' ' -f 2)
 	else
 		# If the location is not in the file, fetch the coordinates from the API
-		if [[ $type == "city" ]]; then
+		if [[ "$type" == "city" ]]; then
 			coordinates=$(curl -s "https://nominatim.openstreetmap.org/search?format=json&q=$location" | jq -r '.[0].lat + "," + .[0].lon' | awk -F, '{printf "%.6f,%.6f\n", $1, $2}')
 		else
 			coordinates=$(curl -s "https://ipinfo.io/$location" | jq -r '.loc' | awk -F, '{printf "%.6f,%.6f\n", $1, $2}')
 		fi
 
 		# Add the location and coordinates to the geo.txt file
-		echo "$location $coordinates" >> .var/.cache/geo.txt
+		echo "$location $coordinates" >> home/.cache/geo.txt
 	fi
 
 	# Format the coordinates to the requested number of decimal places
@@ -1175,43 +1388,64 @@ function geo() {
 function image() {
 
 	local command
-	local image
+	local input
+	local output_filename
 	local aspect_ratio
 	local focal_orientation
 	local overwrite_mode
-	local output_filename
 	local gravity
+	local height
+	local blur_radius
+	local degrees
+	local option
+	local output_extension
 
 	deps magick
 
-	command=$1 && shift;
+	command=$1 && shift
+	
+	[[ -p /dev/stdin ]] && input=$(cat) || input=$1 && shift
 
 	case $command in
 
+		create)
+
+			local color dimensions filename
+
+			color=$input
+			dimensions=${1:-250x250}
+			filename=${2:-${color}_$dimensions.webp}
+
+			magick -size "$dimensions" "xc:${color}" "$filename"
+
+			;;
+
 		crop )
-		
-			image="$1"
-			aspect_ratio="${2:-3:2}"
-			focal_orientation="${3:-center}"
-			overwrite_mode="$4"
+
+			aspect_ratio=${1:-3:2}
+			focal_orientation=${2:-center}
+			overwrite_mode=$3
 
 			# Validate aspect ratio format (e.g., 16:9)
-			if ! [[ $aspect_ratio =~ ^[0-9]+:[0-9]+$ ]]; then
+			if ! [[ "$aspect_ratio" =~ ^[0-9]+:[0-9]+$ ]]; then
 				echo "Aspect ratio must be in the format W:H (e.g., 16:9)"
-				exit 1
-			fi
+				return 1
+			fi 
 
 			# Validate focal orientation
 			case $focal_orientation in
 				north|south|east|west|center|northwest|northeast|southwest|southeast) ;;
-				*) echo "Focal orientation must be one of: north, south, east, west, center, northwest, northeast, southwest, southeast" && exit 1 ;;
+				*)
+					echo "Focal orientation must be one of: north, south, east, west, center, northwest, northeast, southwest, southeast" >&2
+					return 1
+				;;
 			esac
 
 			# Generate a semantic file name
-			output_filename="${image%.*}_${aspect_ratio//:/x}_${focal_orientation}.${image##*.}"
+			output_filename="${input%.*}_${aspect_ratio//:/x}_${focal_orientation}.${input##*.}"
 
 			# Check if file exists and overwrite mode is not set to "overwrite"
-			[ -f "$output_filename" ] && [ "$overwrite_mode" != "overwrite" ] && exit 0
+			[ -f "$output_filename" ] && [ "$overwrite_mode" != "overwrite" ] && return 1
 
 			# Determine new dimensions and crop position based on aspect ratio and focal orientation
 			case $focal_orientation in
@@ -1226,86 +1460,115 @@ function image() {
 				southeast) gravity="SouthEast" ;;
 			esac
 
-			# Crop image using ImageMagick's convert tool
-			magick "$image" -gravity "$gravity" -crop "$aspect_ratio" +repage "$output_filename" && echo "$output_filename" && exit 0 || echo "Failed to process $image" && exit 1;
+			# Crop input using ImageMagick's convert tool
+			magick "$input" -gravity "$gravity" -crop "$aspect_ratio" +repage "$output_filename" && echo "$output_filename" || echo "Failed to process $input"
 
 			;;
 
-
 		convert )
 
-			# cases: png-to-jpg, heic-to-jpg, jpg-to-webp, png-to-webp, heic-to-webp
+			option=$1 && shift
 
-			case "$1" in
+			[[ -z "$input" ]] && echo "Error: input file not provided" >&2 && return 1
+
+			case $option in
 				jpg-to-png | png-to-jpg | png-to-webp | heic-to-jpg | heic-to-webp | jpg-to-webp )
-					if [ -z "$2" ]; then
-						image=$(cat)
-					else
-						image="$2"
-					fi
-					output_extension=${1#*-to-}
-					output_filename="${image%.*}.$output_extension"
-					magick "$image" "$output_filename" && echo "$output_filename" && exit 0 || echo "Failed to process $image" && exit 1
+					output_extension="${option#*-to-}"
+					output_filename="${input%.*}.$output_extension"
+					magick "$input" "$output_filename" && echo "$output_filename" || echo "Failed to process $input"
 					;;
-				*)
-					echo "Invalid conversion: $1" && exit 1
-					;;
+				*) echo "Invalid conversion: $option" >&2 && return 1 ;;
 			esac
 		
 			;;
 
+		resize)
 
-		resize )
+			height=$1
+			output_filename="${input%.*}_resized.${input##*.}"
 			
-			# Simple usage message
-			usage() {
-			echo "Usage: $0 <image_path> <height>"
-			exit 1
-			}
+			[[ -f "$input" ]] || { echo "Error: File '$input' not found." >&2; return 1; }
 			
-			# Check for correct number of arguments
-			[ "$#" -eq 2 ] || usage
+			extension=${input##*.}
+			base_name=${input%.*}
 			
-			image="$1"
-			height="$2"
-			output_filename="${image%.*}_resized.${image##*.}"
-			
-			# Exit if input file doesn't exist
-			[ -f "$image" ] || { echo "Error: File '$image' not found."; exit 1; }
-			
-			# Extract the file extension
-			extension="${image##*.}"
-			
-			# Extract the base name without the extension
-			base_name="${image%.*}"
-			
-			# Create a more semantic output filename that includes the target height
+			# Semantic filename
 			output_filename="${base_name}_${height}px.${extension}"
 			
-			# Resize image and handle success or failure
-			if magick "$image" -resize x"$height" "$output_filename"; then
-			echo "$output_filename"
+			if magick "$input" -resize x"$height" "$output_filename"; then
+				echo "$output_filename"
 			else
-			echo "Failed to process $image"
-			exit 1
+				echo "Failed to process $input" >&2 && return 1
 			fi
 
 			;;
 
-
 		thumbnail )
 
-			image="$1"
-			image resize "$image" 300
+			image resize "$input" 300
 
 			;;
 
-		geo ) ;; # pending
-		describe ) ;; # pending
-		rotate ) ;; # pending
-		blur ) ;; # pending
+		geo )
 
-		* ) echo "Invalid command: $command" && exit 1 ;;
+			if [ ! -f "$input" ]; then
+				echo "Error: File '$input' not found." >&2
+				return 1
+			fi
+
+			# Extract GPS coordinates using ImageMagick's identify tool
+			gps_info=$(magick identify -verbose "$input" | grep "exif:GPS")
+
+			if [ -n "$gps_info" ]; then
+				echo "GPS Information for $input:"
+				echo "$gps_info"
+			else
+				echo "No GPS data found in $input."
+			fi
+
+			;;
+
+		describe ) ;; # pending
+
+		rotate )
+		
+			degrees=$1
+			output_filename="${input%.*}_rotated.${input##*.}"
+			
+			if [ ! -f "$input" ]; then
+				echo "Error: File '$input' not found." >&2
+				return 1
+			fi
+			
+			if magick "$input" -rotate "$degrees" "$output_filename"; then
+				echo "$output_filename"
+			else
+				echo "Failed to process $input" >&2
+				return 1
+			fi
+		
+			;;
+
+		blur )
+
+			blur_radius="${1:-5}"  # Default blur radius is 5 if not provided
+			output_filename="${input%.*}_blurred.${input##*.}"
+
+			if [ ! -f "$input" ]; then
+				echo "Error: File '$input' not found." >&2
+				return 1
+			fi
+
+			if magick "$input" -blur 0x"$blur_radius" "$output_filename"; then
+				echo "$output_filename"
+			else
+				echo "Failed to process $input" >&2
+				return 1
+			fi
+
+			;;
+
+		* ) echo "Invalid command: $command" ;;
 
 	esac
 
@@ -1315,40 +1578,47 @@ function image() {
 
 function interpret() {
 
-    local input
-    local temp_script
+    local input user_script args env_file
+
+    args=() && while [[ $# -gt 0 ]]; do
+		case $1 in
+			--env) env_file="$2"; shift 2 ;;
+			*) args+=("$1"); shift ;;
+		esac
+	done && set -- "${args[@]}"
 
     input=$1 && shift
 
-    [[ ! -f ".var/scripts/$input" ]] && echo "No script by that title found: $input"
+    [[ ! -f "home/scripts/$input" ]] && \
+        echo "No script by that name found: $input" && return 1
 
-	temp_script=$(mktemp) && {
-		printf '#!/usr/bin/env bash\nset -e\nsource ./bare.sh\n'
-		cat ".var/scripts/$input"
-	} > "$temp_script"
-	
-	chmod +x "$temp_script"
-	
-	# Save the original stdin to file descriptor 3
-	exec 3<&0
-	
-	# Run the temp script with stdin redirected to /dev/null
-	"$temp_script" "$@" < /dev/null
-	
-	# Restore the original stdin
-	exec 0<&3
-	
-	# Close file descriptor 3
-	exec 3<&-
-	
-	rm "$temp_script"
+    user_script="./$(random string 30)"
+
+    {
+        echo '#!/usr/bin/env bash'
+        echo 'set -e'
+        echo "cd $BARE_DIR"
+        echo 'source ./bare.sh'
+        [[ -n "$env_file" ]] && cat "$env_file"
+        cat "home/scripts/$input"
+    } > "$user_script"
+    
+    chmod +x "$user_script"
+
+    "$user_script" "$@" < /dev/null
+    
+    rm "$user_script"
+
 }
+
+
+
 
 
 
 function lowercase() {
 
-	[[ -t 0 ]] && input=$1 || input=$(cat)
+	[[ -p /dev/stdin ]] && input=$(cat) || input=$1
 	transform "$input" --lowercase
 
 }
@@ -1358,7 +1628,6 @@ function lowercase() {
 function math() {
 
 	local operation
-	local expression
 	local output
 
 	remaining_args=() && while [[ $# -gt 0 ]]; do
@@ -1368,59 +1637,59 @@ function math() {
 		esac
 	done && set -- "${remaining_args[@]}"
 
+	[[ -p /dev/stdin ]] && input=$(cat) || input=$1 && shift
+
 	case $operation in
 
 		round)
-
-			number=$1
-			decimals=${2:-0}
-			shift 2
-
-			[[
-				$(validate number "$number") == 'false'
-				||
-				$(validate number "$decimals") == 'false'
-			]] && echo "Error: invalid number" && exit 1
-
-			output=$(php -r "echo number_format($number, $decimals, '.', '');")
-
+		
+			case $input in
+				up) math ceiling "$1" ;;
+				down) math floor "$1" ;;
+				*)
+					decimals=${1:-0}
+				
+					if [[ $(validate number "$input") == 'false' ]] || [[ $(validate number "$decimals") == 'false' ]]; then
+						echo "Error: invalid number"
+						return 1
+					fi
+				
+					php -r "echo number_format((float)$input, (int)$decimals, '.', ''), PHP_EOL;"
+					;;
+			esac
+		
 			;;
-
+		
 		floor)
-
-			number=$1
-			shift
-
-			[[ $(validate number "$number") == 'false' ]] && echo "Error: invalid number" && exit 1
-
-			output=$(php -r "echo floor($number);")
-
+		
+			if [[ $(validate number "$input") == 'false' ]]; then
+				echo "Error: invalid number"
+				return 1
+			fi
+		
+			php -r "echo floor((float)$input), PHP_EOL;"
+		
 			;;
-
+		
 		ceil|ceiling)
-
-			number=$1
-			shift
-
-			[[ $(validate number "$number") == 'false' ]] && echo "Error: invalid number" && exit 1
-
-			output=$(php -r "echo ceil($number);")
-
+		
+			if [[ $(validate number "$input") == 'false' ]]; then
+				echo "Error: invalid number"
+				return 1
+			fi
+		
+			php -r "echo ceil((float)$input), PHP_EOL;"
+		
 			;;
 
 		*)
 
-			# Concatenate all arguments into a single string
-			expression="$*"
-
 			# Use PHP to sanitize and evaluate the math operation
-			output=$(php -r "\$math_operation = '$expression'; if (preg_match('/^[0-9+\-.*\/() ]+$/', \$math_operation)) { echo eval('return ' . \$math_operation . ';'); } else { echo 'Invalid input'; }")
+			php -r "\$math_operation = '$input'; if (preg_match('/^[0-9+\-.*\/() ]+$/', \$math_operation)) { echo eval('return ' . \$math_operation . ';'), PHP_EOL; } else { echo 'Invalid input', PHP_EOL; }"
 
 			;;
 
 	esac
-
-	echo "$output" && exit 0
 
 }
 
@@ -1448,7 +1717,7 @@ function media() {
 
 	command=$1 && shift
 
-	[[ -t 0 ]] && input="$1" && shift || input=$(cat)
+	[[ -p /dev/stdin ]] && input=$(cat) || input=$1 && shift
 
 	remaining_args=() && while [[ $# -gt 0 ]]; do
 		case $1 in
@@ -1462,7 +1731,7 @@ function media() {
 			examine)
 		
 			# Check if the input file exists
-			[[ ! -f $input ]] && echo "Error: expected file input" && exit 1
+			[[ ! -f $input ]] && echo "Error: expected file input"
 		
 			# Create a temporary directory for the extracted image
 			tmp_dir=$(mktemp -d)
@@ -1495,7 +1764,7 @@ function media() {
 		detail)
 		
 			# takes a given mp3 file and adds metadata (album artwork, title, composer, etc) via ffmpeg
-			[[ ! -f $input ]] && echo "Error: expected file input" && exit 1
+			[[ ! -f $input ]] && echo "Error: expected file input"
 		
 			# now, examine the file in case some of these
 			# are already set and use those as default
@@ -1517,9 +1786,9 @@ function media() {
 				esac
 			done && set -- "${remaining_args[@]}"
 			
-			[[ -z $title ]] && echo "Error: title is required" && exit 1
-			[[ -z $album ]] && echo "Error: album is required" && exit 1
-			[[ -z $artist ]] && echo "Error: artist is required" && exit 1
+			[[ -z $title ]] && echo "Error: title is required"
+			[[ -z $album ]] && echo "Error: album is required"
+			[[ -z $artist ]] && echo "Error: artist is required"
 			
 			ffmpeg_command=("ffmpeg" "-y" "-i" "$input")
 			
@@ -1555,7 +1824,6 @@ function media() {
 			# Check if input file exists
 			if [[ ! -f "$input" ]]; then
 				echo "Error: Input file does not exist."
-				exit 1
 			fi
 			
 			if [[ "$output_extension" == "mp3" ]]; then
@@ -1569,7 +1837,6 @@ function media() {
 			# Check if the output file was created
 			if [[ ! -f "$output" ]]; then
 				echo "Conversion failed."
-				exit 1
 			fi
 			
 			echo "$output"
@@ -1612,16 +1879,13 @@ function media() {
 			# Check if the output file was created
 			if [[ ! -f "$output" ]]; then
 				echo "Cut failed."
-				exit 1
 			fi
 			
 			echo "$output"
 
 			;;
 
-		*)
-			exit 1
-			;;
+		*) : ;;
 	esac
 
 	if [[ "$remove_original" == '1' ]]; then
@@ -1638,8 +1902,8 @@ function move() {
 
 	[[ $# == 2 ]] && destination="$2" || destination="$1"
 
-	[[ ! -f "$file" ]] && echo "Error: file '$file' does not exist." && exit 1
-	[[ -z $destination ]] && echo "Error: destination not provided." && exit 1
+	[[ ! -f "$file" ]] && echo "Error: file '$file' does not exist."
+	[[ -z $destination ]] && echo "Error: destination not provided."
 
 	mv "$file" "$destination"
 
@@ -1649,7 +1913,7 @@ function move() {
 
 function open() {
 
-	[ -z "$EDITOR" ] && echo "EDITOR is not set" && exit 1
+	[ -z "$EDITOR" ] && echo "EDITOR is not set"
 
 	# Check if $1 is provided
 	if [ -n "$1" ]; then
@@ -1667,10 +1931,25 @@ function open() {
 
 function openai() {
 
-	[ -z "$OPENAI_API_KEY" ] && { echo "OPENAI_API_KEY is not defined"; exit 1; }
+	[[ -z "$OPENAI_API_KEY" ]] && {
+		echo ""
+		echo -e " ${RED}Error${RESET}: OPENAI_API_KEY is not set"
+		read -r -p " ⚙️ Set now? (y/n): " response
+		[[ $response == 'y' ]] && {
+			read -r -s -p " ⚙️ Enter your OpenAI API key: " OPENAI_API_KEY
+			echo ""
+			echo "OPENAI_API_KEY=$OPENAI_API_KEY" >> ~/.barerc && sleep 0.4
+			echo " ⚙️ OPENAI_API_KEY set! You can now use OpenAI in bare."
+			echo ""
+			return 0
+		}
+	}
+
+	local args command input
+	local assistant_name list_assistants list_threads json_mode debug mode thread_title
 
 	# capture assistant name
-	remaining_args=() && while [[ "$#" -gt 0 ]]; do
+	args=() && while [[ "$#" -gt 0 ]]; do
 		case $1 in
 			@*) assistant_name="${1#@}"; shift ;;
 			--assistant) assistant_name="$2"; shift 2 ;;
@@ -1680,9 +1959,9 @@ function openai() {
 			--json) json_mode=1 && shift ;;
 			--debug) debug='true' && shift ;;
 			--high-powered) mode='high-powered'; shift 2 ;;
-			*) remaining_args+=("$1"); shift ;;
+			*) args+=("$1"); shift ;;
 		esac
-	done && set -- "${remaining_args[@]}"
+	done && set -- "${args[@]}"
 
 	# set system prompt (according to assistant name)
 	assistant_prompt="You are a helpful assistant.";
@@ -1708,7 +1987,6 @@ function openai() {
 	print
 	}'
 
-
 	command="chat"
 
 	args=() && for arg in "$@"; do
@@ -1718,9 +1996,15 @@ function openai() {
 		esac
 	done && set -- "${args[@]}"
 
+	[[ -p /dev/stdin ]] && input=$(cat) || input=$1 && shift
+
+	[[ -z "$input" ]] && echo "Error: no input provided" >&2 && return 1
+
 	case $command in 
 
-		"chat" )
+		chat )
+
+			local model system_prompt user_messages assistant_messages messages thread_contents thread_title payload response
 
 			# Initialize variables
 			if [[ $mode == 'high-powered' ]]; then
@@ -1731,18 +2015,12 @@ function openai() {
 			system_prompt="$assistant_prompt"
 			user_messages=()
 			assistant_messages=()
+
+			while IFS= read -r line; do
+				user_messages+=("$line")
+				break
+			done <<< "$input"
 			
-			# Read the first user message from arguments or stdin
-			if [ -n "$1" ]; then
-				user_messages+=("$1")
-			else
-				while IFS= read -r line; do
-					user_messages+=("$line")
-					break  # Exit after the first line of input
-				done < /dev/stdin
-			fi
-			
-			shift
 			# Parse command-line arguments
 			while [[ "$#" -gt 0 ]]; do
 				case $1 in
@@ -1754,8 +2032,6 @@ function openai() {
 					*) echo "Invalid option: $1" >&2 ;;
 				esac
 			done
-
-			
 
 			if [[ -n $thread_title ]]; then
 
@@ -1820,13 +2096,14 @@ function openai() {
 			;;
 
 
-		"voice" )
+		voice )
 			
+			local model voice response_format speed output
+
 			model='tts-1'
 			voice='alloy'
 			response_format='mp3'
 			speed=1
-
 			output="$(random string 32).mp3"
 
 			while getopts "m:i:v:f:s:o:" opt; do
@@ -1870,14 +2147,16 @@ function openai() {
 			echo ".var/downloads/$output"
 
 			;;
-		"listen" )
+		listen )
 
 			# Coming soon. OpenAI only accepts text and image as of now.
 
 			;;
 
 
-		"transcribe" )
+		transcribe )
+
+			local language model prompt response_format temperature timestamp_granularities file max_size file_size response
 
 			model='whisper-1'
 			language='en'
@@ -1943,8 +2222,7 @@ function openai() {
 
 function pretty() {
 
-	input=$(getInput)
-	[[ -z $input ]] && input=$1
+	[[ -p /dev/stdin ]] && input=$(cat) || input=$1 && shift
 	
 	deps glow
 	echo "$input" | glow
@@ -1957,15 +2235,9 @@ function qr() {
 
 	deps qrencode
 
-	# Attempt to read from stdin, if nothing is piped in, use $1
-	if [ -t 0 ]; then
-	# Terminal is attached, stdin is not redirected, use $1
-	link="$1"
-	else
-	# stdin is redirected, read from stdin
-	read -r link
-	fi
+	local link output
 
+	[[ -t 0 ]] && link=$1 || link=$(cat)
 	output=".var/downloads/$(random string 30).png"
 
 	qrencode -o "$output" "$link"
@@ -1978,12 +2250,9 @@ function qr() {
 
 function random() {
 
-	local input
-	local command
-	local length
-	local constraint
+	local input command length constraint
 
-	[[ -t 0 ]] || input=$(cat)
+	[[ -p /dev/stdin ]] && input=$(cat)
 
 	command='string'
 	length=${input:-16}
@@ -2017,23 +2286,21 @@ function random() {
 
 function rec() {
 
+	deps rec2csv csvlook
+
 	local input
 	local command
 	local output
-	local as_table
-	local as
-
-	deps rec2csv csvlook
 
 	if [[ -f $1 ]]; then
 		input=$(cat "$1") && shift;
 	else
-		[[ -t 0 ]] || input=$(cat);
+		[[ -p /dev/stdin ]] && input=$(cat)
 	fi
 
 	[[ -z $input ]] && input=$(cat .var/bare.rec)
 
-	command="$1" && shift
+	command=$1 && shift
 
 	remaining_args=() && while [[ "$#" -gt 0 ]]; do
 		case $1 in
@@ -2050,20 +2317,20 @@ function rec() {
 
 		insert|create)
 
-			[[ $# -eq 0 ]] && echo "Error: expected at least one argument" && exit 1
+			[[ $# -eq 0 ]] && echo "Error: expected at least one argument"
 
 			output=$(echo "$input" | recins "$@")
-			[[ $? -ne 0 ]] && echo "$output" && exit 0
+			[[ $? -ne 0 ]] && echo "$output"
 			echo "$output" > .var/bare.rec
 
 			;;
 
 		delete|remove)
 
-			[[ $# -eq 0 ]] && echo "Error: expected at least one argument" && exit 1
+			[[ $# -eq 0 ]] && echo "Error: expected at least one argument"
 
 			output=$(echo "$input" | recdel "$@")
-			[[ $? -ne 0 ]] && echo "$output" && exit 0
+			[[ $? -ne 0 ]] && echo "$output"
 			echo "$output" > .var/bare.rec
 
 			;;
@@ -2101,7 +2368,7 @@ function rec() {
 					shift
 
 					file="$1" && shift
-					[[ ! -f "$file" ]] && echo "ERROR: no such file: $1" && exit 1
+					[[ ! -f "$file" ]] && echo "ERROR: no such file: $1"
 					# if file is .csv file pipe to --from-csv, if .json pipe to --from-json
 					destination="$2" && shift
 					[[ $2 == 'to' ]] && destination="$3"
@@ -2130,7 +2397,7 @@ function rec() {
 				echo "$json_output" | jq
 			else
 				echo "Error: Conversion failed" >&2
-				exit 1
+				
 			fi
 
 			;;
@@ -2138,7 +2405,7 @@ function rec() {
 		--from-json)
 			
 			[[ -f "$1" ]] && input="$(cat "$1")" && shift
-			[[ -z $input ]] && echo "ERROR: no input provided" && exit 1
+			[[ -z $input ]] && echo "ERROR: no input provided"
 			
 			# Check if the input is an object or an array
 			if echo "$input" | jq -e 'type == "object"' > /dev/null; then
@@ -2154,7 +2421,7 @@ function rec() {
 		--from-csv)
 
 			[[ -f "$1" ]] && input="$(cat "$1")" && shift
-			[[ -z $input ]] && echo "ERROR: no input provided" && exit 1
+			[[ -z $input ]] && echo "ERROR: no input provided"
 			output="$(echo "$input" | sed '1s/^\xEF\xBB\xBF//' | csv2rec)"
 			[[ -n $1 ]] && echo "$output" >> "$1" || echo "$output"
 
@@ -2164,14 +2431,12 @@ function rec() {
 
 			if ! recinf "$1" > /dev/null 2>&1; then
 				echo "Error: invalid source recfile"
-				exit 1
 			else
 				recfile="$1"
 			fi
 			
 			if ! recinf "$2" > /dev/null 2>&1; then
 				echo "Error: invalid schema recfile"
-				exit 1
 			else
 				schema_file="$2"
 			fi
@@ -2232,6 +2497,8 @@ function rec() {
 			# trim any newlines that has a newline directly after it with sed
 			echo "$output" | sed '/^$/N;/^\n$/D' > "$recfile"
 
+			uset -f get_rec_block
+
 			;;
 
 	esac
@@ -2247,7 +2514,7 @@ function render() {
 	local to_html
 	local pretty
 
-	[[ -t 0 ]] && input=$1 || input=$(cat)
+	[[ -p /dev/stdin ]] && input=$(cat) || input=$1
 
 	# Process arguments to handle flags and content
 	args=() && for arg in "$@"; do
@@ -2307,12 +2574,14 @@ function request() {
 			--token) curl_cmd+=("-H" "Authorization: Bearer $2") && shift 2 ;;
 			--auth) curl_cmd+=("--user" "$2") && shift 2 ;;
 			--output) curl_cmd+=("-o" "$2") && shift 2 ;;
-			*) echo "Unknown option: $1" ;;
+			# *) echo "Unknown option: $1" ;;
 			
 		esac
 	done
 
 	"${curl_cmd[@]}"
+
+	unset -f split_data_into_form_fields
 
 }
 
@@ -2324,15 +2593,20 @@ function reveal() {
 
 	[[ -t 0 ]] && input="$1" || input=$(cat)
 
-	[[ "$#" -eq 0 && -z $input ]] && echo "No file given" && exit 1
-
-	[[ -f $input ]] && cat "$input" && exit 0
+	[[ "$#" -eq 0 && -z $input ]] && echo "No file given"
 
 	for file in "$@"; do
-		[[ ! -f "$file" ]] && echo "File '$file' not found" && continue
+		[[ ! -f "$file" ]] && echo "File '$file' not found"
 		cat "$file"
-		echo "" && echo ""
 	done
+
+}
+
+
+
+function round() {
+
+	math round "$@"
 
 }
 
@@ -2340,45 +2614,50 @@ function reveal() {
 
 function run() {
 
-	local args
-	local script
-	local csv
+    local args
+    local script
+    local csv
 
-	args=() && while [[ $# -gt 0 ]]; do
-		case $1 in
-			:over) csv=$2 && shift 2 ;;
-			*) args+=("$1") && shift ;;
-		esac
-	done && set -- "${args[@]}"
+    args=() && while [[ $# -gt 0 ]]; do
+        case $1 in
+            :over) csv=$2 && shift 2 ;;
+            *) args+=("$1") && shift ;;
+        esac
+    done && set -- "${args[@]}"
 
-	script="$1" && shift
+    script="$1" && shift
 
-	if [[ -n $csv && -f $csv ]]; then
+    if [[ -n $csv && -f $csv ]]; then
 
-		csv=$(cat "$csv")
+        csv=$(cat "$csv")
 
-		IFS=',' read -r -a fields <<< "$(echo "$csv" | head -n 1)"
+        IFS=',' read -r -a fields <<< "$(echo "$csv" | head -n 1)"
 
-		echo "$csv" | tail -n +2 | while IFS=',' read -r line; do
+        while IFS=',' read -r line; do
 
-			IFS=',' read -r -a values <<< "$line"
+            IFS=',' read -r -a values <<< "$line"
+
+			# Create or truncate the variables file
+			env_file="home/.cache/env.tmp"
 			
 			for ((i=0; i<${#fields[@]}; i++)); do
 				field_name="${fields[$i]}"
 				field_value="${values[$i]}"
 				field_value=$(echo "$field_value" | xargs | sed 's/^"\|"$//g')
-				export "$field_name"="$field_value"
+				echo "$field_name=\"$field_value\"" >> "$env_file"
 			done
 
-			interpret "$script" "$@"
+            interpret "$script" --env "$env_file" "$@" < /dev/null
 
-		done
+			rm "$env_file"
 
-	else
+        done < <(echo "$csv" | tail -n +2)
 
-		interpret "$script" "$@"
+    else
 
-	fi
+        interpret "$script" "$@"
+
+    fi
 }
 
 
@@ -2425,8 +2704,10 @@ function serve() {
 
 function show() {
 
-	[[ -t 0 ]] && input=$1 || input=$(cat)
-	[[ -n $input ]] || { echo "No input provided"; exit 1; }
+	local input
+
+	[[ -p /dev/stdin ]] && input=$(cat) || input=$1
+	[[ -n $input ]] || { echo "No input provided"; }
 	echo "$input"
 
 }
@@ -2435,8 +2716,10 @@ function show() {
 
 function silence() {
 
-	[[ -t 0 ]] && input=$1 || input=$(cat)
-	echo "$input" >> /dev/null && exit 0
+	local input
+
+	[[ -p /dev/stdin ]] && input=$(cat) || input=$1
+	echo "$input" >> /dev/null
 
 }
 
@@ -2444,7 +2727,9 @@ function silence() {
 
 function size() {
 
-	[[ -t 0 ]] && input="$1" || input=$(cat)
+	local input stat_cmd
+
+	[[ -p /dev/stdin ]] && input=$(cat) || input=$1
 
 	# Check the OS type and set the appropriate stat command
 	if [[ "$(uname)" == "Darwin" ]]; then
@@ -2475,13 +2760,9 @@ function size() {
 
 function speed() {
 
-	local speed_factor
-	local input_file
-	local output_file
-	local is_video
-	local extension
-
 	deps ffmpeg openssl
+
+	local speed_factor input_file output_file is_video extension
 
 	# Default values
 	speed_factor=${1:-'0.5'}
@@ -2490,7 +2771,6 @@ function speed() {
 
 	if [ -z "$input_file" ]; then
 		echo "Error: Input file is not provided" >&2
-		exit 1
 	fi
 
 	# Parse command line options
@@ -2501,8 +2781,7 @@ function speed() {
 			s) speed_factor=${OPTARG};;
 			i) input_file=${OPTARG};;
 			o) output_file=${OPTARG};;
-			\?) echo "Usage: $0 [-s speed_factor] [-i input_file] [-o output_file]" >&2
-				exit 1;;
+			\?) echo "Usage: $0 [-s speed_factor] [-i input_file] [-o output_file]" >&2 ;;
 		esac
 	done
 
@@ -2529,7 +2808,6 @@ function speed() {
 		fi
 	else
 		echo "Error: Speed factor must be non-zero" >&2
-		exit 1
 	fi
 
 	echo "$output_file"
@@ -2540,7 +2818,9 @@ function speed() {
 
 function squish() {
 
-	[[ -t 0 ]] && input=$1 || input=$(cat)
+	local input
+
+	[[ -p /dev/stdin ]] && input=$(cat) || input=$1
 	transform "$input" --squish
 
 }
@@ -2549,13 +2829,10 @@ function squish() {
 
 function sub() {
 
-    local replacing
-    local replacement
-    local input
-    local args
+    local replacing replacement input args
 
     replacing=$1 && shift
-    input=$(getInput)
+	[[ -p /dev/stdin ]] && input=$(cat) || input=$1 && shift
 
     args=() && while [[ $# -gt 0 ]]; do
         case $1 in
@@ -2573,13 +2850,8 @@ function sub() {
 
 function transform() {
 
-	local input
-	local format
-	local variant
-	local all
-	local args
+	local input format variant all args
 
-	input=$(getInput)
 	format='text' # Default format
 	variant='hyphens' # Default phone format variant
 	all=0
@@ -2603,8 +2875,7 @@ function transform() {
 		esac && shift
 	done && set -- "${args[@]}"
 
-	# Check if input is left over
-	[[ $# -eq 1 ]] && input=$1
+	[[ -p /dev/stdin ]] && input=$(cat) || input=$1 && shift
 
 	case $format in
 
@@ -2651,13 +2922,9 @@ function transform() {
 
 function translate() {
 
-	local input
-	local output_format
-	local explain_reasoning
-	local model
-	local remaining_args
-
 	deps dig
+
+	local input output_format explain_reasoning model remaining_args
 
 	output_format="english"
 	model=${OPENAI_DEFAULT_MODEL:-'gpt-4o'}
@@ -2676,7 +2943,7 @@ function translate() {
 		[[ -t 0 ]] && input="$1" && shift || input=$(cat);
 	fi
 
-	[[ -z $input ]] && echo "Error: requires input" && exit 1
+	[[ -z $input ]] && echo "Error: requires input"
 
 	case $output_format in
 
@@ -2686,19 +2953,19 @@ function translate() {
 
 			input_format=$1 && shift
 
-			[[ $(validate number "$input") == 'false' ]] && echo "Error: invalid number" && exit 1
+			[[ $(validate number "$input") == 'false' ]] && echo "Error: invalid number"
 
 			case $input_format in
 
-				grams) echo "$input * 1000" | bc -l ;;
+				grams|g) echo "$input * 1000" | bc -l ;;
 
-				pounds) echo "$input * 2.20462" | bc -l ;;
+				pounds|lbs) echo "$input * 2.20462" | bc -l ;;
 
-				ounces) echo "$input * 35.274" | bc -l ;;
+				ounces|oz) echo "$input * 35.274" | bc -l ;;
 
 				tons) echo "$input * 0.00110231" | bc -l ;;
 
-				*) echo "Error: invalid input format" && exit 1 ;;
+				*) echo "Error: invalid input format" ;;
 
 			esac
 
@@ -2707,7 +2974,7 @@ function translate() {
 
 		ip|IP|ip-address)
 
-			[[ $(validate domain "$input") == 'false' ]] && echo "Error: invalid domain name" && exit 1
+			[[ $(validate domain "$input") == 'false' ]] && echo "Error: invalid domain name"
 
 			dig +short "$input"
 
@@ -2733,13 +3000,13 @@ function translate() {
 				else
 					runs_remaining=$((runs_remaining - 1))  # Invalid response, decrement runs_remaining
 					if [ $runs_remaining -eq 0 ]; then
-						echo "Sorry, we're having a hard time responding to this request. Maybe try rephrasing." && exit 1
+						echo "Sorry, we're having a hard time responding to this request. Maybe try rephrasing."
 					fi
 				fi
 
 			done
 
-			[[ $explain_reasoning == 'true' ]] && echo "$response" | jq -r '.reasoning' && exit 0
+			[[ $explain_reasoning == 'true' ]] && echo "$response" | jq -r '.reasoning'
 
 			echo "$response" | jq -r '.translation'
 
@@ -2753,7 +3020,7 @@ function translate() {
 
 function trim() {
 
-	[[ -t 0 ]] && input=$1 || input=$(cat)
+	[[ -p /dev/stdin ]] && input=$(cat) || input=$1
 	transform "$input" --trim
 
 }
@@ -2762,7 +3029,7 @@ function trim() {
 
 function uppercase() {
 
-	[[ -t 0 ]] && input=$1 || input=$(cat)
+	[[ -p /dev/stdin ]] && input=$(cat) || input=$1
 	transform "$input" --uppercase
 
 }
@@ -2771,8 +3038,8 @@ function uppercase() {
 
 function validate() {
 
-	local type output
-	
+	local input type output runs_remaining response explain condition source_material model precision digits regex date_format os_type parsed_date time_format normalized_input parsed_time country
+
 	type=$1 && shift
 	[[ -z $input ]] && input=$1 && shift
 	output="false"
@@ -2807,7 +3074,6 @@ function validate() {
 
 			;;
 
-
 		file)
 
 			if [[ -f $input ]]; then
@@ -2835,11 +3101,10 @@ function validate() {
 			while [ $runs_remaining -gt 0 ]; do
 				response="$(openai chat "You are an expert validator. I will provide a condition and a source material. Your task is to determine if the source material satisfies the condition. Respond with one JSON object containing two properties: 'reasoning <string>' and 'answer <true/false boolean>' where 'reasoning' contains your reasoning and 'answer' is either true or false, indicating whether the source material satisfies the condition. - - - ###--### - - - CONDITION: $condition - - - SOURCE MATERIAL: $source_material - - - ###--### - - - So... what do you say? True or false; does the source material satisfy the condition? Remember, respond only with a one dimensional JSON object (containing just the 'reasoning' and 'answer' properties)." --model "$model" --json)"
 			
-				# Validate that response JSON object contains just two properties (reasoning and answer) and that answer is true or false boolean.
 				if [[ $(echo "$response" | jq 'keys | length') -eq 2 && ( $(echo "$response" | jq -r '.answer') == 'true' || $(echo "$response" | jq -r '.answer') == 'false' ) ]]; then
-					runs_remaining=0  # Valid response, exit the loop
+					runs_remaining=0
 				else
-					runs_remaining=$((runs_remaining - 1))  # Invalid response, decrement runs_remaining
+					runs_remaining=$((runs_remaining - 1))
 					if [ $runs_remaining -eq 0 ]; then
 						echo "Sorry, we're having a hard time responding to this request. Maybe try rephrasing."
 					fi
@@ -2850,7 +3115,6 @@ function validate() {
 			echo "$response" | jq -r '.answer'
 			
 			;;
-
 
 		alpha|alphabetic)
 			if echo "$input" | grep -Eq '^[a-zA-Z]+$'; then
@@ -2895,11 +3159,9 @@ function validate() {
 			;;
 
 		domain)
-
 			if echo "$input" | grep -Eq '^([a-zA-Z0-9-]+\.)+[a-zA-Z]{2,}$|^([a-zA-Z0-9-]+\.)+[a-zA-Z0-9-]{2,}$'; then
 				output="true"
 			fi
-
 			;;
 
 		ip)
@@ -2909,7 +3171,6 @@ function validate() {
 			;;
 
 		number|numeric|num)
-			echo "$input"
 			if echo "$input" | grep -Eq '^-?[0-9]+(\.[0-9]+)?$'; then
 				output="true"
 			fi
@@ -2918,6 +3179,8 @@ function validate() {
 		integer|int|digit)
 			if echo "$input" | grep -Eq '^-?[0-9]+$'; then
 				output="true"
+			else
+				output='false'
 			fi
 			;;
 
@@ -2934,8 +3197,10 @@ function validate() {
 			;;
 
 		decimal|float|floating-point)
+
 			precision=""
 			digits=""
+
 			while true; do
 				case $1 in
 					--places|--decimals|--precision) precision="$2" && shift 2 ;;
@@ -2945,15 +3210,17 @@ function validate() {
 				esac
 			done
 
-			regex="^[0-9]+(\.[0-9]{${precision:-1},})?$"
+			regex="^[0-9]+\.[0-9]{${precision:-1},}$"
+
 			if [[ -n $digits ]]; then
-				regex="^[0-9]{${digits}}(\.[0-9]{${precision:-1},})?$"
+				regex="^[0-9]{${digits}}\.[0-9]{${precision:-1},}$"
 			fi
 
 			if echo "$input" | grep -Eq "$regex"; then
 				output="true"
+			else
+				output="false"
 			fi
-
 			;;
 		
 		date)
@@ -3029,46 +3296,37 @@ function validate() {
 			;;
 
 		time)
-		
+
 			time_format="%H:%M"  # Default time format
 
-
-			# Parse the format argument
 			case $1 in
 				--format)
 					case $1 in
-						"24-hour"|"hh:mm") time_format="%H:%M" ;; # e.g., 13:45
-						"24-hour-seconds"|"hh:mm:ss") time_format="%H:%M:%S" ;; # e.g., 13:45:30
-						"12-hour"|"hh:mm am/pm") time_format="%I:%M %p" ;; # e.g., 01:45 PM
-						"12-hour-seconds"|"hh:mm:ss am/pm") time_format="%I:%M:%S %p" ;; # e.g., 01:45:30 PM
+						"24-hour"|"hh:mm") time_format="%H:%M" ;;
+						"24-hour-seconds"|"hh:mm:ss") time_format="%H:%M:%S" ;;
+						"12-hour"|"hh:mm am/pm") time_format="%I:%M %p" ;;
+						"12-hour-seconds"|"hh:mm:ss am/pm") time_format="%I:%M:%S %p" ;;
 						*) time_format="$2" ;; # Use provided format
 					esac
 					shift 2
 					;;
 			esac
 
-			# Normalize the input to handle lowercase am/pm
 			normalized_input=$(echo "$input" | tr '[:lower:]' '[:upper:]')
 				
-			# Detect the operating system
 			os_type=$(uname)
 				
-			# Attempt to parse the time based on the OS
 			if [ "$os_type" = "Darwin" ]; then
-				# macOS (BSD)
 				parsed_time=$(gdate -j -f "$time_format" "$normalized_input" +"$time_format" 2>/dev/null)
 			else
-				# Assume Linux (GNU date)
 				parsed_time=$(gdate -d "$normalized_input" +"$time_format" 2>/dev/null)
 			fi
 
-			# Strictly compare the original input with the parsed time
 			if [[ "$parsed_time" == "$normalized_input" ]]; then
 				output="true"
 			fi
 
 			;;
-
 
 		true-false|true/false)
 
@@ -3119,7 +3377,6 @@ function validate() {
 			
 			;;
 
-
 		zip|zip-code|postal-code)
 
 			country="US"  # Default country
@@ -3139,8 +3396,6 @@ function validate() {
 			esac
 			;;
 
-
-
 		*)
 			echo "Invalid type: $type"
 			;;
@@ -3155,7 +3410,7 @@ function validate() {
 
 function weather() {
 
-	[[ -t 0 ]] && input="$1" && shift || input=$(cat)
+	[[ -p /dev/stdin ]] && input=$(cat) || input="$1" && shift
 
 	# detect if input is a lat,long
 	if [[ $input =~ ^-?[0-9]+\.[0-9]+,-?[0-9]+\.[0-9]+$ ]]; then
@@ -3164,7 +3419,7 @@ function weather() {
 		location=$(geo "$input")
 	fi
 
-	cache_path=".var/.cache/weather/$(codec text.filesafe "$location")"
+	cache_path="home/.cache/weather/$(codec text.filesafe "$location")"
 
 	[[ $BARE_COLOR == '0' ]] && color='0' || color='1'
 
@@ -3189,7 +3444,7 @@ function weather() {
 
 		function cacheJSON() {
 			json=$(curl -sL "wttr.in/$location?format=j1")
-			mkdir -p .var/.cache/weather
+			mkdir -p home/.cache/weather
 			echo "$json" > "$cache_path.json"
 		}
 
@@ -3206,32 +3461,26 @@ function weather() {
 
 		[[ $concise == '1' ]] && {
 			echo "$json" | jq -r '.current_condition[0].weatherDesc[0].value'
-			exit 0
 		}
 
 		[[ $sunrise == '1' ]] && {
 			echo "$json" | jq -r '.weather[0].astronomy[0].sunrise'
-			exit 0
 		}
 
 		[[ $sunset == '1' ]] && {
 			echo "$json" | jq -r '.weather[0].astronomy[0].sunset'
-			exit 0
 		}
 
 		[[ $moonrise == '1' ]] && {
 			echo "$json" | jq -r '.weather[0].astronomy[0].moonrise'
-			exit 0
 		}
 
 		[[ $moonset == '1' ]] && {
 			echo "$json" | jq -r '.weather[0].astronomy[0].moonset'
-			exit 0
 		}
 
 		[[ $cloud_cover == '1' ]] && {
 			echo "$json" | jq -r '.current_condition[0].cloudcover'
-			exit 0
 		}
 
 	}
@@ -3257,7 +3506,7 @@ function weather() {
 	# if simple request, cache and respond now
 	[[ -n $response ]] && {
 		if [[ ! -f "${cache_path}${cache_append}" ]]; then
-			mkdir -p .var/.cache/weather
+			mkdir -p home/.cache/weather
 			echo "$response" > "${cache_path}${cache_append}"
 		fi
 	}
@@ -3266,7 +3515,6 @@ function weather() {
 	[[ -z $response ]] && {
 		if [[ -f "${cache_path}${cache_append}" ]]; then
 			cat "${cache_path}${cache_append}"
-			exit 0
 		fi
 	}
 
@@ -3278,19 +3526,19 @@ function weather() {
 
 function write() {
 
+	local contents args file
+
 	# Read from stdin if not a terminal
-	[[ -t 0 ]] || contents=$(cat)
+	[[ -p /dev/stdin ]] && contents=$(cat)
 
 	# Parse arguments
-	remaining_args=()
-	while [[ $# -gt 0 ]]; do
+	args=() && while [[ $# -gt 0 ]]; do
 		case $1 in
 			--to) file="$2" && shift 2 ;;
 			--contents) contents="$2" && shift 2 ;;
-			*) remaining_args+=("$1") && shift ;;
+			*) args+=("$1") && shift ;;
 		esac
-	done
-	set -- "${remaining_args[@]}"
+	done && set -- "${args[@]}"
 
 	# Handle positional arguments
 	[[ $# -eq 1 && -n $file ]] && contents="$1"
@@ -3298,8 +3546,8 @@ function write() {
 	[[ $# -eq 2 ]] && { contents="$1"; file="$2"; }
 
 	# Check for missing arguments
-	[[ -z $contents ]] && echo "Error: Missing contents" >&2 && exit 1
-	[[ -z $file ]] && echo "Error: Missing file" >&2 && exit 1
+	[[ -z $contents ]] && echo "Error: Missing contents" >&2
+	[[ -z $file ]] && echo "Error: Missing file" >&2
 
 	# Clean carriage return characters from contents
 	contents=$(echo "$contents" | tr -d '\r')
@@ -3313,10 +3561,7 @@ function write() {
 
 function youtube() {
 
-	local command
-	local quality
-	local thumbnail_quality
-	local url
+	local command quality thumbnail_quality url
 
 	command=$1 && shift
 
@@ -3406,42 +3651,22 @@ function youtube() {
 
 	}
 
-	case "$command" in
+	case $command in
 		download)
-			while [[ "$#" -gt 0 ]]; do
-				case "$1" in
-					--quality)
-						quality="$2"
-						shift 2
-						;;
-					--mp3)
-						format="mp3"
-						shift
-						;;
+			while [[ $# -gt 0 ]]; do
+				case $1 in
+					--quality) quality=$2 && shift 2 ;;
+					--mp3) format="mp3" && shift ;;
 					--thumbnail|--thumb)
-						shift
-						while [[ "$#" -gt 0 ]]; do
-							case "$1" in
-								--md)
-									thumbnail_quality="md"
-									shift
-									;;
-								--max)
-									thumbnail_quality="max"
-									shift
-									;;
-								*)
-									echo "Unknown option: $1" >&2
-									exit 1
-									;;
+						shift && while [[ $# -gt 0 ]]; do
+							case $1 in
+								--md) thumbnail_quality="md" && shift ;;
+								--max) thumbnail_quality="max" && shift ;;
+								# *) echo "Unknown option: $1" >&2 ;;
 							esac
-						done
-						download_thumbnail "$url"
+						done && download_thumbnail "$url"
 						;;
-					*)
-						echo "Unknown option: $1" >&2
-						exit 1
-						;;
+					# *) echo "Unknown option: $1" >&2 ;;
 				esac
 			done
 			download_video
@@ -3451,20 +3676,11 @@ function youtube() {
 
 		thumbnail)
 			shift 2 # Remove the first two arguments
-			while [[ "$#" -gt 0 ]]; do
-				case "$1" in
-					--md)
-						thumbnail_quality="md"
-						shift
-						;;
-					--max)
-						thumbnail_quality="max"
-						shift
-						;;
-					*)
-						echo "Unknown option: $1" >&2
-						exit 1
-						;;
+			while [[ $# -gt 0 ]]; do
+				case $1 in
+					--md) thumbnail_quality="md" && shift ;;
+					--max) thumbnail_quality="max" && shift ;;
+					# *) echo "Unknown option: $1" >&2 ;;
 				esac
 			done
 			download_thumbnail
@@ -3474,18 +3690,28 @@ function youtube() {
 		
 	esac
 
+	unset -f download_video
+	unset -f extract_id
+	unset -f download_thumbnail
+
 }
 
 
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
+
+bareRunCommands
+
 case $1 in
 
-	-t) runBareTerminal ;;
+	'') : ;;
+	-t|-i) runBareTerminal ;;
 	--version|-v) cat .var/sync ;;
 	--upgrade) git pull origin root ;;
-	--setup) bash .lib/setup ;;
-	*) if isValidFunc "$1"; then "$@"; fi ;;
+	--setup) setup ;;
+	*) [[ $(isValidFunc "$1") == 'true' ]] && "$@" ;;
 
 esac
+
+return 0
