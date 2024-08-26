@@ -1,2 +1,6 @@
 /home
 .DS_Store
+
+# legacy ignored
+/.var
+/.etc
