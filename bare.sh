@@ -1975,7 +1975,7 @@ function openai() {
 		$0 = substr($0, space_index + 1)
 	}
 	print
-	}'
+	}' && return 0
 
 	command="chat"
 
