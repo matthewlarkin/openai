@@ -1019,7 +1019,7 @@ function date() {
     # Process arguments
     args=() && while [[ $# -gt 0 ]]; do
         case $1 in
-            as|-F|--format|--formatted) # can't do -f here since native date relies on this
+            as|format|-F|--format|--formatted) # can't do -f here since native date relies on this
                 custom_format=1 && shift
                 read -r -a format_parts <<< "$1"  # Allows us to handle date and time dynamically as parts
                 date_format=""
