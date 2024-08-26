@@ -1,4 +1,4 @@
-# `bare`
+# `bare.sh`
 
 🎥 YouTube: [@bareDeveloper](https://youtube.com/@bareDeveloper)  
 🔖 Website: [bare.sh](https://bare.sh)  
