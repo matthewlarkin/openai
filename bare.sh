@@ -1928,7 +1928,7 @@ function openai() {
 		[[ $response == 'y' ]] && {
 			read -r -s -p " ⚙️ Enter your OpenAI API key: " OPENAI_API_KEY
 			echo ""
-			echo "OPENAI_API_KEY=$OPENAI_API_KEY" >> ~/.barerc && sleep 0.4
+			echo "OPENAI_API_KEY=$OPENAI_API_KEY" >> $BARE_DIR/home/.barerc && sleep 0.4
 			echo " ⚙️ OPENAI_API_KEY set! You can now use OpenAI in bare."
 			echo ""
 			return 0
@@ -1957,16 +1957,16 @@ function openai() {
 	assistant_prompt="You are a helpful assistant.";
 	[[ -n $assistant_name ]] && {
 		assistant_introduction="In this conversation thread you are '$assistant_name'."
-		assistant_instructions="$(recsel -t Assistant .var/bare.rec -e "Name = '$assistant_name'" -P Contents)"
+		assistant_instructions="$(recsel home/recfiles/openai/assistants.rec -e "Name = '$assistant_name'" -P Contents)"
 		assistant_background="Take into consideration the conversation thread (even if some messages are not your own, as you may be entering the chat mid-conversation and should catch yourself up)."
 		assistant_prompt="%YOUR_NAME: $assistant_introduction - - - %YOUR_INSTRUCTIONS: $assistant_instructions - - - %BACKGROUND: $assistant_background - - - %YOUR TASK: Now, you have just been addressed, so respond to the last thing said in a manner consistent with %YOUR_INSTRUCTIONS."
 	}
 
 	# if --threads, just list thread title and exit
-	[[ -n $list_threads ]] && recsel -t Thread .var/bare.rec -P Title
+	[[ -n $list_threads ]] && recsel home/recfiles/openai/threads.rec -P Title && return 0
 
 	# if --assistants, just list assistants and their instructions and exit
-	[[ -n $list_assistants ]] && recsel -t Assistant .var/bare.rec -p Name,Contents | awk '{
+	[[ -n $list_assistants ]] && recsel home/recfiles/openai/assistants.rec -p Name,Contents | awk '{
 	while (length($0) > 60) {
 		space_index = 60
 		while (substr($0, space_index, 1) != " " && space_index > 1) space_index--
@@ -2025,11 +2025,11 @@ function openai() {
 
 			if [[ -n $thread_title ]]; then
 
-				[[ "$(recsel -t Thread .var/bare.rec -e "Title = '$thread_title'")" ]] || recins -t Thread .var/bare.rec -f Title -v "$thread_title"
+				[[ "$(recsel home/recfiles/openai/threads.rec -e "Title = '$thread_title'")" ]] || recins home/recfiles/openai/threads.rec -f Title -v "$thread_title"
 
-				thread_contents=$(recsel -t ThreadMessage .var/bare.rec -p Created,Author,Contents -e "Thread = '$thread_title'")
+				thread_contents=$(recsel home/recfiles/openai/messages.rec -p Created,Author,Contents -e "Thread = '$thread_title'")
 
-				recins -t ThreadMessage .var/bare.rec -f Thread -v "$thread_title" -f Author -v "User" -f Contents -v "$user_messages"
+				recins home/recfiles/openai/messages.rec -f Thread -v "$thread_title" -f Author -v "User" -f Contents -v "$user_messages"
 
 			fi
 
@@ -2048,7 +2048,7 @@ function openai() {
 				
 				if [[ -n $thread_title ]]; then
 					# Fetch the message thread and convert it to a JSON array
-					message_thread=$(recsel -t ThreadMessage .var/bare.rec -p Created,Author,Contents -e "Thread = '$thread_title'" | rec --json)
+					message_thread=$(recsel home/recfiles/openai/messages.rec -p Created,Author,Contents -e "Thread = '$thread_title'" | rec --json)
 					
 					# Format the message_thread JSON array using jq
 					formatted_message_thread=$(echo "$message_thread" | jq '[.[] | {role: (if .Author == "User" then "user" else "assistant" end), name: (if .Author != "User" then .Author else null end), content: .Contents}]')
@@ -2078,7 +2078,7 @@ function openai() {
 			response=$(request "https://api.openai.com/v1/chat/completions" --token "$OPENAI_API_KEY" --json "$payload" | jq -r '.choices[0].message.content');
 
 			[[ -n $thread_title ]] && {
-				recins -t ThreadMessage .var/bare.rec -f Thread -v "$thread_title" -f Author -v "${assistant_name-Assistant}" -f Contents -v "$response"
+				recins home/recfiles/openai/messages.rec -f Thread -v "$thread_title" -f Author -v "${assistant_name-Assistant}" -f Contents -v "$response"
 			}
 
 			echo "$response"
@@ -2288,7 +2288,7 @@ function rec() {
 		[[ -p /dev/stdin ]] && input=$(cat)
 	fi
 
-	[[ -z $input ]] && input=$(cat .var/bare.rec)
+	[[ -z $input ]] && echo "Error: no input provided" && return 1
 
 	command=$1 && shift
 
