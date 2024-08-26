@@ -29,17 +29,17 @@ Don't let simplicity fool you; `bare` is a powerful automation tool in the right
 git clone https://github.com/matthewlarkin/bare.sh ~/bare.sh
 
 # optional alias for easy reference
-echo 'alias bare="~/bare.sh/bare.sh"' >> ~/.bashrc
+echo 'alias bare="$HOME/bare.sh/bare.sh"' >> ~/.bashrc
 ```
 
 ## Configuration
 
 ### RC file
-Bare sets some default global variables and functions and sources `~/.barerc` to pick up any user overwrites or additions (*`bare` creates this file if it doesn't already exist, setting secure permissions to `600`, useful for any user secrets, api keys, etc*).
+Bare sets some default global variables and functions and sources `$BARE_DIR/home/.barerc` to pick up any user overwrites or additions (*`bare` creates this file if it doesn't already exist, setting secure permissions to `600`, useful for any user secrets, api keys, etc*).
 
-If you'd like to add your own global variables or functions, you can include them in your `~/.barerc` file–just be sure to *`export`* them.
+If you'd like to add your own global variables or functions, you can include them in your `$BARE_DIR/home/.barerc` file, just be sure to *`export`* them.
 
-**Sample `~/.barerc`**
+**Sample `.barerc`**
 ```bash
 # Core variable overwrites
 
@@ -103,7 +103,7 @@ cd bare.sh
 xj95iUQK2KGHVap8YSUOX0l9xWbqQl
 ```
 
-`bare terminal`
+`./bare.sh -t`
 ```terminal
 cd bare.sh
 ./bare.sh -t
@@ -134,11 +134,11 @@ For these examples, we're using the `bare terminal`.
 
 With `bare`, we can create our own custom *bare scripts*. These scripts are just bash scripts with access to the `bare` syntax. These scripts can help you automate any number of simple or complex workflows.
 
-To create a `bare` script, navigate to your `.var/scripts` directory, create a file (no file extension necessary), and then write your `bare` commands and/or bash commands. No need to make it executable`bare` will handle this for you.
+To create a `bare` script, navigate to your `$BARE_DIR/home/scripts` directory, create a file (no file extension necessary), and then write your `bare` commands and/or bash commands. No need to make it executable`bare` will handle this for you.
 
-Here's a sample script called `sample` in the `.var/scripts` directory. We added a shebang at the front for better syntax highlighting in VS Code, but shebangs here are not necessary either.
+Here's a sample script called `sample` in the `$BARE_DIR/home/scripts` directory. We added a shebang at the front for better syntax highlighting in VS Code, but shebangs here are not necessary either.
 
-**`.var/scripts/sample`**
+**`$BARE_DIR/home/scripts/sample`**
 ```bash
 #!/usr/bin/env bash
 
@@ -147,7 +147,7 @@ random string 30
 openai chat "Hi there, I'm using a new toolkit called bare.sh, have you heard of it?"
 ```
 
-You can now run that script from the `bare` terminal or from an inline `./bare` call.
+You can now run that script from the `bare` terminal or from an inline `./bare.sh` call.
 
 **`bare` terminal**
 
