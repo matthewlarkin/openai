@@ -55,9 +55,6 @@ function bareRunCommands() {
 		export "$key"="${BASE_CONFIG[$key]}"
 	done
 
-	# shellcheck disable=SC1091
-	source "$BARE_DIR/home/.barerc"
-
 	# Colors for script output
 	local RED GREEN YELLOW BLUE GRAY RESET
 	[[ $BARE_COLOR == 1 ]] && {
@@ -71,6 +68,9 @@ function bareRunCommands() {
 	}
 
 	bareHealthCheck
+
+	# shellcheck disable=SC1091
+	source "$BARE_DIR/home/.barerc"
 
 }
 
@@ -994,132 +994,122 @@ function copy() {
 
 
 
-
 function date() {
+    local input
+    local args
+    local date_cmd
+    local date_format
+    local input_format
+    local custom_format
+    local format_parts
 
-	local input
-	local args
-	local date_cmd
-	local date_format
-	local input_format
-	local custom_format
-	local format_parts
+    # set system timezone temporarily
+    TZ="$BARE_TIMEZONE"
 
+    # Determine the correct date command based on the operating system
+    if [[ "$OS" == "macOS" ]]; then
+        date_cmd="gdate"
+    else
+        date_cmd="date"
+    fi
 
-	[[ -p /dev/stdin ]] && input=$(cat) || input=$1 && shift
+    date_format="%Y-%m-%d %H:%M:%S"
+    input_format="%Y-%m-%d %H:%M:%S"
 
-	# set system timezone temporarily
-	TZ="$BARE_TIMEZONE"
+    # Process arguments
+    args=() && while [[ $# -gt 0 ]]; do
+        case $1 in
+            as|-F|--format|--formatted) # can't do -f here since native date relies on this
+                custom_format=1 && shift
+                read -r -a format_parts <<< "$1"  # Allows us to handle date and time dynamically as parts
+                date_format=""
+                for part in "${format_parts[@]}"; do
+                    case $part in
+                        'U') date_format+="%s " ;;  # 1628841600
+                        'Y-M-D') date_format+="%Y-%m-%d " ;;  # 2024-08-13
+                        'M-D-Y') date_format+="%m-%d-%Y " ;;  # 08-13-2024
+                        'M/D/Y') date_format+="%m/%d/%Y " ;;  # 08/13/2024
+                        'Y-m-d') date_format+="%Y-%-m-%-d " ;; # 2024-8-13
+                        'm-d-Y') date_format+="%-m-%-d-%Y " ;;  # 8-13-2024
+                        'm/d/Y') date_format+="%-m/%-d/%Y " ;;  # 8/13/2024
+                        # times
+                        'H:M:S'|'H:m:s') date_format+="%H:%M:%S " ;; # 14:30:00
+                        'H:M'|'H:m') date_format+="%H:%M " ;; # 14:30
+                        'h:m:s'|'h:M:S'|'h:M:s'|'h:m:S') date_format+="%-I:%M:%S %p " ;; # 2:30:00 PM
+                        'h:m'|'h:M') date_format+="%-I:%M %p " ;; # 2:30 PM
+                        *) date_format+="$part " ;;
+                    esac
+                done
+                date_format="${date_format% }"  # Remove trailing space
+                shift
+                ;;
+            *)
+                args+=("$1")
+                shift
+                ;;
+        esac
+    done
 
-	# Determine the correct date command based on the operating system
-	if [[ "$OS" == "macOS" ]]; then
-		date_cmd="gdate"
-	else
-		date_cmd="date"
-	fi
+    # Set the remaining arguments
+    set -- "${args[@]}"
 
-	date_format="%Y-%m-%d %H:%M:%S"
-	input_format="%Y-%m-%d %H:%M:%S"
+	[[ -p /dev/stdin ]] && input=$(cat) || input=$1
 
-	# Process arguments
-	args=() && while [[ $# -gt 0 ]]; do
-		case $1 in
-			as|-F|--format|--formatted) # can't do -f here since native date relies on this
-				custom_format=1 && shift
-				read -r -a format_parts <<< "$1"  # Allows us to handle date and time dynamically as parts
-				date_format=""
-				for part in "${format_parts[@]}"; do
-					case $part in
+    # If no arguments or input, default to today's date
+    [[ -z $input && $# -eq 0 ]] && input=$(TZ=$TZ $date_cmd +"%Y-%m-%d %H:%M:%S")
+    [[ -z $input ]] && input="$1"
 
-						'U') date_format+="%s " ;;  # 1628841600
+    # Detect the operating system
+    os_type=$(uname)
 
-						'Y-M-D') date_format+="%Y-%m-%d " ;;  # 2024-08-13
-						'M-D-Y') date_format+="%m-%d-%Y " ;;  # 08-13-2024
-						'M/D/Y') date_format+="%m/%d/%Y " ;;  # 08/13/2024
+    # Get today's date in yyyy-mm-dd format
+    if [ "$os_type" = "Darwin" ] && command -v gdate &> /dev/null; then
+        today=$(TZ=$TZ gdate +"%Y-%m-%d")
+    else
+        today=$(TZ=$TZ date +"%Y-%m-%d")
+    fi
 
-						'Y-m-d') date_format+="%Y-%-m-%-d " ;; # 2024-8-13
-						'm-d-Y') date_format+="%-m-%-d-%Y " ;;  # 8-13-2024
-						'm/d/Y') date_format+="%-m/%-d/%Y " ;;  # 8/13/2024
-						
-						# times
-						'H:M:S'|'H:m:s') date_format+="%H:%M:%S " ;; # 14:30:00
-						'H:M'|'H:m') date_format+="%H:%M " ;; # 14:30
-						'h:m:s'|'h:M:S'|'h:M:s'|'h:m:S') date_format+="%-I:%M:%S %p " ;; # 2:30:00 PM
-						'h:m'|'h:M') date_format+="%-I:%M %p " ;; # 2:30 PM
+    # condition yyyy-mm-dd
+    if [[ $(validate date "$input" --format 'Y-m-d') == 'true' ]]; then
+        input="$input 00:00:00"
+    # yyyy-mm-dd hh:mm:ss
+    elif [[ $(validate date "$input" --format 'Y-m-d hh:mm:ss') == 'true' ]]; then
+        # input is already in the correct format
+        :
+    # yyyy-mm-dd hh:mm
+    elif [[ $(validate date "$input" --format 'Y-m-d hh:mm') == 'true' ]]; then
+        input="$input:00"
+    # hh:mm
+    elif [[ $(validate date "$input" --format 'hh:mm') == 'true' ]]; then
+        input="$today $input:00"
+    # hh:mm:ss
+    elif [[ $(validate date "$input" --format 'hh:mm:ss') == 'true' ]]; then
+        input="$today $input"
+    # yyyy-mm-ddThh:mm:ssZ
+    elif [[ $(validate date "$input" --format 'Y-m-d\Thh:mm:ss\Z') == 'true' ]]; then
+        :
+    fi
 
-						*) date_format+="$part " ;;
+    # Validate the date and time
+    if [[ $# -eq 1 ]]; then
+        if [ "$OS" = "macOS" ]; then
+            gdate -d "$input_format" "$input" &> /dev/null
+        else
+            gdate -d "$input" &> /dev/null
+        fi
+    fi
 
-					esac
-				done
-				date_format="${date_format% }"  # Remove trailing space
-				shift
-				;;
-			*)
-				args+=("$1")
-				shift
-				;;
-		esac
-	done
-
-	# Set the remaining arguments
-	set -- "${args[@]}"
-
-	# If no arguments or input, default to today's date
-	[[ -z $input && $# -eq 0 ]] && input=$(TZ=$TZ gdate +"%Y-%m-%d %H:%M:%S")
-	[[ -z $input ]] && input="$1"
-
-	# Detect the operating system
-	os_type=$(uname)
-
-	# Get today's date in yyyy-mm-dd format
-	if [ "$os_type" = "Darwin" ] && command -v gdate &> /dev/null; then
-		today=$(TZ=$TZ gdate +"%Y-%m-%d")
-	else
-		today=$(TZ=$TZ date +"%Y-%m-%d")
-	fi
-
-	# condition yyyy-mm-dd
-	if [[ $(validate date "$input" --format 'Y-m-d') == 'true' ]]; then
-		input="$input 00:00:00"
-	# yyyy-mm-dd hh:mm:ss
-	elif [[ $(validate date "$input" --format 'Y-m-d hh:mm:ss') == 'true' ]]; then
-		# input is already in the correct format
-		:
-	# yyyy-mm-dd hh:mm
-	elif [[ $(validate date "$input" --format 'Y-m-d hh:mm') == 'true' ]]; then
-		input="$input:00"
-	# hh:mm
-	elif [[ $(validate date "$input" --format 'hh:mm') == 'true' ]]; then
-		input="$today $input:00"
-	# hh:mm:ss
-	elif [[ $(validate date "$input" --format 'hh:mm:ss') == 'true' ]]; then
-		input="$today $input"
-	# yyyy-mm-ddThh:mm:ssZ
-	elif [[ $(validate date "$input" --format 'Y-m-d\Thh:mm:ss\Z') == 'true' ]]; then
-		:
-	fi
-
-	# Validate the date and time
-	if [[ $# -eq 1 ]]; then
-		if [ "$OS" = "macOS" ]; then
-			gdate -d "$input_format" "$input" &> /dev/null
-		else
-			gdate -d "$input" &> /dev/null
-		fi
-	fi
-
-	# Format and print the date using the specified format, or default to standard
-	if [[ $custom_format == 1 ]]; then
-		if [[ "$OS" == "macOS" ]]; then
-			formatted_date=$(TZ=$TZ gdate -d "$input" +"$date_format")
-		else
-			formatted_date=$(TZ=$TZ gdate -d "$input" +"$date_format")
-		fi
-		echo "$formatted_date"
-	else
-		TZ=$TZ /bin/date "$@"
-	fi
-
+    # Format and print the date using the specified format, or default to standard
+    if [[ $custom_format == 1 ]]; then
+        if [[ "$OS" == "macOS" ]]; then
+            formatted_date=$(TZ=$TZ gdate -d "$input" +"$date_format")
+        else
+            formatted_date=$(TZ=$TZ gdate -d "$input" +"$date_format")
+        fi
+        echo "$formatted_date"
+    else
+        TZ=$TZ /bin/date "$@"
+    fi
 }
 
 
@@ -3713,5 +3703,3 @@ case $1 in
 	*) [[ $(isValidFunc "$1") == 'true' ]] && "$@" ;;
 
 esac
-
-return 0
