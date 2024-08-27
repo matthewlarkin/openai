@@ -1406,15 +1406,8 @@ function image() {
 
 			[[ -z "$input" ]] && echo "Error: input file not provided" >&2 && return 1
 
-			case $option in
-				jpg-to-png | png-to-jpg | png-to-webp | heic-to-jpg | heic-to-webp | jpg-to-webp )
-					output_extension="${option#*-to-}"
-					output_filename="${input%.*}.$output_extension"
-					magick "$input" "$output_filename" && echo "$output_filename" || echo "Failed to process $input"
-					;;
-				*) echo "Invalid conversion: $option" >&2 && return 1 ;;
-			esac
-		
+			output_filename="$option"
+			magick "$input" "$output_filename" && echo "$output_filename" || echo "Failed to process $input"
 			;;
 
 		resize)
