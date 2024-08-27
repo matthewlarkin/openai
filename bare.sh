@@ -2659,24 +2659,81 @@ function squish() {
 
 function stripe() {
 
-	local input
+	local input command subcommand args
 
-	[[ -p /dev/stdin ]] && input=$(cat) || input=$1 && shift
+	[[ -p /dev/stdin ]] && input=$(cat)
 
-	command=$1 && shift
+	command=$1
+	subcommand=$2
+	shift 2
 
-	case $1 in
+	case $command in
 
 		customers)
-			case $command in
+			case $subcommand in
+
 				create)
-					response=$(request "https://api.stripe.com/v1/customers" --auth "$STRIPE_API_KEY:" --data "$input")
-					echo "$response" | jq
+					
 					;;
+
 				list)
-					request "https://api.stripe.com/v1/customers" --token "$STRIPE_API_KEY" ;;
-				*)
-					echo "Invalid command: $command" ;;
+
+					local by limit
+
+					by='email'
+					limit=10
+
+					args=() && while true; do
+						case $1 in
+							''|-) break ;;
+							--by|by) by=$2; shift 2 ;;
+							--limit|limit) limit=$2; shift 2 ;;
+							*) args+=("$1"); shift ;;
+						esac
+					done && set -- "${args[@]}"
+
+					[[ -z $input ]] && input=$1 && shift
+
+					[[ -z $input ]] && echo "Error: no input provided" && return 1
+
+					case $by in
+
+						email)
+						
+							response=$(curl -s "https://api.stripe.com/v1/customers?email=$input&limit=$limit" -u "$STRIPE_API_KEY:")
+
+							# capture just the basics: id, email, name, phone, address_line1, address_line2, city, state, zip
+							echo "$response" | jq -r '[.data[] | {
+								id: .id,
+								email: .email,
+								name: .name,
+								phone: .phone,
+								address_line_1: .address.line1,
+								address_line_2: .address.line2,
+								city: .address.city,
+								state: .address.state,
+								zip: .address.postal_code
+							}]' | rec --from-json
+							;;
+
+						phone)
+							# Fetch the customers with the given phone number
+							;;
+
+						id|ID)
+							# Fetch the customer with the given ID
+							;;
+
+						*)
+							echo "Invalid option: $by" && return 1
+							;;
+
+					esac
+
+					;;
+
+				*) echo "Invalid subcommand: $subcommand" ;;
+
 			esac
 
 			;;
