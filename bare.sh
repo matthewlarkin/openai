@@ -1516,11 +1516,11 @@ function interpret() {
     local input user_script args env_file
 
     args=() && while [[ $# -gt 0 ]]; do
-		case $1 in
-			--env) env_file=$2; shift 2 ;;
-			*) args+=("$1"); shift ;;
-		esac
-	done && set -- "${args[@]}"
+        case $1 in
+            --env) env_file=$2; shift 2 ;;
+            *) args+=("$1"); shift ;;
+        esac
+    done && set -- "${args[@]}"
 
     input=$1 && shift
 
@@ -1536,11 +1536,12 @@ function interpret() {
         echo 'source ./bare.sh'
         [[ -n "$env_file" ]] && cat "$env_file"
         cat "home/scripts/$input"
+        echo ""
     } > "$user_script"
-    
+
     chmod +x "$user_script"
 
-    bash -c "$user_script" "$@" < /dev/null
+    "$user_script" "$@"
     
     rm "$user_script"
 
@@ -2443,7 +2444,7 @@ function run() {
 
     else
 
-        interpret "$script" "$@"
+        interpret "$script" "$@" < /dev/null
 
     fi
 }
@@ -3488,16 +3489,18 @@ function youtube() {
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-
 bareRunCommands
 
 case $1 in
 
-	'') : ;;
 	-t|-i) runBareTerminal ;;
 	--version|-v) cat .var/sync ;;
 	--upgrade) git pull origin root ;;
 	--setup) setup ;;
-	*) [[ $(isValidFunc "$1") == 'true' ]] && "$@" ;;
+	*)
+		[[ $(isValidFunc "$1") == 'true' ]] && {
+			"$@"
+		} || :
+		;;
 
 esac
