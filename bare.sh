@@ -233,78 +233,21 @@ function runBareTerminal() {
 		echo "if [[ \"\$BARE_COLOR\" == 1 ]]; then"
 		echo "    GREEN='\\033[0;32m'"
 		echo "    YELLOW='\\033[0;33m'"
+		echo "    RED='\\033[0;31m'"
 		echo "    GRAY='\\033[2;37m'"
 		echo "    RESET='\\033[0m'"
 		echo "fi"
-		echo "PS1=\"🐻 \[\${GREEN}\]\$(basename \$(pwd)) \[\${YELLOW}\]> \[\${RESET}\]\""
+		echo "update_prompt() {"
+		echo "    if [ \"\$(basename \"\$(pwd)\")\" = \"bare.sh\" ] && [ -f \"bare.sh\" ]; then"
+		echo "        PS1=\"🐻 \${GREEN}\$(basename \$(pwd)) \${YELLOW}> \${RESET}\""
+		echo "    else"
+		echo "        PS1=\"🐻 \${RED}\$(basename \$(pwd)) \${YELLOW}> \${RESET}\""
+		echo "    fi"
+		echo "}"
+		echo "PROMPT_COMMAND=update_prompt"
+		echo "update_prompt"
 		echo "printf \"\n\${GRAY}entering bare terminal. type exit to leave.\${RESET}\n\""
 	})
-}
-
-
-
-function bareSync() {
-
-	# sync www
-	rsync -a --ignore-existing .lib/.var/ .var >> /dev/null
-	mkdir -p ".var/www" && rsync -av ".lib/.var/www/" ".var/www/" >> /dev/null
-
-	# touch and secure profiles and database
-	touch .var/sync
-	touch ~/.barerc && chmod 600 ~/.barerc
-	touch .var/bare.rec && chmod 600 .var/bare.rec
-
-	if [[ "$OS" == "macOS" ]]; then
-		touch ~/.bash_profile
-	else
-		touch ~/.bashrc
-	fi
-
-	# sync recfiles
-	local recdefs recfile recdefs_blocks recfile_trimmed output rec_type block
-
-	# Read the content of .etc/bare.rec and .var/bare.rec
-	recdefs=$(cat .etc/bare.rec)
-	recfile=$(cat .var/bare.rec)
-
-	# Extract and prepare %rec: blocks from recdefs
-	recdefs_blocks=$(echo "$recdefs" | awk '/^%rec:/ {if (rec) print rec; rec=$0; next} /^%/ {rec=rec"\n"$0} END {print rec}')
-
-	# Function to get a block from recdefs by type
-	get_rec_block() {
-		local type=$1
-		echo "$recdefs_blocks" | awk -v type="$type" '
-		$1 == "%rec:" && $2 == type {
-			rec=$0
-			while (getline > 0) {
-				if ($1 == "%rec:") break
-				rec=rec"\n"$0
-			}
-			print rec
-			exit
-		}'
-	}
-
-	# Trim the recfile to remove any lines that start with % (except those that start with %rec:)
-	recfile_trimmed=$(echo "$recfile" | sed '/^%[^r]/d')
-
-	# Process recfile_trimmed to insert corresponding %rec: blocks
-	output=""
-	while IFS= read -r line; do
-		if [[ $line =~ ^%rec: ]]; then
-			rec_type=$(echo "$line" | cut -d' ' -f2)
-			block=$(get_rec_block "$rec_type")
-			output+="$block"$'\n'
-		else
-			output+="$line"$'\n'
-		fi
-	done <<< "$recfile_trimmed"
-
-	echo "$output" > .var/bare.rec
-
-	# clean up
-	unset -f get_rec_block
-
 }
 
 
@@ -1156,7 +1099,7 @@ function download() {
 
 	deps curl
 
-	[[ -t 0 ]] && url=$1 && shift || url=$(cat)
+	[[ -p /dev/stdin ]] && url=$(cat) || url=$1 && shift
 
 	[[ -z $url ]] && echo "No URL provided"
 
@@ -1887,7 +1830,7 @@ function media() {
 
 function move() {
 
-	[[ -t 0 ]] && file=$1 || file=$(cat)
+	[[ -p /dev/stdin ]] && file=$(cat) || file=$1
 
 	[[ $# == 2 ]] && destination="$2" || destination="$1"
 
@@ -2300,76 +2243,6 @@ function rec() {
 
 	case $command in
 
-		schema) echo "$input" | recinf -d ;;
-
-		tables|types) echo "$input" | recinf -d | sed -n '/^%rec/s/^%rec: //p' ;;
-
-		insert|create)
-
-			[[ $# -eq 0 ]] && echo "Error: expected at least one argument"
-
-			output=$(echo "$input" | recins "$@")
-			[[ $? -ne 0 ]] && echo "$output"
-			echo "$output" > .var/bare.rec
-
-			;;
-
-		delete|remove)
-
-			[[ $# -eq 0 ]] && echo "Error: expected at least one argument"
-
-			output=$(echo "$input" | recdel "$@")
-			[[ $? -ne 0 ]] && echo "$output"
-			echo "$output" > .var/bare.rec
-
-			;;
-
-		select)
-
-			echo "$input" | recsel "$@"
-
-			;;
-
-		list)
-
-			case $1 in
-
-				[dD]ocuments) echo "$input" | recsel -t Document -P Title -C ;;
-
-				[aA]ssistants) echo "$input" | recsel -t Assistant -P Name -C ;;
-
-				[sS]cripts) find .var/scripts -maxdepth 1 -print0 | xargs -0 -I {} basename {} ;;
-
-				[tT]hreads) echo "$input" | recsel -t Thread -P Title -C ;;
-
-				[tT]ags) echo "$input" | recsel -t Tag -P Title -C ;;
-
-			esac
-
-			;;
-
-		import)
-
-			case $1 in
-
-				from)
-
-					shift
-
-					file="$1" && shift
-					[[ ! -f "$file" ]] && echo "ERROR: no such file: $1"
-					# if file is .csv file pipe to --from-csv, if .json pipe to --from-json
-					destination="$2" && shift
-					[[ $2 == 'to' ]] && destination="$3"
-					[[ $file == *.csv ]] && rec --from-csv "$file" "$destination"
-					[[ $file == *.json ]] && rec --from-json "$file" "$destination"
-
-					;;
-
-			esac
-
-			;;
-
 		--csv|--to-csv)
 
 			echo "$input" | rec2csv
@@ -2413,80 +2286,6 @@ function rec() {
 			[[ -z $input ]] && echo "ERROR: no input provided"
 			output="$(echo "$input" | sed '1s/^\xEF\xBB\xBF//' | csv2rec)"
 			[[ -n $1 ]] && echo "$output" >> "$1" || echo "$output"
-
-			;;
-
-		sync)
-
-			if ! recinf "$1" > /dev/null 2>&1; then
-				echo "Error: invalid source recfile"
-			else
-				recfile="$1"
-			fi
-			
-			if ! recinf "$2" > /dev/null 2>&1; then
-				echo "Error: invalid schema recfile"
-			else
-				schema_file="$2"
-			fi
-			
-			# Extract and prepare %rec: blocks from schema
-			schema_blocks=$(awk '/^%rec:/ {if (rec) print rec; rec=$0; next} /^%/ {rec=rec"\n"$0} END {print rec}' < "$schema_file")
-			
-			# Function to get a block from schema by type
-			get_rec_block() {
-				local type=$1
-				echo "$schema_blocks" | awk -v type="$type" '
-				$1 == "%rec:" && $2 == type {
-					rec=$0
-					while (getline > 0) {
-						if ($1 == "%rec:") break
-						rec=rec"\n"$0
-					}
-					print rec
-					exit
-				}'
-			}
-			
-			# Trim the recfile to remove any lines that start with % (except those that start with %rec:)
-			recfile_trimmed=$(sed '/^%[^r]/d' < "$recfile")
-			
-			# Process recfile_trimmed to insert corresponding %rec: blocks
-			output=""
-			processed_types=()
-			while IFS= read -r line; do
-				if [[ $line =~ ^%rec: ]]; then
-					rec_type=$(echo "$line" | cut -d' ' -f2)
-					block=$(get_rec_block "$rec_type")
-					output+=$'\n'"$block"$'\n'
-					processed_types+=("$rec_type")
-				else
-					output+="$line"$'\n'
-				fi
-			done <<< "$recfile_trimmed"
-			
-			# Add any missing schema blocks that were not in the original recfile
-			while IFS= read -r line; do
-				if [[ $line =~ ^%rec: ]]; then
-					rec_type=$(echo "$line" | cut -d' ' -f2)
-					found=false
-					for type in "${processed_types[@]}"; do
-						if [[ "$type" == "$rec_type" ]]; then
-							found=true
-							break
-						fi
-					done
-					if [[ "$found" == false ]]; then
-						block=$(get_rec_block "$rec_type")
-						output+=$'\n'"$block"$'\n'
-					fi
-				fi
-			done <<< "$schema_blocks"
-
-			# trim any newlines that has a newline directly after it with sed
-			echo "$output" | sed '/^$/N;/^\n$/D' > "$recfile"
-
-			uset -f get_rec_block
 
 			;;
 
@@ -2580,7 +2379,7 @@ function reveal() {
 
 	local input
 
-	[[ -t 0 ]] && input="$1" || input=$(cat)
+	[[ -p /dev/stdin ]] && input=$(cat) || input=$1
 
 	[[ "$#" -eq 0 && -z $input ]] && echo "No file given"
 
@@ -2928,9 +2727,9 @@ function translate() {
 		esac
 	done && set -- "${remaining_args[@]}"
 
-	if [[ -z $input ]]; then
-		[[ -t 0 ]] && input="$1" && shift || input=$(cat);
-	fi
+	[[ -z $input ]] && {
+		[[ -p /dev/stdin ]] && input=$(cat) || input=$1
+	}
 
 	[[ -z $input ]] && echo "Error: requires input"
 
