@@ -8,6 +8,7 @@
 - **Overview**
 - **Install**
 - **Configuration**
+- **Getting help**
 - **Bare terminal**
 - **Sample usage**
 - **Bare scripts**
@@ -62,6 +63,73 @@ function myHelloFunction() {
 
 export MY_VAR
 export -f MY_OWN_FUNCTION
+```
+
+### Getting help
+
+Some commands have a built-in help system that you can access by typing `--?`, like so:
+
+```console
+🐻 bare.sh > random --?
+(string|alpha|number:-string) ~ |(int:-16)
+```
+
+Let's break that down:
+- `random` is the command
+- `--?` is the help flag
+- `(string|alpha|number:-string)` is an argument item
+	- arguments in parentheses "()" are optional
+	- arguments in brackets "<>" are required
+	- arguments preceded by a pipe "|" can be piped in from stdin
+	- values after the colon-dash ":-" are default values
+	- argument items separated by a tilde "~" can be in any order
+
+So here, `random` takes two argument items:
+
+- **First**: optional and can be either `string`, `alpha`, or `number`  
+- **Second**: also optional and defaults to `16`
+	
+You can pipe in an integer from `stdin`, and if you leave everything blank, arguments will default to `string` and `16`, like so:
+
+```console
+🐻 bare.sh > random
+OyhcfhS0pggj7Ema
+
+🐻 bare.sh > echo 5 | random number
+77211
+
+🐻 bare.sh > random 14 alpha
+pFprtKKzayumlz
+
+🐻 bare.sh > random 14 alpha | uppercase
+ETUZKJJRHEDCQB
+```
+
+Another example using `request`:
+
+```console
+🐻 bare.sh > request --?
+|<url> (--json <json>|--data <form-data>|--file <file>|--header <header>|--token <token>|--auth <user:pass>|--output <file>)
+```
+
+Here, `request` requires a URL (as its first argument or piped in), and you can optionally pass in JSON, form data, a file, a header, a token, basic auth, or an output file via the flags.
+
+```console
+🐻 bare.sh > request https://jsonplaceholder.typicode.com/posts/1
+{
+  "userId": 1,
+  "id": 1,
+  "title": "sunt aut facere repellat provident occaecati excepturi optio reprehenderit",
+  "body": "quia et suscipit\nsuscipit recusandae consequuntur expedita et cum\nreprehenderit molestiae ut ut quas totam\nnostrum rerum est autem sunt rem eveniet architecto"
+}
+
+🐻 bare.sh > request https://jsonplaceholder.typicode.com/posts --json '{"title": "foo", "body": "bar", "userId": 1}' --header 'Content-type: application/json'
+{
+  "title": "foo",
+  "body": "bar",
+  "userId": 1,
+  "id": 101
+}
 ```
 
 ### Bare dependencies
