@@ -5,24 +5,6 @@ if [ "$(basename "$0")" = "bare.sh" ]; then
     BARE_DIR=$(pwd) && export BARE_DIR
 fi
 
-function bareHealthCheck() {
-
-	[[ ! -f bare.sh ]] && { echo "Error: not in bare directory"; return 1; }
-
-	local item
-
-	mkdir -p home && cd home || return 1
-	mkdir -p .cache .lib .logs desktop downloads recfiles scripts && cd .. || return 1
-	touch home/.barerc
-	for item in document openai; do
-		mkdir -p home/recfiles/$item; done
-	for item in list tags; do
-		touch home/recfiles/document/$item.rec; done;
-	for item in assistants messages threads; do
-		touch home/recfiles/openai/$item.rec; done
-
-}
-
 
 
 function bareRunCommands() {
@@ -45,13 +27,13 @@ function bareRunCommands() {
 		["BARE_COLOR"]=0
 		["BARE_DEBUG"]=0
 		["BARE_REMOTE"]=''
-		["HETZNER_API_TOKEN"]=''
-		["DIGITALOCEAN_API_TOKEN"]=''
-		["LINODE_API_TOKEN"]=''
-		["VULTR_API_TOKEN"]=''
+		["HETZNER_API_KEY"]=''
+		["DIGITALOCEAN_API_KEY"]=''
+		["LINODE_API_KEY"]=''
+		["VULTR_API_KEY"]=''
 		["OPENAI_API_KEY"]=''
-		["STRIPE_SECRET_KEY"]=''
-		["POSTMARK_SERVER_TOKEN"]=''
+		["STRIPE_API_KEY"]=''
+		["POSTMARK_API_KEY"]=''
 		["TOMORROW_WEATHER_API_KEY"]=''
 	) && for key in "${!BASE_CONFIG[@]}"; do
 		export "$key"="${BASE_CONFIG[$key]}"
@@ -76,6 +58,25 @@ function bareRunCommands() {
 
 }
 
+
+
+function bareHealthCheck() {
+
+	[[ ! -f bare.sh ]] && { echo "Error: not in bare directory"; return 1; }
+
+	local item
+
+	mkdir -p home && cd home || return 1
+	mkdir -p .cache .lib .logs desktop downloads recfiles scripts && cd .. || return 1
+	touch home/.barerc
+	for item in document openai; do
+		mkdir -p home/recfiles/$item; done
+	for item in list tags; do
+		touch home/recfiles/document/$item.rec; done;
+	for item in assistants messages threads; do
+		touch home/recfiles/openai/$item.rec; done
+
+}
 
 
 
@@ -196,6 +197,27 @@ function setup() {
 	unset -f setCoreVariables
 
 }
+
+
+
+# Function to generate file list for completion
+_completions() {
+    local cur
+    cur=${COMP_WORDS[COMP_CWORD]}
+    mapfile -t COMPREPLY < <(compgen -f "$COMPLETION_DIR/$cur" | xargs -n 1 basename)
+}
+
+# Wrapper functions to set the directory and call the completion function
+_completions_run() {
+    COMPLETION_DIR="home/scripts"
+    _completions
+} && complete -F _completions_run run
+
+_completions_rec() {
+    COMPLETION_DIR="home/recfiles"
+    _completions
+} && complete -F _completions_rec rec
+
 
 
 
@@ -425,15 +447,15 @@ function cloud() {
 
 	function getCloudProvider() {
 
-		[[ -n "$HETZNER_API_TOKEN" ]] && echo "hetzner" && exit 0
-		[[ -n "$DIGITALOCEAN_API_TOKEN" ]] && echo "digitalocean" && exit 0
-		[[ -n "$LINODE_API_TOKEN" ]] && echo "linode" && exit 0
-		[[ -n "$VULTR_API_TOKEN" ]] && echo "vultr" && exit 0
+		[[ -n "$HETZNER_API_KEY" ]] && echo "hetzner" && exit 0
+		[[ -n "$DIGITALOCEAN_API_KEY" ]] && echo "digitalocean" && exit 0
+		[[ -n "$LINODE_API_KEY" ]] && echo "linode" && exit 0
+		[[ -n "$VULTR_API_KEY" ]] && echo "vultr" && exit 0
 		{
 			echo "Error: no cloud provider set."
 			echo ""
 			echo "Requires one of:"
-			echo -e "  - HETZNER_API_TOKEN\n  - DIGITALOCEAN_API_TOKEN\n  - LINODE_API_TOKEN\n  - VULTR_API_TOKEN"
+			echo -e "  - HETZNER_API_KEY\n  - DIGITALOCEAN_API_KEY\n  - LINODE_API_KEY\n  - VULTR_API_KEY"
 		} >&2
 
 	}
@@ -442,7 +464,7 @@ function cloud() {
 	function hetzner_info() {
 		
 		local json
-		json=$(curl -sL -H "Authorization: Bearer $HETZNER_API_TOKEN" \
+		json=$(curl -sL -H "Authorization: Bearer $HETZNER_API_KEY" \
 		https://api.hetzner.cloud/v1/servers | jq '[.servers[] | {
 			status,
 			ip: .public_net.ipv4.ip,
@@ -471,7 +493,7 @@ function cloud() {
 		fi
 
 		response=$(curl -sL -X POST \
-			-H "Authorization: Bearer $HETZNER_API_TOKEN" \
+			-H "Authorization: Bearer $HETZNER_API_KEY" \
 			-H "Content-Type: application/json" \
 			-d '{
 				"name": "'"$name"'",
@@ -489,7 +511,7 @@ function cloud() {
 	# shellcheck disable=SC2317
 	function hetzner_listSSH() {
 		# only return: .ssh_keys[], and .id, .public_key
-		curl -sL -H "Authorization: Bearer $HETZNER_API_TOKEN" \
+		curl -sL -H "Authorization: Bearer $HETZNER_API_KEY" \
 			"https://api.hetzner.cloud/v1/ssh_keys" | jq '[.ssh_keys[] | {id: .id, name: .name, pub: .public_key}]' | rec --from-json
 	}
 
@@ -503,7 +525,7 @@ function cloud() {
 
 		response=$(
 			curl -sL -X POST \
-				-H "Authorization: Bearer $HETZNER_API_TOKEN" \
+				-H "Authorization: Bearer $HETZNER_API_KEY" \
 				-H "Content-Type: application/json" \
 				-d '{
 					"name": "'"$name"'",
@@ -534,7 +556,7 @@ function cloud() {
 
 		response=$(
 			curl -sL -X POST \
-				-H "Authorization: Bearer $HETZNER_API_TOKEN" \
+				-H "Authorization: Bearer $HETZNER_API_KEY" \
 				-H "Content-Type: application/json" \
 				-d '{
 					"image" : "ubuntu-22.04",
@@ -1162,8 +1184,8 @@ function email() {
 
 	deps jq
 
-	[[ -z "$POSTMARK_SERVER_TOKEN" ]] && {
-		echo "POSTMARK_SERVER_TOKEN is not set"
+	[[ -z "$POSTMARK_API_KEY" ]] && {
+		echo "POSTMARK_API_KEY is not set"
 	}
 
 	# set default from to BARE_EMAIL_FROM
@@ -1214,7 +1236,7 @@ function email() {
 
 	response=$(request https://api.postmarkapp.com/email \
 		--json "$payload" \
-		--header "X-Postmark-Server-Token: $POSTMARK_SERVER_TOKEN");
+		--header "X-Postmark-Server-Token: $POSTMARK_API_KEY");
 
 	# else
 	echo "$response" | jq -r '.MessageID'
@@ -2467,13 +2489,6 @@ function run() {
 
     fi
 }
-# Function to generate file list for completion
-_run_completions() {
-    local cur=${COMP_WORDS[COMP_CWORD]}
-	mapfile -t COMPREPLY < <(compgen -f "home/scripts/$cur" | xargs -n 1 basename)
-}
-# Register the completion function for the run command
-complete -F _run_completions run
 
 
 
@@ -2637,6 +2652,36 @@ function squish() {
 
 	[[ -p /dev/stdin ]] && input=$(cat) || input=$1
 	transform "$input" --squish
+
+}
+
+
+
+function stripe() {
+
+	local input
+
+	[[ -p /dev/stdin ]] && input=$(cat) || input=$1 && shift
+
+	command=$1 && shift
+
+	case $1 in
+
+		customers)
+			case $command in
+				create)
+					response=$(request "https://api.stripe.com/v1/customers" --auth "$STRIPE_API_KEY:" --data "$input")
+					echo "$response" | jq
+					;;
+				list)
+					request "https://api.stripe.com/v1/customers" --token "$STRIPE_API_KEY" ;;
+				*)
+					echo "Invalid command: $command" ;;
+			esac
+
+			;;
+
+	esac
 
 }
 
@@ -3214,7 +3259,10 @@ function validate() {
 			;;
 
 		*)
-			echo "Invalid type: $type"
+			# assume it's a regex
+			if echo "$input" | grep -Eq "$type"; then
+				output="true"
+			fi
 			;;
 
 	esac
