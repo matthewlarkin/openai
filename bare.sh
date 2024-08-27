@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 
-cd "$(dirname "$0")" || return 1
-BARE_DIR=$(pwd) && export BARE_DIR
+if [ "$(basename "$0")" = "bare.sh" ]; then
+    cd "$(dirname "$0")" || return 1
+    BARE_DIR=$(pwd) && export BARE_DIR
+fi
 
 function bareHealthCheck() {
 
@@ -1572,7 +1574,7 @@ function interpret() {
 
     args=() && while [[ $# -gt 0 ]]; do
 		case $1 in
-			--env) env_file="$2"; shift 2 ;;
+			--env) env_file=$2; shift 2 ;;
 			*) args+=("$1"); shift ;;
 		esac
 	done && set -- "${args[@]}"
@@ -1595,14 +1597,11 @@ function interpret() {
     
     chmod +x "$user_script"
 
-    "$user_script" "$@" < /dev/null
+    bash -c "$user_script" "$@" < /dev/null
     
     rm "$user_script"
 
 }
-
-
-
 
 
 
