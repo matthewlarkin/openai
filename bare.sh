@@ -1551,8 +1551,11 @@ function interpret() {
 
 function lowercase() {
 
+	local input
+
 	[[ -p /dev/stdin ]] && input=$(cat) || input=$1
-	transform "$input" --lowercase
+	
+	transform "$input" --lowercase < /dev/null
 
 }
 
@@ -2839,8 +2842,9 @@ function translate() {
 
 function trim() {
 
+	local input
 	[[ -p /dev/stdin ]] && input=$(cat) || input=$1
-	transform "$input" --trim
+	transform "$input" --trim < /dev/null
 
 }
 
@@ -2848,8 +2852,9 @@ function trim() {
 
 function uppercase() {
 
+	local input
 	[[ -p /dev/stdin ]] && input=$(cat) || input=$1
-	transform "$input" --uppercase
+	transform "$input" --uppercase < /dev/null
 
 }
 
