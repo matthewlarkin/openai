@@ -2185,16 +2185,20 @@ function random() {
 
 	local input command length constraint
 
+	# help
+	[[ $1 == '--?' ]] && echo "(string|alpha|number:-string) ~ |(int:-16)" && return 0
+
 	[[ -p /dev/stdin ]] && input=$(cat)
 
 	command='string'
 	length=${input:-16}
 
-	while [[ $# -gt 0 ]]; do
-		case $1 in
-			string|alpha|number) command=$1 ;;
-			*) length=$1 ;;
-		esac && shift
+	for arg in "$@"; do
+		case $arg in
+			string|alpha|number) command=$arg && shift ;;
+			[0-9]*) length=$arg && shift ;;
+			*) : ;;
+		esac
 	done
 
 	# Validate the length
@@ -2298,34 +2302,50 @@ function rec() {
 
 function render() {
 
-	local input
-	local command
-	local to_html
-	local pretty
+	local input command
+
+	# help
+	[[ $1 == '--?' ]] && echo "|<file|markdown> (-p|--pretty|--to-html|--to-markdown|--to-md)" && return 0
 
 	[[ -p /dev/stdin ]] && input=$(cat) || input=$1
+	[[ -f $input ]] && input=$(cat "$input")
 
 	# Process arguments to handle flags and content
 	args=() && for arg in "$@"; do
 		case "$arg" in
-			--to-html|--as-html)
-				to_html=1 && shift
+			--to-html)
+				echo "$input" | pandoc -o temp.html
+				awk '{
+					while (match($0, /<[^>]*><\/[^>]*>/)) {
+						$0 = substr($0, 1, RSTART-1) substr($0, RSTART+RLENGTH)
+					}
+					print
+				}' temp.html > temp_clean.html
+				mv temp_clean.html temp.html
+				cat temp.html
+				rm temp.html
+				return 0
 				;;
-			--pretty)
-				deps glow
-				pretty=1 && shift
+			--pretty|-p)
+				echo "$input" | pretty && return 0
 				;;
-			*) args+=("$arg") && shift ;;
+			--to-markdown|--to-md)
+				echo "$input" | pandoc -f html -t commonmark -o temp.md
+				awk '{
+					while (match($0, /<[^>]*><\/[^>]*>/)) {
+						$0 = substr($0, 1, RSTART-1) substr($0, RSTART+RLENGTH)
+					}
+					print
+				}' temp.md > temp_clean.md
+				mv temp_clean.md temp.md
+				cat temp.md
+				rm temp.md
+				return 0
+				;;
 		esac
 	done && set -- "${args[@]}"
 
-	if [[ $to_html -eq 1 ]]; then
-		echo "$input" | pandoc
-	elif [[ $pretty -eq 1 ]]; then
-		echo "$input" | glow
-	else
-		echo "$input"
-	fi
+	echo "$input"
 
 }
 
@@ -2336,7 +2356,10 @@ function request() {
 	local url
 	declare -a curl_cmd
 
-	url=$1 && shift
+	# help
+	[[ $1 == '--?' ]] && echo "|<url> (--json <json>|--data <form-data>|--file <file>|--header <header>|--token <token>|--auth <user:pass>|--output <file>)" && return 0
+
+	[[ -p /dev/stdin ]] && url=$(cat) || url=$1 && shift
 
 	curl_cmd=("curl" "-s" "-L" "$url")
 
@@ -2448,6 +2471,13 @@ function run() {
 
     fi
 }
+# Function to generate file list for completion
+_run_completions() {
+    local cur=${COMP_WORDS[COMP_CWORD]}
+	mapfile -t COMPREPLY < <(compgen -f "home/scripts/$cur" | xargs -n 1 basename)
+}
+# Register the completion function for the run command
+complete -F _run_completions run
 
 
 
