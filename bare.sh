@@ -308,6 +308,7 @@ EOF
 renew() {
 	# shellcheck disable=SC1091
 	source "$BARE_DIR/bare.sh"
+	_bareStartUp
 }
 
 
@@ -2106,7 +2107,7 @@ openai() {
 		[[ $response == 'y' ]] && {
 			read -r -s -p " ⚙️ Enter your OpenAI API key: " OPENAI_API_KEY
 			echo ""
-			echo "OPENAI_API_KEY=$OPENAI_API_KEY" >> $BARE_HOME/.barerc && sleep 0.4
+			echo "OPENAI_API_KEY=$OPENAI_API_KEY" >> "$BARE_HOME/.barerc" && sleep 0.4
 			echo " ⚙️ OPENAI_API_KEY set! You can now use OpenAI in bare."
 			echo ""
 			return 0
