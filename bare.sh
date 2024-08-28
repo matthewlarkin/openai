@@ -305,15 +305,9 @@ EOF
 
 
 
-refresh() {
+renew() {
 	# shellcheck disable=SC1091
-	source ./bare.sh
-}
-
-
-
-renew() { # alias for refresh, quicker to type
-	refresh
+	source "$BARE_DIR/bare.sh"
 }
 
 
