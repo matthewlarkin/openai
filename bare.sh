@@ -695,7 +695,7 @@ function codec() {
 		
 		decrypt)
 
-			local pass decrypted salt encrypted
+			local pass
 		
 			args=() && while true; do
 				case $1 in
@@ -710,15 +710,16 @@ function codec() {
 			IFS=':' read -r salt encrypted <<< "$input"
 		
 			# Decrypt the input
-			decrypted=$(echo "$encrypted" | base64 -d | openssl enc -d -aes-256-cbc -S "$salt" -k "$pass" -pbkdf2 2>/dev/null)
-			if [[ $? -ne 0 ]]; then
+			if ! decrypted=$(echo "$encrypted" | base64 -d | openssl enc -d -aes-256-cbc -S "$salt" -k "$pass" -pbkdf2 2>/dev/null); then
 				return 1
 			fi
 		
 			echo "$decrypted"
+
 			;;
 
 		hash)
+
 			# shellcheck disable=2005
 			echo "$(php -r "
 				\$password = '$input';
@@ -728,6 +729,7 @@ function codec() {
 			;;
 
 		hash.verify)
+
 			# shellcheck disable=2005
 			echo "$(php -r "
 				\$password = '$1';
@@ -741,6 +743,7 @@ function codec() {
 			;;
 
 		lines.json)
+		
 			# Function to convert a list of items into a JSON array
 			convert_to_json_array() {
 				local input_data
