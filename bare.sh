@@ -514,9 +514,9 @@ airtable() {
 			
 			# Output all records as a JSON array
 			if [[ ${#records[@]} -gt 0 ]]; then
-				echo "${records[@]}" | jq -s '.' | rec --from-json
+				echo "${records[@]}" | jq -s '.'
 			else
-				echo "[]" | rec --from-json
+				echo "[]"
 			fi
 		
 			;;
