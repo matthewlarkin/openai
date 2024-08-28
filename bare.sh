@@ -2684,21 +2684,23 @@ round() {
 
 
 routines() {
-	
+
 	# Ensure BARE_HOME is set
 	if [[ -z $BARE_HOME ]]; then
 		echo "BARE_HOME is not set"
 		exit 1
 	fi
-	
+
 	# Initialize variables
-	local command args input name description cron bash_path
-	
-	bash_path=$(command -v bash)
-	
 	command='list'
-	
 	args=()
+	name=""
+	description=""
+	cron=""
+	input=""
+	bash_path=$(command -v bash)
+
+	# Parse command-line arguments
 	while [[ $# -gt 0 ]]; do
 		case $1 in
 			--name|-n) name=$2 && shift 2 ;;
@@ -2712,82 +2714,74 @@ routines() {
 		esac
 	done
 	set -- "${args[@]}"
-	
-	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1; fi
-	
+
+	if [[ -p /dev/stdin ]]; then
+		input=$(cat)
+	else
+		input=$1
+	fi
+
+	# Define the recfile path
+	RECFILE="$BARE_HOME/recfiles/routines/list.rec"
+
+	# Function to add or update a cron job
+	add_or_update_cron() {
+		[[ -z $name ]] && echo "Error: Name is required" && exit 1
+		[[ -z $cron ]] && echo "Error: Cron is required" && exit 1
+		[[ -z $input ]] && echo "Error: Script is required" && exit 1
+
+		# Remove existing record with the same name (if updating)
+		recdel "$RECFILE" -e "Name = '$name'" 2>/dev/null
+
+		# Insert the new or updated record
+		recins "$RECFILE" -f Name -v "$name" -f Script -v "$bash_path $BARE_DIR/bare.sh $input" -f Description -v "$description" -f Cron -v "$cron"
+
+		# Add to crontab if it doesn't exist
+		if ! (crontab -l 2>/dev/null | grep -q "$cron $bash_path $BARE_DIR/bare.sh $input"); then
+			(crontab -l 2>/dev/null; echo "$cron $bash_path $BARE_DIR/bare.sh $input") | crontab -
+		fi
+
+		echo "success"
+	}
+
+	# Function to remove a cron job
+	remove_cron() {
+		[[ -z $name ]] && echo "Error: Name is required" && exit 1
+
+		# Retrieve the cron timing and script name from the record
+		cron_timing=$(recsel -e "Name = '$name'" -P Cron "$RECFILE")
+		script_name=$(recsel -e "Name = '$name'" -P Script "$RECFILE")
+
+		[[ -z $cron_timing || -z $script_name ]] && echo "Error: Record not found" && exit 1
+
+		# Remove the record from the recfile
+		recdel "$RECFILE" -e "Name = '$name'" 2>/dev/null
+
+		# Remove the crontab entry
+		crontab -l | grep -vF "$cron_timing $script_name" | crontab -
+
+		echo "success"
+	}
+
+	# Execute the command based on the user's input
 	case $command in
-	
 		list)
-	
-			recsel "$BARE_HOME/recfiles/routines/list.rec" -p Name,Description,Cron,Script
-	
+			recsel "$RECFILE" -p Name,Description,Cron,Script
 			;;
-	
-		add)
-	
-			# usage: routines add -n <name> -c <cron> -d <description> <command>
-		
-			[[ -z $name ]] && echo "Error: Name is required" && exit 1
-			[[ -z $cron ]] && echo "Error: Cron is required" && exit 1
-			[[ -z $input ]] && echo "Error: Script is required" && exit 1
-			
-			# Check if the crontab entry already exists
-			if ! (crontab -l 2>/dev/null | grep -q "$cron $bash_path $BARE_DIR/bare.sh $input"); then
-				# If it doesn't exist, add it to the crontab
-				(crontab -l 2>/dev/null; echo "$cron $bash_path $BARE_DIR/bare.sh $input") | crontab -
-			fi
-			
-			# Overwrite any existing record with the same name
-			recdel "$BARE_HOME/recfiles/routines/list.rec" -e "Name = '$name'" 2>/dev/null
-			
-			# Insert the record
-			recins "$BARE_HOME/recfiles/routines/list.rec" -f Name -v "$name" -f Script -v "$bash_path $BARE_DIR/bare.sh $input" -f Description -v "$description" -f Cron -v "$cron"
-			
-			echo "success"
-	
+		add|update)
+			add_or_update_cron
 			;;
-	
-		update)
-	
-			[[ -z $name ]] && echo "Error: Name is required" && exit 1
-			[[ -z $cron ]] && echo "Error: Cron is required" && exit 1
-			[[ -z $input ]] && echo "Error: Script is required" && exit 1
-	
-			# Check if the crontab entry already exists
-			if ! (crontab -l 2>/dev/null | grep -q "$cron $bash_path $BARE_DIR/bare.sh $input"); then
-				# If it doesn't exist, add it to the crontab
-				(crontab -l 2>/dev/null; echo "$cron $bash_path $BARE_DIR/bare.sh $input") | crontab -
-			fi
-	
-			# Overwrite the existing record
-			recdel "$BARE_HOME/recfiles/routines/list.rec" -e "Name = '$name'" 2>/dev/null
-	
-			# Insert the updated record
-			recins "$BARE_HOME/recfiles/routines/list.rec" -f Name -v "$name" -f Script -v "$bash_path $BARE_DIR/bare.sh $input" -f Description -v "$description" -f Cron -v "$cron"
-	
-			echo "success"
-	
-			;;
-	
 		remove)
-	
-			[[ -z $name ]] && echo "Error: Name is required" && exit 1
-	
-			# Remove the record from the list
-	
-			recdel "$BARE_HOME/recfiles/routines/list.rec" -e "Name = '$name'" 2>/dev/null
-	
-			# Remove the crontab entry
-	
-			crontab -l | grep -v "$name" | crontab - 2>/dev/null
-	
-			echo "success"
-	
+			remove_cron
 			;;
-	
-		*) echo "Invalid command" && exit 1 ;;
-	
+		*)
+			echo "Invalid command"
+			exit 1
+			;;
 	esac
+
+	unset -f add_or_update_cron
+	unset -f remove_cron
 
 }
 
