@@ -266,8 +266,6 @@ _isBareCommand() {
 
 _bareTerminal() {
 
-	_bareStartUp
-
 	local boot_rcfile
 
 	boot_rcfile=$(mktemp)
@@ -276,6 +274,7 @@ _bareTerminal() {
 
 	export BASH_SILENCE_DEPRECATION_WARNING=1
 	source ./bare.sh
+	_bareStartUp
 	
 	if [[ "$BARE_COLOR" == 1 ]]; then
 		GREEN='\033[0;32m'
