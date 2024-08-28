@@ -5,7 +5,7 @@ cd "$BARE_DIR" || exit 1 && export BARE_DIR
 
 
 
-function _getOS() {
+_getOS() {
 	OS="Other"
 	case $(uname) in
 		Linux) grep -q 'Ubuntu' /etc/os-release && OS="Ubuntu" ;;
@@ -16,7 +16,7 @@ function _getOS() {
 
 
 
-function _bareStartUp() {
+_bareStartUp() {
 
 	_bareVerifyIntegrity
 	_getOS
@@ -61,7 +61,7 @@ function _bareStartUp() {
 
 
 
-function _bareVerifyIntegrity() {
+_bareVerifyIntegrity() {
 
 	[[ -z $BARE_HOME ]] && echo "Error: BARE_HOME is not set." && return 1
 	[[ ! -d $BARE_HOME ]] && echo "Error: BARE_HOME directory does not exist." && return 1
@@ -89,7 +89,7 @@ function _bareVerifyIntegrity() {
 
 }
 
-function _checkVariables() {
+_checkVariables() {
 
 	local variables logfile steps_required
 
@@ -133,7 +133,7 @@ function _checkVariables() {
 	fi
 }
 
-function _checkDependencies() {
+_checkDependencies() {
 
 	local dependencies logfile steps_required
 
@@ -196,7 +196,7 @@ function _checkDependencies() {
 
 
 
-function _bareSystemHealthCheck() {
+_bareSystemHealthCheck() {
 
 	_bareStartUp
 
@@ -241,7 +241,7 @@ _completions_rec() {
 # HELPER FUNCTIONS
 
 
-function _isBareCommand() {
+_isBareCommand() {
 
 	local command function_names func
 
@@ -260,7 +260,7 @@ function _isBareCommand() {
 
 
 
-function _bareTerminal() {
+_bareTerminal() {
 
 	_bareStartUp
 
@@ -301,14 +301,14 @@ EOF
 
 
 
-function refresh() {
+refresh() {
 	# shellcheck disable=SC1091
 	source ./bare.sh
 }
 
 
 
-function renew() { # alias for refresh, quicker to type
+renew() { # alias for refresh, quicker to type
 	refresh
 }
 
@@ -320,7 +320,7 @@ function renew() { # alias for refresh, quicker to type
 
 
 
-function age() {
+age() {
 
 	local input date_cmd stat_cmd output in variant
 
@@ -447,7 +447,7 @@ function age() {
 }
 
 
-function capitalize() {
+capitalize() {
 
 	local all input args
 
@@ -470,9 +470,9 @@ function capitalize() {
 }
 
 
-function cloud() {
+cloud() {
 
-	function getCloudProvider() {
+	getCloudProvider() {
 
 		[[ -n "$HETZNER_API_KEY" ]] && echo "hetzner" && exit 0
 		[[ -n "$DIGITALOCEAN_API_KEY" ]] && echo "digitalocean" && exit 0
@@ -488,7 +488,7 @@ function cloud() {
 	}
 
 	# shellcheck disable=SC2317
-	function hetzner_info() {
+	hetzner_info() {
 		
 		local json
 		json=$(curl -sL -H "Authorization: Bearer $HETZNER_API_KEY" \
@@ -508,7 +508,7 @@ function cloud() {
 	}
 
 	# shellcheck disable=SC2317
-	function hetzner_createSSH() {
+	hetzner_createSSH() {
 
 		local public_key name response
 
@@ -536,14 +536,14 @@ function cloud() {
 	}
 
 	# shellcheck disable=SC2317
-	function hetzner_listSSH() {
+	hetzner_listSSH() {
 		# only return: .ssh_keys[], and .id, .public_key
 		curl -sL -H "Authorization: Bearer $HETZNER_API_KEY" \
 			"https://api.hetzner.cloud/v1/ssh_keys" | jq '[.ssh_keys[] | {id: .id, name: .name, pub: .public_key}]' | rec --from-json
 	}
 
 	# shellcheck disable=SC2317
-	function hetzner_createFirewall() {
+	hetzner_createFirewall() {
 
 		local name rules response
 
@@ -569,12 +569,12 @@ function cloud() {
 	}
 
 	# shellcheck disable=SC2317
-	function hetzner_listFirewalls() {
+	hetzner_listFirewalls() {
 		:
 	}
 
 	# shellcheck disable=SC2317
-	function hetzner_createServer() {
+	hetzner_createServer() {
 
 		local name key response
 
@@ -659,7 +659,7 @@ function cloud() {
 
 
 
-function codec() {
+codec() {
 
 	local input command index json_array output lines start end reverse_flag
 
@@ -1021,7 +1021,7 @@ END
 
 
 
-function copy() {
+copy() {
 
 	local file destination
 
@@ -1040,7 +1040,7 @@ function copy() {
 
 
 
-function date() {
+date() {
     local input
     local args
     local date_cmd
@@ -1160,7 +1160,7 @@ function date() {
 
 
 
-function deps() {
+deps() {
 
 	local missing_deps
 	
@@ -1189,7 +1189,7 @@ function deps() {
 
 
 
-function download() {
+download() {
 
 	local url
 	local output_name
@@ -1259,7 +1259,7 @@ function download() {
 
 
 
-function email() {
+email() {
 
 	deps jq
 
@@ -1325,7 +1325,7 @@ function email() {
 
 
 
-function filter() {
+filter() {
 
 	local input
 
@@ -1353,7 +1353,7 @@ function filter() {
 
 
 
-function geo() {
+geo() {
 
 	deps curl jq
 	touch home/.cache/geo.txt
@@ -1421,7 +1421,7 @@ function geo() {
 
 
 
-function image() {
+image() {
 
 	local command
 	local input
@@ -1605,7 +1605,7 @@ function image() {
 
 
 
-function interpret() {
+interpret() {
 
     local input user_script args env_file
 
@@ -1643,7 +1643,7 @@ function interpret() {
 
 
 
-function lowercase() {
+lowercase() {
 
 	local input
 
@@ -1655,7 +1655,7 @@ function lowercase() {
 
 
 
-function math() {
+math() {
 
 	local operation
 	local output
@@ -1725,7 +1725,7 @@ function math() {
 
 
 
-function media() {
+media() {
 
 	local command
 	local input
@@ -1926,7 +1926,7 @@ function media() {
 
 
 
-function move() {
+move() {
 
 	[[ -p /dev/stdin ]] && file=$(cat) || file=$1
 
@@ -1941,7 +1941,7 @@ function move() {
 
 
 
-function open() {
+open() {
 
 	[ -z "$EDITOR" ] && echo "EDITOR is not set"
 
@@ -1959,7 +1959,7 @@ function open() {
 
 
 
-function openai() {
+openai() {
 
 	[[ -z "$OPENAI_API_KEY" ]] && {
 		echo ""
@@ -2250,7 +2250,7 @@ function openai() {
 
 
 
-function pretty() {
+pretty() {
 
 	[[ -p /dev/stdin ]] && input=$(cat) || input=$1 && shift
 	
@@ -2261,7 +2261,7 @@ function pretty() {
 
 
 
-function qr() {
+qr() {
 
 	deps qrencode
 
@@ -2278,7 +2278,7 @@ function qr() {
 
 
 
-function random() {
+random() {
 
 	local input command length constraint
 
@@ -2318,7 +2318,7 @@ function random() {
 
 
 
-function rec() {
+rec() {
 
 	deps rec2csv csvlook
 
@@ -2397,7 +2397,7 @@ function rec() {
 
 
 
-function render() {
+render() {
 
 	local input command
 
@@ -2448,7 +2448,7 @@ function render() {
 
 
 
-function request() {
+request() {
 
 	local url
 	declare -a curl_cmd
@@ -2496,7 +2496,7 @@ function request() {
 
 
 
-function reveal() {
+reveal() {
 
 	local input
 
@@ -2513,7 +2513,7 @@ function reveal() {
 
 
 
-function round() {
+round() {
 
 	math round "$@"
 
@@ -2521,7 +2521,7 @@ function round() {
 
 
 
-function run() {
+run() {
 
     local args
     local script
@@ -2571,7 +2571,7 @@ function run() {
 
 
 
-function serve() {
+serve() {
 
 	local command
 
@@ -2611,7 +2611,7 @@ function serve() {
 
 
 
-function show() {
+show() {
 
 	local input
 
@@ -2623,7 +2623,7 @@ function show() {
 
 
 
-function silence() {
+silence() {
 
 	local input
 
@@ -2634,7 +2634,7 @@ function silence() {
 
 
 
-function size() {
+size() {
 
 	local input stat_cmd
 
@@ -2667,7 +2667,7 @@ function size() {
 
 
 
-function speed() {
+speed() {
 
 	deps ffmpeg openssl
 
@@ -2725,7 +2725,7 @@ function speed() {
 
 
 
-function squish() {
+squish() {
 
 	local input
 
@@ -2736,7 +2736,7 @@ function squish() {
 
 
 
-function stripe() {
+stripe() {
 
 	local input command subcommand args
 
@@ -2823,7 +2823,7 @@ function stripe() {
 
 
 
-function sub() {
+sub() {
 
     local replacing replacement input args
 
@@ -2844,7 +2844,7 @@ function sub() {
 
 
 
-function transform() {
+transform() {
 
 	local input format variant all args
 
@@ -2916,7 +2916,7 @@ function transform() {
 
 
 
-function translate() {
+translate() {
 
 	deps dig
 
@@ -3014,7 +3014,7 @@ function translate() {
 
 
 
-function trim() {
+trim() {
 
 	local input
 	[[ -p /dev/stdin ]] && input=$(cat) || input=$1
@@ -3024,7 +3024,7 @@ function trim() {
 
 
 
-function uppercase() {
+uppercase() {
 
 	local input
 	[[ -p /dev/stdin ]] && input=$(cat) || input=$1
@@ -3034,7 +3034,7 @@ function uppercase() {
 
 
 
-function validate() {
+validate() {
 
 	local input type output runs_remaining response explain condition source_material model precision digits regex date_format os_type parsed_date time_format normalized_input parsed_time country
 
@@ -3409,7 +3409,7 @@ function validate() {
 
 
 
-function weather() {
+weather() {
 
 	[[ -p /dev/stdin ]] && input=$(cat) || input="$1" && shift
 
@@ -3443,7 +3443,7 @@ function weather() {
 
 	[[ $json_requested == '1' ]] && {
 
-		function cacheJSON() {
+		cacheJSON() {
 			json=$(curl -sL "wttr.in/$location?format=j1")
 			mkdir -p home/.cache/weather
 			echo "$json" > "$cache_path.json"
@@ -3525,7 +3525,7 @@ function weather() {
 
 
 
-function write() {
+write() {
 
 	local contents args file
 
@@ -3560,7 +3560,7 @@ function write() {
 
 
 
-function youtube() {
+youtube() {
 
 	local command quality thumbnail_quality url
 
@@ -3607,7 +3607,7 @@ function youtube() {
 	}
 
 	# Function to extract YouTube video ID
-	function extract_id() {
+	extract_id() {
 
 		local url
 
