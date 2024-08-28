@@ -75,8 +75,8 @@ _bareVerifyIntegrity() {
 
 	# set directories
 	mkdir -p .cache .logs csvs desktop documents downloads recfiles scripts
-	for item in document openai tasks projects
-		do mkdir -p recfiles/$item; done
+	for item in document openai tasks projects routines; do
+		mkdir -p recfiles/$item; done
 
 	# set files
 	touch .barerc
@@ -84,7 +84,7 @@ _bareVerifyIntegrity() {
 		touch recfiles/document/$item.rec; done
 	for item in assistants messages threads; do
 		touch recfiles/openai/$item.rec; done
-	for item in tasks projects; do
+	for item in tasks projects routines; do
 		touch recfiles/$item/list.rec
 		touch recfiles/$item/tags.rec
 		touch recfiles/$item/comments.rec; done
@@ -235,6 +235,11 @@ _completions_rec() {
     COMPLETION_DIR="home/recfiles"
     _completions
 } && complete -F _completions_rec rec
+
+_completions_routine() {
+	COMPLETION_DIR="home/scripts"
+	_completions
+} && complete -F _completions_routine routines
 
 
 
@@ -450,7 +455,7 @@ airtable() {
 
 	[[ -z $AIRTABLE_ACCESS_TOKEN ]] && echo "Error: AIRTABLE_ACCESS_TOKEN is not set." && return 1
 
-	local input command subcommand args base_id table_name api_key command record_id filter limit offset response records new_records
+	local input command subcommand args base_id table_name api_key command record_id filter limit offset response records new_records url view
 
 	api_key=$AIRTABLE_ACCESS_TOKEN
 	base_id=$AIRTABLE_BASE_ID
@@ -461,6 +466,7 @@ airtable() {
 			--table|-t) table_name=$2 && shift 2 ;;
 			--api-key|-k) api_key=$2 && shift 2 ;;
 			--filter|-f) filter=$2 && shift 2 ;;
+			--view|-v) view=$2 && shift 2 ;;
 			--id|-i) record_id=$2 && shift 2 ;;
 			--limit|-l) limit=$2 && shift 2 ;;
 			--offset|-o) offset=$2 && shift 2 ;;
@@ -488,6 +494,7 @@ airtable() {
 			while :; do
 				url="https://api.airtable.com/v0/$base_id/$(codec url.encode "$table_name")?limit=$limit&offset=$offset"
 				[[ -n "$filter" ]] && url="$url&filterByFormula=$(codec url.encode "$filter")"
+				[[ -n "$view" ]] && url="$url&view=$(codec url.encode "$view")"
 			
 				response=$(curl -sL "$url" -H "Authorization: Bearer $api_key")
 			
@@ -1748,7 +1755,9 @@ image() {
 
 interpret() {
 
-    local input user_script args env_file
+    local input user_script args env_file BARE_HOME_FULL
+
+	[[ -z $BARE_HOME ]] && echo "BARE_HOME is not set" && return 1
 
     args=() && while [[ $# -gt 0 ]]; do
         case $1 in
@@ -1759,18 +1768,21 @@ interpret() {
 
     input=$1 && shift
 
-    [[ ! -f "home/scripts/$input" ]] && \
-        echo "No script by that name found: $input" && return 1
+    [[ ! -f "$BARE_HOME/scripts/$input" ]] && \
+        echo "No script by that name found: $BARE_HOME/scripts/$input" && return 1
 
-    user_script="./$(random string 30)"
+	BARE_HOME_FULL=$(cd "$BARE_HOME" && pwd)
+
+    user_script="$BARE_HOME_FULL/.cache/$(random string 30)"
 
     {
         echo '#!/usr/bin/env bash'
         echo 'set -e'
         echo "cd $BARE_DIR"
         echo 'source ./bare.sh'
+		echo '_bareStartUp'
         [[ -n "$env_file" ]] && cat "$env_file"
-        cat "home/scripts/$input"
+        cat "$BARE_HOME/scripts/$input"
         echo ""
     } > "$user_script"
 
@@ -2672,6 +2684,108 @@ reveal() {
 round() {
 
 	math round "$@"
+
+}
+
+
+
+routines() {
+	
+	# Initialize variables
+	local command args input name description cron bash_path
+
+	bash_path=$(command -v bash)
+	
+	command='list'
+	
+	args=() && while [[ $# -gt 0 ]]; do
+		case $1 in
+			--name|-n) name=$2 && shift 2 ;;
+			--description|--desc|-d) description=$2 && shift 2 ;;
+			--cron|-c) cron=$2 && shift 2 ;;
+			--add|--create|add|create) command='add' && shift ;;
+			--update|--edit|update|edit) command='update' && shift ;;
+			--remove|remove) command='remove' && shift ;;
+			--list|list) command='list' && shift ;;
+			*) args+=("$1") && shift ;;
+		esac
+	done && set -- "${args[@]}"
+	
+	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1; fi
+	
+	case $command in
+	
+		list)
+	
+			recsel "$BARE_HOME/recfiles/routines/list.rec" -p Name,Description,Cron,Script
+	
+			;;
+	
+		add)
+	
+			# usage: routines add -n <name> -c <cron> -d <description> <command>
+		
+			[[ -z $name ]] && echo "Error: Name is required" && return 1
+			[[ -z $cron ]] && echo "Error: Cron is required" && return 1
+			[[ -z $input ]] && echo "Error: Script is required" && return 1
+			
+			# Check if the crontab entry already exists
+			if ! (crontab -l 2>/dev/null | grep -q "$cron $bash_path $BARE_DIR/bare.sh $input"); then
+				# If it doesn't exist, add it to the crontab
+				(crontab -l 2>/dev/null; echo "$cron $bash_path $BARE_DIR/bare.sh $input") | crontab -
+			fi
+			
+			# Overwrite any existing record with the same name
+			recdel "$BARE_HOME/recfiles/routines/list.rec" -e "Name = '$name'" 2>/dev/null
+			
+			# Insert the record
+			recins "$BARE_HOME/recfiles/routines/list.rec" -f Name -v "$name" -f Script -v "$bash_path $BARE_DIR/bare.sh $input" -f Description -v "$description" -f Cron -v "$cron"
+			
+			echo "success"
+	
+			;;
+	
+		update)
+	
+			[[ -z $name ]] && echo "Error: Name is required" && return 1
+			[[ -z $cron ]] && echo "Error: Cron is required" && return 1
+			[[ -z $input ]] && echo "Error: Script is required" && return 1
+	
+			# Check if the crontab entry already exists
+			if ! (crontab -l 2>/dev/null | grep -q "$cron $bash_path $BARE_DIR/bare.sh $input"); then
+				# If it doesn't exist, add it to the crontab
+				(crontab -l 2>/dev/null; echo "$cron $bash_path $BARE_DIR/bare.sh $input") | crontab -
+			fi
+	
+			# Overwrite the existing record
+			recdel "$BARE_HOME/recfiles/routines/list.rec" -e "Name = '$name'" 2>/dev/null
+	
+			# Insert the updated record
+			recins "$BARE_HOME/recfiles/routines/list.rec" -f Name -v "$name" -f Script -v "$bash_path $BARE_DIR/bare.sh $input" -f Description -v "$description" -f Cron -v "$cron"
+	
+			echo "success"
+	
+			;;
+	
+		remove)
+	
+			[[ -z $name ]] && echo "Error: Name is required" && return 1
+	
+			# Remove the record from the list
+	
+			recdel "$BARE_HOME/recfiles/routines/list.rec" -e "Name = '$name'" 2>/dev/null
+	
+			# Remove the crontab entry
+	
+			crontab -l | grep -v "$name" | crontab -
+	
+			echo "success"
+	
+			;;
+	
+		*) echo "Invalid command" && return 1 ;;
+	
+	esac
 
 }
 
