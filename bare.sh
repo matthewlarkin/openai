@@ -1,28 +1,31 @@
 #!/usr/bin/env bash
 
-if [ "$(basename "$0")" = "bare.sh" ]; then
-    cd "$(dirname "$0")" || return 1
-    BARE_DIR=$(pwd) && export BARE_DIR
-fi
+BARE_DIR=$(realpath "$(dirname "$0")")
+cd "$BARE_DIR" || exit 1 && export BARE_DIR
 
 
 
-function bareRunCommands() {
+function _getOS() {
+	OS="Other"
+	case $(uname) in
+		Linux) grep -q 'Ubuntu' /etc/os-release && OS="Ubuntu" ;;
+		Darwin) OS="macOS";;
+	esac
+	export OS
+}
 
-	# Detect macOS, Ubuntu, or Other
-	local OS
-	OS=$({
-		[[ $(uname) == 'Linux' ]] \
-			&& grep -q 'Ubuntu' /etc/os-release \
-			&& echo "Ubuntu"
-		[[ $(uname) == 'Darwin' ]] && echo "macOS"
-	} || echo "Other") && export OS
+
+
+function _bareStartUp() {
+
+	_bareVerifyIntegrity
+	_getOS
 
 	# Set the values in the associative array
 	local -A BASE_CONFIG
 	BASE_CONFIG=(
 		["BARE_VERSION"]=$(git log -1 --format=%ct)
-		["BARE_DIR"]=$(pwd)
+		["BARE_HOME"]="$BARE_DIR/home"
 		["BARE_TIMEZONE"]=UTC
 		["BARE_COLOR"]=0
 		["BARE_DEBUG"]=0
@@ -51,150 +54,161 @@ function bareRunCommands() {
 		export RED GREEN YELLOW BLUE GRAY RESET
 	}
 
-	bareHealthCheck
-
 	# shellcheck disable=SC1091
-	source "$BARE_DIR/home/.barerc"
+	source "$BARE_HOME/.barerc"
 
 }
 
 
 
-function bareHealthCheck() {
+function _bareVerifyIntegrity() {
 
-	[[ ! -f bare.sh ]] && { echo "Error: not in bare directory"; return 1; }
+	[[ -z $BARE_HOME ]] && echo "Error: BARE_HOME is not set." && return 1
+	[[ ! -d $BARE_HOME ]] && echo "Error: BARE_HOME directory does not exist." && return 1
+	[[ ! -f $BARE_DIR/bare.sh ]] && echo "Error: not in bare directory" && return 1
 
 	local item
 
-	mkdir -p home && cd home || return 1
-	mkdir -p .cache .lib .logs desktop downloads recfiles scripts && cd .. || return 1
-	touch home/.barerc
-	for item in document openai; do
-		mkdir -p home/recfiles/$item; done
-	for item in list tags; do
-		touch home/recfiles/document/$item.rec; done;
-	for item in assistants messages threads; do
-		touch home/recfiles/openai/$item.rec; done
+	cd "$BARE_HOME" || return 1
 
+	# set directories
+	mkdir -p .cache .lib .logs desktop downloads recfiles scripts csvs documents
+	for item in document openai tasks projects
+		do mkdir -p recfiles/$item; done
+
+	# set files
+	touch .barerc
+	for item in list tags; do
+		touch recfiles/document/$item.rec; done
+	for item in assistants messages threads; do
+		touch recfiles/openai/$item.rec; done
+	for item in tasks projects; do
+		touch recfiles/$item/list.rec
+		touch recfiles/$item/tags.rec
+		touch recfiles/$item/comments.rec; done
+
+}
+
+function _checkVariables() {
+
+	local variables logfile steps_required
+
+	steps_required='false'
+
+	variables=(
+		"OPENAI_API_KEY"
+		"POSTMARK_API_KEY"
+		"BARE_EMAIL_FROM"
+		"STRIPE_API_KEY"
+		"EDITOR"
+	)
+
+	logfile="$BARE_HOME/.logs/system-report.$(date +%Y-%m-%d).md"
+
+	echo ""
+	echo "${BLUE}Checking core variables ...${RESET}"
+	echo ""
+	sleep 0.2
+
+	echo "System Report $(date)" > "$logfile"
+	echo "- - - - -" >> "$logfile"
+
+	# Verify that core variables exist in $BARE_HOME/.barerc
+	for var in "${variables[@]}"; do
+		if ! grep -q "^$var=" "$BARE_HOME/.barerc"; then
+			echo "$var=''" >> "$BARE_HOME/.barerc"
+			sleep 0.2
+			echo "- Variable *'$var'* is missing. It has been added with an empty value to *$BARE_HOME/.barerc*." >> "$logfile"
+			steps_required='true'
+		fi
+	done
+
+	sleep 0.2
+
+	if [[ "$steps_required" == 'true' ]]; then
+		echo " | ${RED}Extra steps required${RESET}: a system report with missing variables was written to:"
+		echo " | ${GRAY}$logfile${RESET}."
+	else
+		echo -e " | ${GREEN}All core variables are set!${RESET}"
+	fi
+}
+
+function _checkDependencies() {
+
+	local dependencies logfile steps_required
+
+	steps_required='false'
+
+	declare -A dependencies=(
+		["jq"]="jq"
+		["yq"]="yq"
+		["yt-dlp"]="yt-dlp"
+		["curl"]="curl"
+		["ffmpeg"]="ffmpeg"
+		["recsel"]="recutils"
+		["sqlite3"]="sqlite3"
+		["httpd"]="apache2"
+		["pandoc"]="pandoc"
+		["xxd"]="xxd"
+		["php"]="php"
+		["awk"]="awk"
+		["perl"]="perl"
+		["openssl"]="openssl"
+		["magick"]="imagemagick"
+		["qrencode"]="qrencode"
+		["csvcut"]="csvkit"
+	)
+
+	# Only add gdate for macOS
+	if [[ "$OS" != "Ubuntu" ]]; then
+		dependencies["gdate"]="coreutils"
+		dependencies["gsed"]="gnu-sed"
+	fi
+
+	logfile="$BARE_HOME/.logs/system-report.$(date +%Y-%m-%d).md"
+
+	echo ""
+	echo "${BLUE}Checking dependencies ...${RESET}"
+	echo ""
+	sleep 0.2
+
+	echo "System Report $(date)" > "$logfile"
+	echo "- - - - -" >> "$logfile"
+
+	# Check and log missing dependencies
+	for package in "${!dependencies[@]}"; do
+		if ! command -v "$package" &> /dev/null; then
+			sleep 0.2
+			echo "- Dependency *'$package'* not found. Please install *'${dependencies[$package]}'* manually." >> "$logfile"
+			steps_required='true'
+		fi
+	done
+
+	sleep 0.2
+
+	if [[ "$steps_required" == 'true' ]]; then
+		echo " | ${RED}Extra steps required${RESET}: a system report with recommendations was written to:"
+		echo " | ${GRAY}$logfile${RESET}."
+	else
+		echo -e " | ${GREEN}All good!${RESET}"
+	fi
 }
 
 
 
-function setup() {
+function _bareSystemHealthCheck() {
 
-	function setCoreVariables() {
+	_bareStartUp
 
-		local variables logfile steps_required
-
-		steps_required='false'
-
-		variables=(
-			"OPENAI_API_KEY"
-			"POSTMARK_API_TOKEN"
-			"BARE_EMAIL_FROM"
-			"STRIPE_SECRET_KEY"
-			"EDITOR"
-		)
-
-		logfile="$BARE_DIR/home/.logs/system-report.$(date +%Y-%m-%d).md"
-
-		echo ""
-		echo "${BLUE}Checking core variables ...${RESET}"
-		echo ""
-		sleep 0.2
-
-		echo "System Report $(date)" > "$logfile"
-		echo "- - - - -" >> "$logfile"
-
-		# Verify that core variables exist in $BARE_DIR/home/.barerc
-		for var in "${variables[@]}"; do
-			if ! grep -q "^$var=" "$BARE_DIR/home/.barerc"; then
-				echo "$var=''" >> "$BARE_DIR/home/.barerc"
-				sleep 0.2
-				echo "- Variable *'$var'* is missing. It has been added with an empty value to *$BARE_DIR/home/.barerc*." >> "$logfile"
-				steps_required='true'
-			fi
-		done
-
-		sleep 0.2
-
-		if [[ "$steps_required" == 'true' ]]; then
-			echo " | ${RED}Extra steps required${RESET}: a system report with missing variables was written to:"
-			echo " | ${GRAY}$logfile${RESET}."
-		else
-			echo -e " | ${GREEN}All core variables are set!${RESET}"
-		fi
-	}
-
-	function checkDependencies() {
-
-		local dependencies logfile steps_required
-
-		steps_required='false'
-
-		declare -A dependencies=(
-			["jq"]="jq"
-			["yq"]="yq"
-			["yt-dlp"]="yt-dlp"
-			["curl"]="curl"
-			["ffmpeg"]="ffmpeg"
-			["recsel"]="recutils"
-			["sqlite3"]="sqlite3"
-			["httpd"]="apache2"
-			["pandoc"]="pandoc"
-			["xxd"]="xxd"
-			["php"]="php"
-			["awk"]="awk"
-			["perl"]="perl"
-			["openssl"]="openssl"
-			["magick"]="imagemagick"
-			["qrencode"]="qrencode"
-			["csvcut"]="csvkit"
-		)
-
-		# Only add gdate for macOS
-		if [[ "$OS" != "Ubuntu" ]]; then
-			dependencies["gdate"]="coreutils"
-		fi
-
-		logfile="$BARE_DIR/home/.logs/system-report.$(date +%Y-%m-%d).md"
-
-		echo ""
-		echo "${BLUE}Checking dependencies ...${RESET}"
-		echo ""
-		sleep 0.2
-
-		echo "System Report $(date)" > "$logfile"
-		echo "- - - - -" >> "$logfile"
-
-		# Check and log missing dependencies
-		for package in "${!dependencies[@]}"; do
-			if ! command -v "$package" &> /dev/null; then
-				sleep 0.2
-				echo "- Dependency *'$package'* not found. Please install *'${dependencies[$package]}'* manually." >> "$logfile"
-				steps_required='true'
-			fi
-		done
-
-		sleep 0.2
-
-		if [[ "$steps_required" == 'true' ]]; then
-			echo " | ${RED}Extra steps required${RESET}: a system report with recommendations was written to:"
-			echo " | ${GRAY}$logfile${RESET}."
-		else
-			echo -e " | ${GREEN}All good!${RESET}"
-		fi
-	}
-
-	checkDependencies
-	setCoreVariables
+	_checkDependencies
+	_checkVariables
 
 	echo ""
 	echo "${GREEN}System check complete.${RESET}"
 	echo ""
 
-	unset -f checkDependencies
-	unset -f setCoreVariables
+	unset -f _checkDependencies
+	unset -f _checkVariables
 
 }
 
@@ -227,16 +241,16 @@ _completions_rec() {
 # HELPER FUNCTIONS
 
 
-function isValidFunc() {
+function _isBareCommand() {
 
 	local command function_names func
 
-	command="$1"
+	command=$1
 	mapfile -t function_names < <(declare -F | awk '{print $3}')
 
 	for func in "${function_names[@]}"; do
 		if [[ "$func" == "$command" ]]; then
-			echo 'true' && return 0
+			return 0
 		fi
 	done
 
@@ -246,30 +260,43 @@ function isValidFunc() {
 
 
 
-function runBareTerminal() {
-	# shellcheck disable=SC2028
-	exec bash --rcfile <({
-		echo "# tell Macs to be quiet about their zsh default"
-		echo "export BASH_SILENCE_DEPRECATION_WARNING=1"
-		echo "source ./bare.sh"
-		echo "if [[ \"\$BARE_COLOR\" == 1 ]]; then"
-		echo "    GREEN='\\033[0;32m'"
-		echo "    YELLOW='\\033[0;33m'"
-		echo "    RED='\\033[0;31m'"
-		echo "    GRAY='\\033[2;37m'"
-		echo "    RESET='\\033[0m'"
-		echo "fi"
-		echo "update_prompt() {"
-		echo "    if [ \"\$(basename \"\$(pwd)\")\" = \"bare.sh\" ] && [ -f \"bare.sh\" ]; then"
-		echo "        PS1=\"🐻 \[\${GREEN}\]\$(basename \$(pwd)) \[\${YELLOW}\]> \[\${RESET}\]\""
-		echo "    else"
-		echo "        PS1=\"🐻 \[\${RED}\]\$(basename \$(pwd)) \[\${YELLOW}\]> \[\${RESET}\]\""
-		echo "    fi"
-		echo "}"
-		echo "PROMPT_COMMAND=update_prompt"
-		echo "update_prompt"
-		echo "printf \"\n\${GRAY}entering bare terminal. type exit to leave.\${RESET}\n\""
-	})
+function _bareTerminal() {
+
+	_bareStartUp
+
+	local boot_rcfile
+
+	boot_rcfile=$(mktemp)
+	
+	cat << 'EOF' > "$boot_rcfile"
+
+	export BASH_SILENCE_DEPRECATION_WARNING=1
+	source ./bare.sh
+	
+	if [[ "$BARE_COLOR" == 1 ]]; then
+		GREEN='\033[0;32m'
+		YELLOW='\033[0;33m'
+		RED='\033[0;31m'
+		GRAY='\033[2;37m'
+		RESET='\033[0m'
+	fi
+	
+	update_prompt() {
+		if [ "$(basename "$(pwd)")" = "bare.sh" ] && [ -f "bare.sh" ]; then
+			PS1="🐻 \[${GREEN}\]$(basename $(pwd)) \[${YELLOW}\]> \[${RESET}\]"
+		else
+			PS1="🐻 \[${RED}\]$(basename $(pwd)) \[${YELLOW}\]> \[${RESET}\]"
+		fi
+	}
+	
+	PROMPT_COMMAND=update_prompt
+	update_prompt
+	
+	printf "\n${GRAY}entering bare terminal. type exit to leave.${RESET}\n"
+EOF
+	
+	exec bash --rcfile "$boot_rcfile"
+
 }
 
 
@@ -641,6 +668,55 @@ function codec() {
 	[[ -p /dev/stdin ]] && input=$(cat) || input=$1 && shift
 
 	case $command in
+
+		encrypt)
+
+			local salt pass encrypted
+
+			args=() && while true; do
+				case $1 in
+					--salt|-s) salt=$2 && shift 2 ;;
+					--pass|-p) pass=$2 && shift 2 ;;
+					*) break ;;
+				esac
+			done && set -- "${args[@]}"
+		
+			[[ -z $pass ]] && echo "Error: pass is required." && return 1
+		
+			# Generate a random salt if not provided
+			[[ -z $salt ]] && salt=$(openssl rand -hex 8)
+		
+			# Encrypt the input
+			encrypted=$(echo "$input" | openssl enc -aes-256-cbc -S "$salt" -k "$pass" -pbkdf2 | base64)
+
+			echo "$salt:$encrypted"
+
+			;;
+		
+		decrypt)
+
+			local pass decrypted salt encrypted
+		
+			args=() && while true; do
+				case $1 in
+					--pass|-p) pass=$2 && shift 2 ;;
+					*) break ;;
+				esac
+			done && set -- "${args[@]}"
+		
+			[[ -z $pass ]] && echo "Error: pass is required." && return 1
+		
+			# Extract the salt and encrypted data
+			IFS=':' read -r salt encrypted <<< "$input"
+		
+			# Decrypt the input
+			decrypted=$(echo "$encrypted" | base64 -d | openssl enc -d -aes-256-cbc -S "$salt" -k "$pass" -pbkdf2 2>/dev/null)
+			if [[ $? -ne 0 ]]; then
+				return 1
+			fi
+		
+			echo "$decrypted"
+			;;
 
 		hash)
 			# shellcheck disable=2005
@@ -1889,7 +1965,7 @@ function openai() {
 		[[ $response == 'y' ]] && {
 			read -r -s -p " ⚙️ Enter your OpenAI API key: " OPENAI_API_KEY
 			echo ""
-			echo "OPENAI_API_KEY=$OPENAI_API_KEY" >> $BARE_DIR/home/.barerc && sleep 0.4
+			echo "OPENAI_API_KEY=$OPENAI_API_KEY" >> $BARE_HOME/.barerc && sleep 0.4
 			echo " ⚙️ OPENAI_API_KEY set! You can now use OpenAI in bare."
 			echo ""
 			return 0
@@ -3622,18 +3698,20 @@ function youtube() {
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
-bareRunCommands
-
 case $1 in
 
-	-t|-i) runBareTerminal ;;
-	--version|-v) cat .var/sync ;;
-	--upgrade) git pull origin root ;;
-	--setup) setup ;;
-	*)
-		[[ $(isValidFunc "$1") == 'true' ]] && {
-			"$@"
-		} || :
+	-i|-t|terminal)
+		_bareTerminal
 		;;
+
+	--health)
+		_bareSystemHealthCheck
+		;;
+	
+	--version|-v|-V) echo "$BARE_VERSION" ;;
+
+	--upgrade) git pull origin root ;;
+
+	*) if _isBareCommand "$1"; then "$@"; fi ;;
 
 esac
