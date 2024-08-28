@@ -32,7 +32,7 @@ _bareStartUp() {
 		["LINODE_API_KEY"]=''
 		["VULTR_API_KEY"]=''
 		["OPENAI_API_KEY"]=''
-		["STRIPE_API_KEY"]=''
+		["STRIPE_SECRET_KEY"]=''
 		["AIRTABLE_ACCESS_TOKEN"]=''
 		["AIRTABLE_BASE_ID"]=''
 		["POSTMARK_API_KEY"]=''
@@ -74,7 +74,7 @@ _bareVerifyIntegrity() {
 	cd "$BARE_HOME" || return 1
 
 	# set directories
-	mkdir -p .cache .lib .logs desktop downloads recfiles scripts csvs documents
+	mkdir -p .cache .logs csvs desktop documents downloads recfiles scripts
 	for item in document openai tasks projects
 		do mkdir -p recfiles/$item; done
 
@@ -103,7 +103,7 @@ _checkVariables() {
 		"OPENAI_API_KEY"
 		"POSTMARK_API_KEY"
 		"BARE_EMAIL_FROM"
-		"STRIPE_API_KEY"
+		"STRIPE_SECRET_KEY"
 		"EDITOR"
 	)
 
@@ -1358,7 +1358,7 @@ download() {
 
 	# setup environment
 	output_name="$(random string 32)"
-	temp_file=".var/downloads/${output_name}"
+	temp_file="$BARE_HOME/downloads/${output_name}"
 
 	if [[ "$is_youtube" = 1 ]]; then
 
@@ -1394,7 +1394,7 @@ download() {
 		[[ -z "$extension" ]] && echo "Unsupported MIME type: $mime_type"
 
 		# Construct the final output file name with the correct extension
-		output_file=".var/downloads/${output_name}.${extension}"
+		output_file="$BARE_HOME/downloads/${output_name}.${extension}"
 
 		# Rename the file
 		mv "$temp_file" "$output_file"
@@ -1437,9 +1437,6 @@ email() {
 	[[ -z "$to" ]] && echo "No recipient specified, use --to to specify a recipient"
 	[[ -z "$subject" ]] && echo "No subject specified, use --subject to specify a subject"
 	[[ -z "$body" ]] && echo "No body specified, use --body to specify a body"
-
-	# if .var/email/signature.md exists, append it to the end of the email body
-	[[ -f ".var/email/signature.md" ]] && body="$body<p>- - -</p>$(render email/signature.md --to-html)";
 
 	payload=$(jq -n \
 		--arg from "$from" \
@@ -1996,7 +1993,7 @@ media() {
 		convert)
 
 			output_extension="$1"
-			output=".var/downloads/$(random string 32).$1"
+			output="$BARE_HOME/downloads/$(random string 32).$1"
 			
 			# Check if input file exists
 			if [[ ! -f "$input" ]]; then
@@ -2025,7 +2022,7 @@ media() {
 			extension="${input##*.}"
 			start_time="$1"
 			end_time="$2"
-			output="${3:-.var/downloads/$(random string 32).$extension}"
+			output="${3:-$BARE_HOME/downloads/$(random string 32).$extension}"
 			
 			# Determine the output format based on the file extension
 			extension="${input##*.}"
@@ -2314,14 +2311,14 @@ openai() {
 				-H "Authorization: Bearer $OPENAI_API_KEY" \
 				-H "Content-Type: application/json" \
 				-d "$payload" \
-				-o ".var/downloads/$output"
+				-o "$BARE_HOME/downloads/$output"
 
 			# Check if the file was created and is not empty
-			if [ ! -s ".var/downloads/$output" ]; then
+			if [ ! -s "$BARE_HOME/downloads/$output" ]; then
 				echo "Error: File $output was not created or is empty" >&2
 			fi
 
-			echo ".var/downloads/$output"
+			echo "$BARE_HOME/downloads/$output"
 
 			;;
 		listen )
@@ -2415,7 +2412,7 @@ qr() {
 	local link output
 
 	[[ -t 0 ]] && link=$1 || link=$(cat)
-	output=".var/downloads/$(random string 30).png"
+	output="$BARE_HOME/downloads/$(random string 30).png"
 
 	qrencode -o "$output" "$link"
 
@@ -2761,7 +2758,7 @@ serve() {
 			;;
 
 		* )
-			cd .var/www && sqlpage
+			cd "$BARE_HOME/www" && sqlpage
 			;;
 	esac
 
@@ -2838,7 +2835,7 @@ speed() {
 	# Default values
 	speed_factor=${1:-'0.5'}
 	input_file="$2"
-	output_file=${3:-".var/downloads/$(openssl rand -hex 16).mp3"}
+	output_file=${3:-"$BARE_HOME/downloads/$(openssl rand -hex 16).mp3"}
 
 	if [ -z "$input_file" ]; then
 		echo "Error: Input file is not provided" >&2
@@ -2941,7 +2938,7 @@ stripe() {
 
 						email)
 						
-							response=$(curl -s "https://api.stripe.com/v1/customers?email=$input&limit=$limit" -u "$STRIPE_API_KEY:")
+							response=$(curl -s "https://api.stripe.com/v1/customers?email=$input&limit=$limit" -u "$STRIPE_SECRET_KEY:")
 
 							# capture just the basics: id, email, name, phone, address_line1, address_line2, city, state, zip
 							echo "$response" | jq -r '[.data[] | {
@@ -3737,9 +3734,6 @@ youtube() {
 		echo "Invalid YouTube URL"
 	fi
 
-	# Ensure .downloads directory exists
-	mkdir -p .var/downloads
-
 	# Function to download video
 	download_video() {
 
@@ -3749,7 +3743,7 @@ youtube() {
 		local relative_output
 
 		random_filename=$(random string 32)
-		output_path=".var/downloads/$random_filename"
+		output_path="$BARE_HOME/downloads/$random_filename"
 		
 		if [[ "$format" == "mp3" ]]; then
 			final_output=$(yt-dlp --no-part -x --audio-format mp3 -o "$output_path.%(ext)s" --print after_move:filepath "$url" 2>/dev/null)
@@ -3808,7 +3802,7 @@ youtube() {
 		esac
 
 		random_filename=$(random string 32).jpg
-		output_path=".var/downloads/$random_filename"
+		output_path="$BARE_HOME/downloads/$random_filename"
 		curl -sL "$thumbnail_url" -o "$output_path"
 		echo "$output_path"
 
