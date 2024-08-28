@@ -461,7 +461,7 @@ airtable() {
 			--table|-t) table_name=$2 && shift 2 ;;
 			--api-key|-k) api_key=$2 && shift 2 ;;
 			--filter|-f) filter=$2 && shift 2 ;;
-			--id) record_id=$2 && shift 2 ;;
+			--id|-i) record_id=$2 && shift 2 ;;
 			--limit|-l) limit=$2 && shift 2 ;;
 			--offset|-o) offset=$2 && shift 2 ;;
 			*) args+=("$1") && shift ;;
@@ -507,6 +507,9 @@ airtable() {
 				# Check if there's more data to fetch
 				offset=$(echo "$response" | jq -r '.offset // empty')
 				[[ -z "$offset" ]] && break
+			
+				# Rate limit: wait for 0.2 seconds before the next request
+				sleep 0.2
 			done
 			
 			# Output all records as a JSON array
