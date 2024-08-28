@@ -18,9 +18,6 @@ _getOS() {
 
 _bareStartUp() {
 
-	_bareVerifyIntegrity
-	_getOS
-
 	# Set the values in the associative array
 	local -A BASE_CONFIG
 	BASE_CONFIG=(
@@ -54,6 +51,9 @@ _bareStartUp() {
 		export RED GREEN YELLOW BLUE GRAY RESET
 	}
 
+	_bareVerifyIntegrity
+	_getOS
+
 	# shellcheck disable=SC1091
 	source "$BARE_HOME/.barerc"
 
@@ -86,6 +86,8 @@ _bareVerifyIntegrity() {
 		touch recfiles/$item/list.rec
 		touch recfiles/$item/tags.rec
 		touch recfiles/$item/comments.rec; done
+
+	cd "$BARE_DIR" || return 1
 
 }
 
