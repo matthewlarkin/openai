@@ -33,6 +33,8 @@ _bareStartUp() {
 		["VULTR_API_KEY"]=''
 		["OPENAI_API_KEY"]=''
 		["STRIPE_API_KEY"]=''
+		["AIRTABLE_ACCESS_TOKEN"]=''
+		["AIRTABLE_BASE_ID"]=''
 		["POSTMARK_API_KEY"]=''
 		["TOMORROW_WEATHER_API_KEY"]=''
 	) && for key in "${!BASE_CONFIG[@]}"; do
@@ -326,7 +328,7 @@ age() {
 
 	local input date_cmd stat_cmd output in variant
 
-	[[ -p /dev/stdin ]] && input=$(cat) || input=$1 && shift
+	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1 && shift; fi
 
 	[[ -z "$input" ]] && echo "No input provided"
 
@@ -449,6 +451,149 @@ age() {
 }
 
 
+
+airtable() {
+
+	[[ -z $AIRTABLE_ACCESS_TOKEN ]] && echo "Error: AIRTABLE_ACCESS_TOKEN is not set." && return 1
+
+	local input command subcommand args base_id table_name api_key command record_id filter limit offset response records new_records
+
+	api_key=$AIRTABLE_ACCESS_TOKEN
+	base_id=$AIRTABLE_BASE_ID
+
+	args=() && while [[ $# -gt 0 ]]; do
+		case $1 in
+			--base-id|-b) base_id=$2 && shift 2 ;;
+			--table|-t) table_name=$2 && shift 2 ;;
+			--api-key|-k) api_key=$2 && shift 2 ;;
+			--filter|-f) filter=$2 && shift 2 ;;
+			--id) record_id=$2 && shift 2 ;;
+			--limit|-l) limit=$2 && shift 2 ;;
+			--offset|-o) offset=$2 && shift 2 ;;
+			*) args+=("$1") && shift ;;
+		esac
+	done && set -- "${args[@]}"
+
+	[[ -z $base_id ]] && echo "Error: base_id is required." && return 1
+	[[ -z $table_name ]] && echo "Error: table_name is required." && return 1
+	[[ -z $api_key ]] && echo "Error: api_key is required." && return 1
+
+	command=$1 && shift
+
+	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1 && shift; fi
+	[[ -f $input ]] && input=$(cat "$input")
+
+	case $command in
+
+		list)
+
+			limit=${limit-100}
+			offset=""
+			records=()
+			
+			while :; do
+				url="https://api.airtable.com/v0/$base_id/$(codec url.encode "$table_name")?limit=$limit&offset=$offset"
+				[[ -n "$filter" ]] && url="$url&filterByFormula=$(codec url.encode "$filter")"
+			
+				response=$(curl -sL "$url" -H "Authorization: Bearer $api_key")
+			
+				# Check if the response contains records
+				if [[ $(echo "$response" | jq '.records') != "null" ]]; then
+					# Extract records and add to the array
+					new_records=$(echo "$response" | jq -c '.records[] | {id: .id} + .fields | with_entries(.key |= gsub("[^a-zA-Z0-9_]"; "_"))')
+					if [[ -n "$new_records" ]]; then
+						records+=("$new_records")
+					else
+						break
+					fi
+				else
+					break
+				fi
+			
+				# Check if there's more data to fetch
+				offset=$(echo "$response" | jq -r '.offset // empty')
+				[[ -z "$offset" ]] && break
+			done
+			
+			# Output all records as a JSON array
+			if [[ ${#records[@]} -gt 0 ]]; then
+				echo "${records[@]}" | jq -s '.' | rec --from-json
+			else
+				echo "[]" | rec --from-json
+			fi
+		
+			;;
+
+		create)
+
+			[[ -z $input ]] && echo "Error: no data provided." && return 1
+		
+			# Convert the input to the format expected by the Airtable API
+			formatted_input=$(echo "$input" | jq -c '{records: map({fields: .})}')
+		
+			response=$(curl -sL "https://api.airtable.com/v0/$base_id/$(codec url.encode "$table_name")" \
+				-H "Authorization: Bearer $api_key" \
+				--json "$formatted_input")
+		
+			if [[ $(echo "$response" | jq -r '.error') == "null" ]]; then
+				# Extract the record IDs
+				echo "$response" | jq -r '.records[].id'
+				return 0
+			else
+				echo "Error: $(echo "$response" | jq -r '.error')"
+				return 1
+			fi
+			
+			;;
+
+		update|edit)
+		
+			[[ -z $input ]] && echo "Error: no data provided." && return 1
+		
+			# Convert the input to the format expected by the Airtable API
+			formatted_input=$(echo "$input" | jq -c '.[0] | {fields: .}')
+		
+			[[ -z $record_id ]] && echo "Error: record_id is required." && return 1
+		
+			response=$(curl -sL -X PATCH "https://api.airtable.com/v0/$base_id/$(codec url.encode "$table_name")/$record_id" \
+				-H "Authorization: Bearer $api_key" \
+				-H "Content-Type: application/json" \
+				--data "$formatted_input")
+		
+			if [[ $(echo "$response" | jq -r '.error') == "null" ]]; then
+				echo "$response" | jq -r '.id'
+				return 0
+			else
+				echo "Error: $(echo "$response" | jq -r '.error')"
+				return 1
+			fi
+		
+			;;
+
+		delete)
+		
+			[[ -z $record_id ]] && echo "Error: record_id is required." && return 1
+
+			response=$(curl -sL -X DELETE "https://api.airtable.com/v0/$base_id/$(codec url.encode "$table_name")/$record_id")
+
+			if [[ $(echo "$response" | jq -r '.error') == "null" ]]; then
+				echo "Record deleted successfully."
+				return 0
+			else
+				echo "Error: $(echo "$response" | jq -r '.error')"
+				return 1
+			fi
+
+			;;
+
+		*) echo "Invalid command: $command" && return 1 ;;
+	
+	esac
+
+}
+
+
+
 capitalize() {
 
 	local all input args
@@ -460,7 +605,7 @@ capitalize() {
 		esac
 	done && set -- "${args[@]}"
 
-	[[ -p /dev/stdin ]] && input=$(cat) || input=$*
+	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$*; fi
 
 	# if 'all', capitalize all words
 	if [[ -n "$all" ]]; then
@@ -667,7 +812,7 @@ codec() {
 
 	command=$1 && shift
 
-	[[ -p /dev/stdin ]] && input=$(cat) || input=$1 && shift
+	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1 && shift; fi
 
 	case $command in
 
@@ -1027,7 +1172,7 @@ copy() {
 
 	local file destination
 
-	[[ -p /dev/stdin ]] && file=$(cat) || file=$1
+	if [[ -p /dev/stdin ]]; then file=$(cat); else file=$1; fi
 
 	while [[ $# -gt 1 ]]; do shift; done;
 	destination=$1
@@ -1100,8 +1245,8 @@ date() {
 
     # Set the remaining arguments
     set -- "${args[@]}"
-
-	[[ -p /dev/stdin ]] && input=$(cat) || input=$1
+	
+	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1; fi
 
     # If no arguments or input, default to today's date
     [[ -z $input && $# -eq 0 ]] && input=$(TZ=$TZ $date_cmd +"%Y-%m-%d %H:%M:%S")
@@ -1202,7 +1347,7 @@ download() {
 
 	deps curl
 
-	[[ -p /dev/stdin ]] && url=$(cat) || url=$1 && shift
+	if [[ -p /dev/stdin ]]; then url=$(cat); else url=$1 && shift; fi
 
 	[[ -z $url ]] && echo "No URL provided"
 
@@ -1442,7 +1587,7 @@ image() {
 
 	command=$1 && shift
 	
-	[[ -p /dev/stdin ]] && input=$(cat) || input=$1 && shift
+	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1 && shift; fi
 
 	case $command in
 
@@ -1649,7 +1794,7 @@ lowercase() {
 
 	local input
 
-	[[ -p /dev/stdin ]] && input=$(cat) || input=$1
+	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1; fi
 	
 	transform "$input" --lowercase < /dev/null
 
@@ -1669,7 +1814,7 @@ math() {
 		esac
 	done && set -- "${remaining_args[@]}"
 
-	[[ -p /dev/stdin ]] && input=$(cat) || input=$1 && shift
+	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1 && shift; fi
 
 	case $operation in
 
@@ -1749,7 +1894,7 @@ media() {
 
 	command=$1 && shift
 
-	[[ -p /dev/stdin ]] && input=$(cat) || input=$1 && shift
+	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1 && shift; fi
 
 	remaining_args=() && while [[ $# -gt 0 ]]; do
 		case $1 in
@@ -1930,7 +2075,7 @@ media() {
 
 move() {
 
-	[[ -p /dev/stdin ]] && file=$(cat) || file=$1
+	if [[ -p /dev/stdin ]]; then file=$(cat); else file=$1; fi
 
 	[[ $# == 2 ]] && destination="$2" || destination="$1"
 
@@ -2028,7 +2173,7 @@ openai() {
 		esac
 	done && set -- "${args[@]}"
 
-	[[ -p /dev/stdin ]] && input=$(cat) || input=$1 && shift
+	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1 && shift; fi
 
 	[[ -z "$input" ]] && echo "Error: no input provided" >&2 && return 1
 
@@ -2254,7 +2399,7 @@ openai() {
 
 pretty() {
 
-	[[ -p /dev/stdin ]] && input=$(cat) || input=$1 && shift
+	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1 && shift; fi
 	
 	deps glow
 	echo "$input" | glow
@@ -2287,7 +2432,7 @@ random() {
 	# help
 	[[ $1 == '--?' ]] && echo "(string|alpha|number:-string) ~ |(int:-16)" && return 0
 
-	[[ -p /dev/stdin ]] && input=$(cat)
+	if [[ -p /dev/stdin ]]; then input=$(cat); fi;
 
 	command='string'
 	length=${input:-16}
@@ -2331,7 +2476,7 @@ rec() {
 	if [[ -f $1 ]]; then
 		input=$(cat "$1") && shift;
 	else
-		[[ -p /dev/stdin ]] && input=$(cat)
+		if [[ -p /dev/stdin ]]; then input=$(cat); fi
 	fi
 
 	[[ -z $input ]] && echo "Error: no input provided" && return 1
@@ -2371,17 +2516,32 @@ rec() {
 		--from-json)
 			
 			[[ -f "$1" ]] && input="$(cat "$1")" && shift
-			[[ -z $input ]] && echo "ERROR: no input provided"
+			[[ -z $input ]] && echo "ERROR: no input provided" && exit 1
 			
 			# Check if the input is an object or an array
 			if echo "$input" | jq -e 'type == "object"' > /dev/null; then
 				input="[$input]"
 			fi
 			
+			# Function to sanitize keys
+			sanitize_keys() {
+				jq 'map(
+					with_entries(
+						.key |= gsub("[^a-zA-Z0-9_]"; "_")
+					)
+				)'
+			}
+			
+			# Sanitize keys and check if the array is empty
+			sanitized_input=$(echo "$input" | sanitize_keys)
+			if [[ $(echo "$sanitized_input" | jq 'length') -eq 0 ]]; then
+				exit 0
+			fi
+			
 			# Convert given input to CSV
-			output=$(echo "$input" | jq -r '(.[0] | keys_unsorted) as $keys | $keys, map([.[ $keys[] ]])[] | @csv' | csv2rec)
+			output=$(echo "$sanitized_input" | jq -r '(.[0] | keys_unsorted) as $keys | $keys, map([.[ $keys[] ]])[] | @csv' | csv2rec)
 			[[ -n $1 ]] && echo "$output" >> "$1" || echo "$output"
-
+			
 			;;
 
 		--from-csv)
@@ -2406,7 +2566,7 @@ render() {
 	# help
 	[[ $1 == '--?' ]] && echo "|<file|markdown> (-p|--pretty|--to-html|--to-markdown|--to-md)" && return 0
 
-	[[ -p /dev/stdin ]] && input=$(cat) || input=$1
+	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1; fi
 	[[ -f $input ]] && input=$(cat "$input")
 
 	# Process arguments to handle flags and content
@@ -2426,7 +2586,7 @@ render() {
 				return 0
 				;;
 			--pretty|-p)
-				echo "$input" | pretty && return 0
+				pretty "$input" && return 0
 				;;
 			--to-markdown|--to-md)
 				echo "$input" | pandoc -f html -t commonmark -o temp.md
@@ -2458,7 +2618,7 @@ request() {
 	# help
 	[[ $1 == '--?' ]] && echo "|<url> (--json <json>|--data <form-data>|--file <file>|--header <header>|--token <token>|--auth <user:pass>|--output <file>)" && return 0
 
-	[[ -p /dev/stdin ]] && url=$(cat) || url=$1 && shift
+	if [[ -p /dev/stdin ]]; then url=$(cat); else url=$1 && shift; fi
 
 	curl_cmd=("curl" "-s" "-L" "$url")
 
@@ -2502,7 +2662,7 @@ reveal() {
 
 	local input
 
-	[[ -p /dev/stdin ]] && input=$(cat) || input=$1
+	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1; fi
 
 	[[ "$#" -eq 0 && -z $input ]] && echo "No file given"
 
@@ -2617,7 +2777,7 @@ show() {
 
 	local input
 
-	[[ -p /dev/stdin ]] && input=$(cat) || input=$1
+	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1; fi
 	[[ -n $input ]] || { echo "No input provided"; }
 	echo "$input"
 
@@ -2629,7 +2789,7 @@ silence() {
 
 	local input
 
-	[[ -p /dev/stdin ]] && input=$(cat) || input=$1
+	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1; fi
 	echo "$input" >> /dev/null
 
 }
@@ -2640,7 +2800,7 @@ size() {
 
 	local input stat_cmd
 
-	[[ -p /dev/stdin ]] && input=$(cat) || input=$1
+	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1; fi
 
 	# Check the OS type and set the appropriate stat command
 	if [[ "$(uname)" == "Darwin" ]]; then
@@ -2731,7 +2891,7 @@ squish() {
 
 	local input
 
-	[[ -p /dev/stdin ]] && input=$(cat) || input=$1
+	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1; fi
 	transform "$input" --squish
 
 }
@@ -2742,7 +2902,7 @@ stripe() {
 
 	local input command subcommand args
 
-	[[ -p /dev/stdin ]] && input=$(cat)
+	if [[ -p /dev/stdin ]]; then input=$(cat); fi
 
 	command=$1
 	subcommand=$2
@@ -2830,7 +2990,7 @@ sub() {
     local replacing replacement input args
 
     replacing=$1 && shift
-	[[ -p /dev/stdin ]] && input=$(cat) || input=$1 && shift
+	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1 && shift; fi
 
     args=() && while [[ $# -gt 0 ]]; do
         case $1 in
@@ -2873,7 +3033,7 @@ transform() {
 		esac && shift
 	done && set -- "${args[@]}"
 
-	[[ -p /dev/stdin ]] && input=$(cat) || input=$1 && shift
+	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1 && shift; fi
 
 	case $format in
 
@@ -2938,7 +3098,7 @@ translate() {
 	done && set -- "${remaining_args[@]}"
 
 	[[ -z $input ]] && {
-		[[ -p /dev/stdin ]] && input=$(cat) || input=$1
+		if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1; fi
 	}
 
 	[[ -z $input ]] && echo "Error: requires input"
@@ -3019,7 +3179,7 @@ translate() {
 trim() {
 
 	local input
-	[[ -p /dev/stdin ]] && input=$(cat) || input=$1
+	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1; fi
 	transform "$input" --trim < /dev/null
 
 }
@@ -3029,7 +3189,7 @@ trim() {
 uppercase() {
 
 	local input
-	[[ -p /dev/stdin ]] && input=$(cat) || input=$1
+	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1; fi
 	transform "$input" --uppercase < /dev/null
 
 }
@@ -3413,7 +3573,7 @@ validate() {
 
 weather() {
 
-	[[ -p /dev/stdin ]] && input=$(cat) || input="$1" && shift
+	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1 && shift; fi
 
 	# detect if input is a lat,long
 	if [[ $input =~ ^-?[0-9]+\.[0-9]+,-?[0-9]+\.[0-9]+$ ]]; then
@@ -3532,7 +3692,7 @@ write() {
 	local contents args file
 
 	# Read from stdin if not a terminal
-	[[ -p /dev/stdin ]] && contents=$(cat)
+	if [[ -p /dev/stdin ]]; then contents=$(cat); fi
 
 	# Parse arguments
 	args=() && while [[ $# -gt 0 ]]; do
