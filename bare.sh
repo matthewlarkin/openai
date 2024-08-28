@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 
 BARE_DIR=$(realpath "$(dirname "$0")")
-cd "$BARE_DIR" || exit 1 && export BARE_DIR
+cd "$BARE_DIR" || exit 1
+export BARE_DIR
 
 
 
@@ -56,8 +57,12 @@ _bareStartUp() {
 	_bareVerifyIntegrity
 	_getOS
 
+	[[ -f ~/.bash_profile ]] && source ~/.bash_profile
+	[[ -f ~/.bashrc ]] && source ~/.bashrc
 	# shellcheck disable=SC1091
 	source "$BARE_HOME/.barerc"
+
+	export BARE_HOME
 
 }
 
@@ -1755,42 +1760,31 @@ image() {
 
 interpret() {
 
-    local input user_script args env_file BARE_HOME_FULL
+	local input args env_file BARE_HOME_FULL
+
+	_bareStartUp
 
 	[[ -z $BARE_HOME ]] && echo "BARE_HOME is not set" && return 1
 
-    args=() && while [[ $# -gt 0 ]]; do
-        case $1 in
-            --env) env_file=$2; shift 2 ;;
-            *) args+=("$1"); shift ;;
-        esac
-    done && set -- "${args[@]}"
+	args=()
+	while [[ $# -gt 0 ]]; do
+		case $1 in
+			--env) env_file=$2; shift 2 ;;
+			*) args+=("$1"); shift ;;
+		esac
+	done
+	set -- "${args[@]}"
 
-    input=$1 && shift
+	input=$1 && shift
 
-    [[ ! -f "$BARE_HOME/scripts/$input" ]] && \
-        echo "No script by that name found: $BARE_HOME/scripts/$input" && return 1
+	[[ ! -f "$BARE_HOME/scripts/$input" ]] && \
+		echo "No script by that name found: $BARE_HOME/scripts/$input" && return 1
 
-	BARE_HOME_FULL=$(cd "$BARE_HOME" && pwd)
+	# Source the environment file if provided
+	[[ -n "$env_file" ]] && source "$env_file"
 
-    user_script="$BARE_HOME_FULL/.cache/$(random string 30)"
-
-    {
-        echo '#!/usr/bin/env bash'
-        echo 'set -e'
-        echo "cd $BARE_DIR"
-        echo 'source ./bare.sh'
-		echo '_bareStartUp'
-        [[ -n "$env_file" ]] && cat "$env_file"
-        cat "$BARE_HOME/scripts/$input"
-        echo ""
-    } > "$user_script"
-
-    chmod +x "$user_script"
-
-    "$user_script" "$@"
-    
-    rm "$user_script"
+	# Source the script with the remaining arguments
+	source "$BARE_HOME/scripts/$input" "$@"
 
 }
 
@@ -2691,14 +2685,21 @@ round() {
 
 routines() {
 	
+	# Ensure BARE_HOME is set
+	if [[ -z $BARE_HOME ]]; then
+		echo "BARE_HOME is not set"
+		exit 1
+	fi
+	
 	# Initialize variables
 	local command args input name description cron bash_path
-
+	
 	bash_path=$(command -v bash)
 	
 	command='list'
 	
-	args=() && while [[ $# -gt 0 ]]; do
+	args=()
+	while [[ $# -gt 0 ]]; do
 		case $1 in
 			--name|-n) name=$2 && shift 2 ;;
 			--description|--desc|-d) description=$2 && shift 2 ;;
@@ -2709,7 +2710,8 @@ routines() {
 			--list|list) command='list' && shift ;;
 			*) args+=("$1") && shift ;;
 		esac
-	done && set -- "${args[@]}"
+	done
+	set -- "${args[@]}"
 	
 	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1; fi
 	
@@ -2725,9 +2727,9 @@ routines() {
 	
 			# usage: routines add -n <name> -c <cron> -d <description> <command>
 		
-			[[ -z $name ]] && echo "Error: Name is required" && return 1
-			[[ -z $cron ]] && echo "Error: Cron is required" && return 1
-			[[ -z $input ]] && echo "Error: Script is required" && return 1
+			[[ -z $name ]] && echo "Error: Name is required" && exit 1
+			[[ -z $cron ]] && echo "Error: Cron is required" && exit 1
+			[[ -z $input ]] && echo "Error: Script is required" && exit 1
 			
 			# Check if the crontab entry already exists
 			if ! (crontab -l 2>/dev/null | grep -q "$cron $bash_path $BARE_DIR/bare.sh $input"); then
@@ -2747,9 +2749,9 @@ routines() {
 	
 		update)
 	
-			[[ -z $name ]] && echo "Error: Name is required" && return 1
-			[[ -z $cron ]] && echo "Error: Cron is required" && return 1
-			[[ -z $input ]] && echo "Error: Script is required" && return 1
+			[[ -z $name ]] && echo "Error: Name is required" && exit 1
+			[[ -z $cron ]] && echo "Error: Cron is required" && exit 1
+			[[ -z $input ]] && echo "Error: Script is required" && exit 1
 	
 			# Check if the crontab entry already exists
 			if ! (crontab -l 2>/dev/null | grep -q "$cron $bash_path $BARE_DIR/bare.sh $input"); then
@@ -2769,7 +2771,7 @@ routines() {
 	
 		remove)
 	
-			[[ -z $name ]] && echo "Error: Name is required" && return 1
+			[[ -z $name ]] && echo "Error: Name is required" && exit 1
 	
 			# Remove the record from the list
 	
@@ -2777,13 +2779,13 @@ routines() {
 	
 			# Remove the crontab entry
 	
-			crontab -l | grep -v "$name" | crontab -
+			crontab -l | grep -v "$name" | crontab - 2>/dev/null
 	
 			echo "success"
 	
 			;;
 	
-		*) echo "Invalid command" && return 1 ;;
+		*) echo "Invalid command" && exit 1 ;;
 	
 	esac
 
