@@ -915,10 +915,10 @@ codec() {
 			}
 
 			# Check if the input is a JSON string or a list of items
-			if echo -n "$1" | jq empty 2>/dev/null; then
-				handle_json_string "$1"
+			if echo -n "$input" | jq empty 2>/dev/null; then
+				handle_json_string "$input"
 			else
-				convert_to_json_array "$1"
+				convert_to_json_array "$input"
 			fi
 			;;
 
