@@ -6,7 +6,7 @@ export BARE_DIR
 
 
 
-_getOS() {
+__getOS() {
 	OS="Other"
 	case $(uname) in
 		Linux) grep -q 'Ubuntu' /etc/os-release && OS="Ubuntu" ;;
@@ -17,7 +17,7 @@ _getOS() {
 
 
 
-_bareStartUp() {
+__bareStartUp() {
 
 	# Set the values in the associative array
 	local -A BASE_CONFIG
@@ -54,8 +54,8 @@ _bareStartUp() {
 		export RED GREEN YELLOW BLUE GRAY RESET
 	}
 
-	_bareVerifyIntegrity
-	_getOS
+	__bareVerifyIntegrity
+	__getOS
 
 	[[ -f ~/.bash_profile ]] && source ~/.bash_profile
 	[[ -f ~/.bashrc ]] && source ~/.bashrc
@@ -68,7 +68,7 @@ _bareStartUp() {
 
 
 
-_bareVerifyIntegrity() {
+__bareVerifyIntegrity() {
 
 	[[ -z $BARE_HOME ]] && echo "Error: BARE_HOME is not set." && return 1
 	[[ ! -d $BARE_HOME ]] && echo "Error: BARE_HOME directory does not exist." && return 1
@@ -98,7 +98,7 @@ _bareVerifyIntegrity() {
 
 }
 
-_checkVariables() {
+__checkVariables() {
 
 	local variables logfile steps_required
 
@@ -142,7 +142,7 @@ _checkVariables() {
 	fi
 }
 
-_checkDependencies() {
+__checkDependencies() {
 
 	local dependencies logfile steps_required
 
@@ -205,46 +205,46 @@ _checkDependencies() {
 
 
 
-_bareSystemHealthCheck() {
+__bareSystemHealthCheck() {
 
-	_bareStartUp
+	__bareStartUp
 
-	_checkDependencies
-	_checkVariables
+	__checkDependencies
+	__checkVariables
 
 	echo ""
 	echo "${GREEN}System check complete.${RESET}"
 	echo ""
 
-	unset -f _checkDependencies
-	unset -f _checkVariables
+	unset -f __checkDependencies
+	unset -f __checkVariables
 
 }
 
 
 
 # Function to generate file list for completion
-_completions() {
+__completions() {
     local cur
     cur=${COMP_WORDS[COMP_CWORD]}
     mapfile -t COMPREPLY < <(compgen -f "$COMPLETION_DIR/$cur" | xargs -n 1 basename)
 }
 
 # Wrapper functions to set the directory and call the completion function
-_completions_run() {
+__completions_run() {
     COMPLETION_DIR="home/scripts"
-    _completions
-} && complete -F _completions_run run
+    __completions
+} && complete -F __completions_run run
 
-_completions_rec() {
-    COMPLETION_DIR="home/recfiles"
-    _completions
-} && complete -F _completions_rec rec
+__completions_rec() {
+    COMPLETION_DIR="$BARE_HOME/recfiles"
+    __completions
+} && complete -F __completions_rec rec
 
-_completions_routine() {
+__completions_routine() {
 	COMPLETION_DIR="home/scripts"
-	_completions
-} && complete -F _completions_routine routines
+	__completions
+} && complete -F __completions_routine routines
 
 
 
@@ -255,7 +255,7 @@ _completions_routine() {
 # HELPER FUNCTIONS
 
 
-_isBareCommand() {
+__isBareCommand() {
 
 	local command function_names func
 
@@ -274,7 +274,7 @@ _isBareCommand() {
 
 
 
-_bareTerminal() {
+__bareTerminal() {
 
 	local boot_rcfile
 
@@ -284,7 +284,7 @@ _bareTerminal() {
 
 	export BASH_SILENCE_DEPRECATION_WARNING=1
 	source ./bare.sh
-	_bareStartUp
+	__bareStartUp
 	
 	if [[ "$BARE_COLOR" == 1 ]]; then
 		GREEN='\033[0;32m'
@@ -317,7 +317,7 @@ EOF
 renew() {
 	# shellcheck disable=SC1091
 	source "$BARE_DIR/bare.sh"
-	_bareStartUp
+	__bareStartUp
 }
 
 
@@ -1762,7 +1762,7 @@ interpret() {
 
 	local input args env_file BARE_HOME_FULL
 
-	_bareStartUp
+	__bareStartUp
 
 	[[ -z $BARE_HOME ]] && echo "BARE_HOME is not set" && return 1
 
@@ -2144,16 +2144,16 @@ openai() {
 	assistant_prompt="You are a helpful assistant.";
 	[[ -n $assistant_name ]] && {
 		assistant_introduction="In this conversation thread you are '$assistant_name'."
-		assistant_instructions="$(recsel home/recfiles/openai/assistants.rec -e "Name = '$assistant_name'" -P Contents)"
+		assistant_instructions="$(recsel "$BARE_HOME/recfiles/openai/assistants.rec" -e "Name = '$assistant_name'" -P Contents)"
 		assistant_background="Take into consideration the conversation thread (even if some messages are not your own, as you may be entering the chat mid-conversation and should catch yourself up)."
 		assistant_prompt="%YOUR_NAME: $assistant_introduction - - - %YOUR_INSTRUCTIONS: $assistant_instructions - - - %BACKGROUND: $assistant_background - - - %YOUR TASK: Now, you have just been addressed, so respond to the last thing said in a manner consistent with %YOUR_INSTRUCTIONS."
 	}
 
 	# if --threads, just list thread title and exit
-	[[ -n $list_threads ]] && recsel home/recfiles/openai/threads.rec -P Title && return 0
+	[[ -n $list_threads ]] && recsel "$BARE_HOME/recfiles/openai/threads.rec" -P Title && return 0
 
 	# if --assistants, just list assistants and their instructions and exit
-	[[ -n $list_assistants ]] && recsel home/recfiles/openai/assistants.rec -p Name,Contents | awk '{
+	[[ -n $list_assistants ]] && recsel "$BARE_HOME/recfiles/openai/assistants.rec" -p Name,Contents | awk '{
 	while (length($0) > 60) {
 		space_index = 60
 		while (substr($0, space_index, 1) != " " && space_index > 1) space_index--
@@ -2212,11 +2212,11 @@ openai() {
 
 			if [[ -n $thread_title ]]; then
 
-				[[ "$(recsel home/recfiles/openai/threads.rec -e "Title = '$thread_title'")" ]] || recins home/recfiles/openai/threads.rec -f Title -v "$thread_title"
+				[[ "$(recsel "$BARE_HOME/recfiles/openai/threads.rec" -e "Title = '$thread_title'")" ]] || recins $BARE_HOME/recfiles/openai/threads.rec -f Title -v "$thread_title"
 
-				thread_contents=$(recsel home/recfiles/openai/messages.rec -p Created,Author,Contents -e "Thread = '$thread_title'")
+				thread_contents=$(recsel "$BARE_HOME/recfiles/openai/messages.rec" -p Created,Author,Contents -e "Thread = '$thread_title'")
 
-				recins home/recfiles/openai/messages.rec -f Thread -v "$thread_title" -f Author -v "User" -f Contents -v "$user_messages"
+				recins "$BARE_HOME/recfiles/openai/messages.rec" -f Thread -v "$thread_title" -f Author -v "User" -f Contents -v "$user_messages"
 
 			fi
 
@@ -2235,7 +2235,7 @@ openai() {
 				
 				if [[ -n $thread_title ]]; then
 					# Fetch the message thread and convert it to a JSON array
-					message_thread=$(recsel home/recfiles/openai/messages.rec -p Created,Author,Contents -e "Thread = '$thread_title'" | rec --json)
+					message_thread=$(recsel "$BARE_HOME/recfiles/openai/messages.rec" -p Created,Author,Contents -e "Thread = '$thread_title'" | rec --json)
 					
 					# Format the message_thread JSON array using jq
 					formatted_message_thread=$(echo "$message_thread" | jq '[.[] | {role: (if .Author == "User" then "user" else "assistant" end), name: (if .Author != "User" then .Author else null end), content: .Contents}]')
@@ -2265,7 +2265,7 @@ openai() {
 			response=$(request "https://api.openai.com/v1/chat/completions" --token "$OPENAI_API_KEY" --json "$payload" | jq -r '.choices[0].message.content');
 
 			[[ -n $thread_title ]] && {
-				recins home/recfiles/openai/messages.rec -f Thread -v "$thread_title" -f Author -v "${assistant_name-Assistant}" -f Contents -v "$response"
+				recins "$BARE_HOME/recfiles/openai/messages.rec" -f Thread -v "$thread_title" -f Author -v "${assistant_name-Assistant}" -f Contents -v "$response"
 			}
 
 			echo "$response"
@@ -2589,16 +2589,15 @@ render() {
 				pretty "$input" && return 0
 				;;
 			--to-markdown|--to-md)
-				echo "$input" | pandoc -f html -t commonmark -o temp.md
-				awk '{
-					while (match($0, /<[^>]*><\/[^>]*>/)) {
-						$0 = substr($0, 1, RSTART-1) substr($0, RSTART+RLENGTH)
-					}
-					print
-				}' temp.md > temp_clean.md
-				mv temp_clean.md temp.md
+				# Ensure output is UTF-8 encoded, and remove all backslashes
+				echo "$input" | iconv -f utf-8 -t utf-8 -c | pandoc -f html -t markdown -o temp.md
+				
+				# Output the Markdown content
 				cat temp.md
+				
+				# Remove the temporary Markdown file
 				rm temp.md
+				
 				return 0
 				;;
 		esac
@@ -2614,14 +2613,18 @@ request() {
 
 	local url
 	declare -a curl_cmd
-
+	
 	# help
 	[[ $1 == '--?' ]] && echo "|<url> (--json <json>|--data <form-data>|--file <file>|--header <header>|--token <token>|--auth <user:pass>|--output <file>)" && return 0
-
-	if [[ -p /dev/stdin ]]; then url=$(cat); else url=$1 && shift; fi
-
+	
+	if [[ -p /dev/stdin ]]; then 
+		url=$(cat | tr -d '\0') 
+	else 
+		url=$1 && shift 
+	fi
+	
 	curl_cmd=("curl" "-s" "-L" "$url")
-
+	
 	# Function to split --data into multiple -F fields
 	split_data_into_form_fields() {
 		local data=$1
@@ -2633,7 +2636,7 @@ request() {
 			curl_cmd+=("-F" "$key=$value")
 		done
 	}
-
+	
 	# Loop through all arguments
 	while [ "$#" -gt 0 ]; do
 		case "$1" in
@@ -2649,9 +2652,9 @@ request() {
 			
 		esac
 	done
-
+	
 	"${curl_cmd[@]}"
-
+	
 	unset -f split_data_into_form_fields
 
 }
@@ -2804,29 +2807,23 @@ run() {
 
     if [[ -n $csv && -f $csv ]]; then
 
-        csv=$(cat "$csv")
-
-        IFS=',' read -r -a fields <<< "$(echo "$csv" | head -n 1)"
-
-        while IFS=',' read -r line; do
-
-            IFS=',' read -r -a values <<< "$line"
-
-			# Create or truncate the variables file
-			env_file="home/.cache/env.tmp"
-			
+		csv=$(cat "$csv")
+		
+		IFS=',' read -r -a fields <<< "$(echo "$csv" | head -n 1)"
+		
+		while IFS=',' read -r line; do
+			IFS=',' read -r -a values <<< "$line"
+		
 			for ((i=0; i<${#fields[@]}; i++)); do
 				field_name="${fields[$i]}"
 				field_value="${values[$i]}"
 				field_value=$(echo "$field_value" | xargs | sed 's/^"\|"$//g')
-				echo "$field_name=\"$field_value\"" >> "$env_file"
+				export "$field_name=$field_value"
 			done
-
-            interpret "$script" --env "$env_file" "$@" < /dev/null
-
-			rm "$env_file"
-
-        done < <(echo "$csv" | tail -n +2)
+		
+			interpret "$script" "$@" < /dev/null
+		
+		done < <(echo "$csv" | tail -n +2)
 
     else
 
@@ -3105,6 +3102,32 @@ sub() {
     done && set -- "${args[@]}"
 
 	echo "${input//$replacing/$replacement}"
+
+}
+
+
+
+summarize() {
+
+	local input length input_char_count prompt
+
+	length='1000'
+
+	args=() && while [[ $# -gt 0 ]]; do
+		case $1 in
+			--length|-l) length=$2; shift 2 ;;
+			--prompt|-p) prompt="$2"; shift 2 ;;
+			*) args+=("$1"); shift ;;
+		esac
+	done && set -- "${args[@]}"
+
+	[[ -p /dev/stdin ]] && input=$(cat | codec json.encode) || input=$1
+
+	input_char_count=${#input}
+	length=$((input_char_count / 2))
+	length=$((length > 1000 ? 1000 : length))
+
+	openai "Summarize the following USER_TEXT to approximately $length characters. $prompt \n\nUSER_TEXT: $input" < /dev/null
 
 }
 
@@ -3967,17 +3990,17 @@ youtube() {
 case $1 in
 
 	-i|-t|terminal)
-		_bareTerminal
+		__bareTerminal
 		;;
 
 	--health)
-		_bareSystemHealthCheck
+		__bareSystemHealthCheck
 		;;
 	
 	--version|-v|-V) echo "$BARE_VERSION" ;;
 
 	--upgrade) git pull origin root ;;
 
-	*) if _isBareCommand "$1"; then "$@"; fi ;;
+	*) if __isBareCommand "$1"; then "$@"; fi ;;
 
 esac
