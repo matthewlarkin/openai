@@ -3104,8 +3104,6 @@ summarize() {
 
 	local input length input_char_count prompt
 
-	length='1000'
-
 	args=() && while [[ $# -gt 0 ]]; do
 		case $1 in
 			--length|-l) length=$2; shift 2 ;;
@@ -3116,11 +3114,17 @@ summarize() {
 
 	[[ -p /dev/stdin ]] && input=$(cat | codec json.encode) || input=$1
 
-	input_char_count=${#input}
-	length=$((input_char_count / 2))
-	length=$((length > 1000 ? 1000 : length))
+	input_word_count=$(echo "$input" | wc -w)
+	
+	# Calculate 25% of the word count
+	auto_length=$((input_word_count * 25 / 100))
+	
+	# Ensure the length does not exceed 1000 words
+	auto_length=$((auto_length > 1000 ? 1000 : auto_length))
+	
+	[[ -z $length ]] && length=$auto_length
 
-	openai "Summarize the following USER_TEXT to approximately $length characters. $prompt \n\nUSER_TEXT: $input" < /dev/null
+	openai "Summarize the following USER_TEXT to approximately $length words. $prompt \n\nUSER_TEXT: $input" < /dev/null
 
 }
 
