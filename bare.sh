@@ -1286,6 +1286,18 @@ date() {
 
 
 
+decrypt() {
+
+	local input
+
+	[[ -p /dev/stdin ]] && input=$(cat) || input=$1 && shift
+
+	codec decrypt "$input" "$@" < /dev/null
+
+}
+
+
+
 deps() {
 
 	local missing_deps
@@ -1445,6 +1457,17 @@ email() {
 
 }
 
+
+
+encrypt() {
+
+	local input
+
+	[[ -p /dev/stdin ]] && input=$(cat) || input=$1 && shift
+
+	codec encrypt "$input" "$@" < /dev/null
+
+}
 
 
 
@@ -2971,81 +2994,81 @@ squish() {
 
 stripe() {
 
-	local input command subcommand args
+	local input command args action
 
-	if [[ -p /dev/stdin ]]; then input=$(cat); fi
-
-	command=$1
-	subcommand=$2
-	shift 2
+	action='list'
+	command=$1 && shift
+	[[ -p /dev/stdin ]] && input=$(cat)
 
 	case $command in
 
 		customers)
-			case $subcommand in
 
-				create)
-					
-					;;
+			local limit email id all
+			
+			limit='10'
+			email=''
+			id=''
+			all='false'
+			
+			args=() && for arg in "$@"; do
+			  case $arg in
+				--email|-e) email=$2 && shift 2 ;;
+				--id|-i) id=$2 && shift 2 ;;
+				--limit|-l) limit=$2 && shift 2 ;;
+				--all) limit='100'; all='true'; shift ;;
+				*) args+=("$1") && shift ;;
+			  esac
+			done && set -- "${args[@]}"
+			
+			case $1 in
+			  create|update|delete|archive) action=$1 && shift ;;
+			  *) action='list' ;;
+			esac
+			
+			[[ -z $input ]] && input=$1 && shift
+			[[ -z $input && $action != 'list' ]] && echo "Error: no input provided" && return 1
+			
+			case $action in
+			
+			  list)
+				if [[ $limit -le 100 && $all != 'true' ]]; then
+				  # Fetch customers once if limit is below 100 and all is not set to true
+				  response=$(curl -G -sL "https://api.stripe.com/v1/customers" \
+					-u "$STRIPE_SECRET_KEY:" \
+					-d "limit=$limit")
 
-				list)
-
-					local by limit
-
-					by='email'
-					limit=10
-
-					args=() && while true; do
-						case $1 in
-							''|-) break ;;
-							--by|by) by=$2; shift 2 ;;
-							--limit|limit) limit=$2; shift 2 ;;
-							*) args+=("$1"); shift ;;
-						esac
-					done && set -- "${args[@]}"
-
-					[[ -z $input ]] && input=$1 && shift
-
-					[[ -z $input ]] && echo "Error: no input provided" && return 1
-
-					case $by in
-
-						email)
-						
-							response=$(curl -s "https://api.stripe.com/v1/customers?email=$input&limit=$limit" -u "$STRIPE_SECRET_KEY:")
-
-							# capture just the basics: id, email, name, phone, address_line1, address_line2, city, state, zip
-							echo "$response" | jq -r '[.data[] | {
-								id: .id,
-								email: .email,
-								name: .name,
-								phone: .phone,
-								address_line_1: .address.line1,
-								address_line_2: .address.line2,
-								city: .address.city,
-								state: .address.state,
-								zip: .address.postal_code
-							}]' | rec --from-json
-							;;
-
-						phone)
-							# Fetch the customers with the given phone number
-							;;
-
-						id|ID)
-							# Fetch the customer with the given ID
-							;;
-
-						*)
-							echo "Invalid option: $by" && return 1
-							;;
-
-					esac
-
-					;;
-
-				*) echo "Invalid subcommand: $subcommand" ;;
-
+				# Extract customers
+				customers=$(echo "$response" | jq -r '.data[] | {id: .id, email: .email, name: .name, phone: .phone}')
+				final_result=$(echo "$customers" | jq -s '.')
+				
+				else
+				  has_more=true
+				  starting_after=''
+				
+				  # Loop to fetch all customers
+				  while [ "$has_more" = true ]; do
+					response=$(curl -G -sL "https://api.stripe.com/v1/customers" \
+					  -u "$STRIPE_SECRET_KEY:" \
+					  -d "limit=$limit" \
+					  ${starting_after:+-d "starting_after=$starting_after"})
+				
+					# Extract customers and has_more property
+					new_customers=$(echo "$response" | jq -r '.data[] | {id: .id, email: .email, name: .name, phone: .phone}')
+					mapfile -t new_customers_array < <(echo "$new_customers" | jq -c '.')
+					customers+=("${new_customers_array[@]}")
+					has_more=$(echo "$response" | jq -r '.has_more')
+					starting_after=$(echo "$response" | jq -r '.data[-1].id')
+				  done
+				
+				  # Merge all customer objects into a final array
+				  final_result=$(printf '%s\n' "${customers[@]}" | jq -s '.')
+				fi
+				
+				# Output the final result
+				echo "$final_result"
+				;;
+			
 			esac
 
 			;;
