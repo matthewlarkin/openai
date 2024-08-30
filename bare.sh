@@ -1197,23 +1197,16 @@ copy() {
 
 
 date() {
-    local input
-    local args
-    local date_cmd
-    local date_format
-    local input_format
-    local custom_format
-    local format_parts
+
+    local input args date_cmd date_format input_format custom_format format_parts
+
+	date_cmd="date"
 
     # set system timezone temporarily
     TZ="$BARE_TIMEZONE"
 
     # Determine the correct date command based on the operating system
-    if [[ "$OS" == "macOS" ]]; then
-        date_cmd="gdate"
-    else
-        date_cmd="date"
-    fi
+    [[ "$OS" == "macOS" ]] && date_cmd="gdate"
 
     date_format="%Y-%m-%d %H:%M:%S"
     input_format="%Y-%m-%d %H:%M:%S"
@@ -1221,9 +1214,9 @@ date() {
     # Process arguments
     args=() && while [[ $# -gt 0 ]]; do
         case $1 in
-            as|format|-F|--format|--formatted) # can't do -f here since native date relies on this
+            as|format|-F|--format|--formatted)
                 custom_format=1 && shift
-                read -r -a format_parts <<< "$1"  # Allows us to handle date and time dynamically as parts
+                read -r -a format_parts <<< "$1"
                 date_format=""
                 for part in "${format_parts[@]}"; do
                     case $part in
@@ -1232,8 +1225,11 @@ date() {
                         'M-D-Y') date_format+="%m-%d-%Y " ;;  # 08-13-2024
                         'M/D/Y') date_format+="%m/%d/%Y " ;;  # 08/13/2024
                         'Y-m-d') date_format+="%Y-%-m-%-d " ;; # 2024-8-13
+						'y-m-d') date_format+="%y-%-m-%-d " ;; # 24-8-13
                         'm-d-Y') date_format+="%-m-%-d-%Y " ;;  # 8-13-2024
+						'm-d-y') date_format+="%-m-%-d-%y " ;;  # 8-13-24
                         'm/d/Y') date_format+="%-m/%-d/%Y " ;;  # 8/13/2024
+						'm/d/y') date_format+="%-m/%-d/%y " ;;  # 8/13/24
                         # times
                         'H:M:S'|'H:m:s') date_format+="%H:%M:%S " ;; # 14:30:00
                         'H:M'|'H:m') date_format+="%H:%M " ;; # 14:30
@@ -1242,13 +1238,9 @@ date() {
                         *) date_format+="$part " ;;
                     esac
                 done
-                date_format="${date_format% }"  # Remove trailing space
-                shift
+                shift && date_format="${date_format% }"  # Remove trailing space
                 ;;
-            *)
-                args+=("$1")
-                shift
-                ;;
+            *) args+=("$1") && shift ;;
         esac
     done
 
@@ -1261,15 +1253,7 @@ date() {
     [[ -z $input && $# -eq 0 ]] && input=$(TZ=$TZ $date_cmd +"%Y-%m-%d %H:%M:%S")
     [[ -z $input ]] && input="$1"
 
-    # Detect the operating system
-    os_type=$(uname)
-
-    # Get today's date in yyyy-mm-dd format
-    if [ "$os_type" = "Darwin" ] && command -v gdate &> /dev/null; then
-        today=$(TZ=$TZ gdate +"%Y-%m-%d")
-    else
-        today=$(TZ=$TZ date +"%Y-%m-%d")
-    fi
+	today=$(TZ=$TZ $date_cmd +"%Y-%m-%d")
 
     # condition yyyy-mm-dd
     if [[ $(validate date "$input" --format 'Y-m-d') == 'true' ]]; then
@@ -1292,23 +1276,9 @@ date() {
         :
     fi
 
-    # Validate the date and time
-    if [[ $# -eq 1 ]]; then
-        if [ "$OS" = "macOS" ]; then
-            gdate -d "$input_format" "$input" &> /dev/null
-        else
-            gdate -d "$input" &> /dev/null
-        fi
-    fi
-
     # Format and print the date using the specified format, or default to standard
     if [[ $custom_format == 1 ]]; then
-        if [[ "$OS" == "macOS" ]]; then
-            formatted_date=$(TZ=$TZ gdate -d "$input" +"$date_format")
-        else
-            formatted_date=$(TZ=$TZ gdate -d "$input" +"$date_format")
-        fi
-        echo "$formatted_date"
+        TZ=$TZ $date_cmd -d "$input" +"$date_format"
     else
         TZ=$TZ /bin/date "$@"
     fi
