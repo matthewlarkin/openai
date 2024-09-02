@@ -2554,7 +2554,7 @@ rec() {
 
 render() {
 
-	local input command
+	local input command args subargs
 
 	# help
 	[[ $1 == '--?' ]] && echo "|<file|markdown> (-p|--pretty|--to-html|--to-markdown|--to-md)" && return 0
@@ -2565,6 +2565,7 @@ render() {
 	# Process arguments to handle flags and content
 	args=() && for arg in "$@"; do
 		case "$arg" in
+
 			--to-html)
 				echo "$input" | pandoc -o temp.html
 				awk '{
@@ -2574,25 +2575,70 @@ render() {
 					print
 				}' temp.html > temp_clean.html
 				mv temp_clean.html temp.html
-				cat temp.html
+				{
+					echo "<html><head><title>Summary</title><link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/sakura.css/css/sakura.css' type='text/css'></head><body>"
+					cat temp.html
+					echo "</body></html>"
+				}
 				rm temp.html
 				return 0
 				;;
+
 			--pretty|-p)
 				pretty "$input" && return 0
 				;;
+
 			--to-markdown|--to-md)
-				# Ensure output is UTF-8 encoded, and remove all backslashes
-				echo "$input" | iconv -f utf-8 -t utf-8 -c | pandoc -f html -t markdown -o temp.md
-				
-				# Output the Markdown content
-				cat temp.md
-				
-				# Remove the temporary Markdown file
-				rm temp.md
-				
-				return 0
+
+				local high_powered simple_mode prompt subargs
+
+				subargs=() && for subarg in "$@"; do
+					case "$subarg" in
+						--simple) simple_mode=1 && shift ;;
+						--high-powerd) high_powered=1 && shift ;;
+						*) subargs+=("$subarg") && shift ;;
+					esac
+				done && set -- "${subargs[@]}"
+
+				if [[ $simple_mode == 1 ]]; then
+
+					echo "$input" | lynx -stdin -dump | pandoc -f html -t markdown
+
+				else
+
+					local openai_args
+
+					prompt="You are an expert transcoder from html and text content to neatly structured markdown content. Use your best judgement to convert the given INPUT as semantically and clean and simple markdown content that simplifies the output but doesn't leave out any content. Write it in JSON format with the raw markdown content in a property called 'markdown'.' \n\n - - - \n\n"
+					input=$(echo "$input" | lynx -stdin -dump | codec json.encode)
+
+					openai_args=("--json")
+					[[ $high_powered == 1 ]] && openai_args+=("--high-powered")
+					
+					openai "$prompt: INPUT: $input" "${openai_args[@]}" < /dev/null | jq -r '.markdown'
+
+				fi
+
 				;;
+
+			--to-pdf)
+
+				local tmp_file output_file
+
+				tmp_file=$(mktemp)
+				output_file="${1:-BARE_HOME/desktop/$(random string 32).pdf}"
+			
+				{
+					echo "<html><head><title>Summary</title><link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/sakura.css/css/sakura.css' type='text/css'></head><body>"
+					echo "$input"
+					echo "</body></html>"
+				} > "$tmp_file" > /dev/null 2>&1
+
+				pandoc -f html -t pdf --pdf-engine=weasyprint -o "$output_file" < "$tmp_file"
+
+				echo "$output_file"
+
+				;;
+
 		esac
 	done && set -- "${args[@]}"
 
@@ -2645,10 +2691,22 @@ request() {
 			
 		esac
 	done
-	
+
 	"${curl_cmd[@]}"
 	
 	unset -f split_data_into_form_fields
+
+}
+
+
+
+research() {
+
+	local input
+
+	[[ -p /dev/stdin ]] && input=$(cat) || input=$1 && shift
+
+	websearch "$input" "$@" < /dev/null
 
 }
 
@@ -2658,14 +2716,10 @@ reveal() {
 
 	local input
 
-	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1; fi
+	[[ -p /dev/stdin ]] && input=$(cat) || input=$1 && shift
 
-	[[ "$#" -eq 0 && -z $input ]] && echo "No file given"
-
-	for file in "$@"; do
-		[[ ! -f "$file" ]] && echo "File '$file' not found"
-		cat "$file"
-	done
+	[[ ! -f "$input" ]] && echo "File '$input' not found"
+	cat "$input"
 
 }
 
@@ -2823,6 +2877,46 @@ run() {
         interpret "$script" "$@" < /dev/null
 
     fi
+}
+
+
+
+scripts() {
+
+	local input command
+
+	[[ -z $EDITOR ]] && echo "$EDITOR is not set" && return 1
+
+	command=$1 && shift
+	[[ -p /dev/stdin ]] && input=$(cat) || input=$1 && shift
+
+	case $command in
+
+		list) ls "$BARE_HOME/scripts" ;;
+
+		create|new)
+			[[ -z $input ]] && echo "No input provided" && return 1
+			[[ -f "$BARE_HOME/scripts/$input" ]] && echo "Script '$input' already exists" && return 1
+			echo -e "#!/usr/bin/env bash\n\n" > "$BARE_HOME/scripts/$input"
+			"$EDITOR" "$BARE_HOME/scripts/$input"
+			;;
+
+		open|edit)
+			[[ -z $input ]] && echo "No input provided" && return 1
+			[[ ! -f "$BARE_HOME/scripts/$input" ]] && echo "Script '$input' does not exist" && return 1
+			"$EDITOR" "$BARE_HOME/scripts/$input"
+			;;
+
+		remove|delete)
+			[[ -z $input ]] && echo "No input provided" && return 1
+			[[ ! -f "$BARE_HOME/scripts/$input" ]] && echo "Script does not exist" && return 1
+			rm "$BARE_HOME/scripts/$input"
+			;;
+		
+		*) echo "Invalid command" && return 1 ;;
+
+	esac
+
 }
 
 
@@ -3373,13 +3467,14 @@ validate() {
 			source_material="$1" && shift
 			model=${OPENAI_DEFAULT_MODEL:-'gpt-4o-mini'}
 
-			while true; do
-				case $1 in
-					--explain) explain=true && shift ;;
-					--high-powered) model='gpt-4o' && shift ;;
-					--model) model="$2" && shift 2 ;;
-					''|*) break ;;
+			for arg in "$@"; do
+				case $arg in
+					--explain) explain=true ;;
+					--high-powered) model='gpt-4o' ;;
+					--model) model="$2"; shift ;;
+					*) break ;;
 				esac
+				shift
 			done
 			
 			while [ $runs_remaining -gt 0 ]; do
@@ -3396,7 +3491,7 @@ validate() {
 			done
 
 			[[ -n $explain ]] && echo "$response" | jq -r '.reasoning'
-			echo "$response" | jq -r '.answer'
+			output=$(echo "$response" | jq -r '.answer')
 			
 			;;
 
@@ -3806,6 +3901,59 @@ weather() {
 	}
 
 	echo "$response"
+
+}
+
+
+
+websearch() {
+
+	deps ddgr lynx
+
+	local args input limit output urls query summary filtered_urls
+
+	limit=5
+	prompt='Summarize with markdown formatting enhancements'
+	length='1000'
+
+	args=() && while [[ $# -gt 0 ]]; do
+		case $1 in
+			--length) length=$2 && shift 2 ;;
+			--limit) limit=$2 && shift 2 ;;
+			--prompt) prompt=$2 && shift 2 ;;
+			*) args+=("$1") && shift ;;
+		esac
+	done && set -- "${args[@]}"
+
+	[[ -p /dev/stdin ]] && input=$(cat) || input=$1 && shift
+
+	limit=$((limit + 10))
+
+	filtered_urls=$(ddgr --json -n "$limit" "$input" | jq -r '.[].url' | grep -vE 'youtube.com|facebook.com|twitter.com|instagram.com|linkedin.com|amazon.com|google.com|reddit.com|ebay.com|medium.com')
+
+	# take only the top five urls
+	urls=$(echo "$filtered_urls" | head -n 5)
+
+	# Process each URL
+	while IFS= read -r url; do
+	  {
+		lynx -dump -nolist "$url" | grep -vE 'http|www|\.com|\.net|\.org|\.edu|\.gov|@'
+		echo -e "\n\nSource: $url\n\n"
+		echo -e "\n\n- - - - -\n\n"
+	  } >> "$BARE_HOME/desktop/webresearch.contents.txt"
+	done <<< "$urls"
+
+	query=$(echo "$input" | tr -d '\r')
+	summary=$(cat "$BARE_HOME/desktop/webresearch.contents.txt" | summarize -p "$prompt" -l "$length")
+
+	rm "$BARE_HOME/desktop/webresearch.contents.txt"
+
+	touch "$BARE_HOME/desktop/webresearch.summary.rec"
+
+	recins -f query -v "$query" -f summary -v "$summary" -f sources -v "$urls" "$BARE_HOME/desktop/webresearch.summary.rec"
+	recsel "$BARE_HOME/desktop/webresearch.summary.rec"
+
+	rm "$BARE_HOME/desktop/webresearch.summary.rec"
 
 }
 
