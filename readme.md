@@ -18,11 +18,9 @@
 
 ## Overview
 
-`bare.sh` (aka `bare`) aims to simplify bash scripting through easy-to-write, easy-to-read scripting. The syntax and list of options is intentially kept simple (*baren*) so you can focus and write with simplicity.
+`bare.sh` (aka `bare`) aims to give individuals a simple toolkit for expressing common tasks, such as creating and managing records, interacting with AI assistants, and sending emails.
 
-Don't let simplicity fool you; `bare` is a powerful automation tool in the right hands, as `bare` can invoke user `bare scripts` (which are just `bash` scripts with `bare` syntax available), making the system highly extensible.
-
-`bare` takes inspiration from the Unix philosophy, accepting input from `stdin` and output to `stdout` wherever possible and treats plaintext as the universal interface.
+In the right hands, `bare` can be a powerful automation tool, particularly with the use of `bare scripts` (which `bash` scripts with `bare` syntax available), making the system highly extensible.
 
 ## Install
 

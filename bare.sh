@@ -22,22 +22,31 @@ __bareStartUp() {
 	# Set the values in the associative array
 	local -A BASE_CONFIG
 	BASE_CONFIG=(
+		# bare
 		["BARE_VERSION"]=$(git log -1 --format=%ct)
 		["BARE_HOME"]="$BARE_DIR/home"
 		["BARE_TIMEZONE"]=UTC
 		["BARE_COLOR"]=0
 		["BARE_DEBUG"]=0
-		["BARE_REMOTE"]=''
-		["HETZNER_API_KEY"]=''
-		["DIGITALOCEAN_API_KEY"]=''
-		["LINODE_API_KEY"]=''
-		["VULTR_API_KEY"]=''
+		# email
+		["SMTP_HOST"]=''
+		["SMTP_PORT"]=''
+		["SMTP_USER"]=''
+		["SMTP_PASS"]=''
+		# APIs
 		["OPENAI_API_KEY"]=''
 		["STRIPE_SECRET_KEY"]=''
 		["AIRTABLE_ACCESS_TOKEN"]=''
 		["AIRTABLE_BASE_ID"]=''
 		["POSTMARK_API_KEY"]=''
 		["TOMORROW_WEATHER_API_KEY"]=''
+		["TINIFY_API_KEY"]='' # Tiny PNG
+		# server
+		["BARE_REMOTE"]=''
+		["HETZNER_API_KEY"]=''
+		["DIGITALOCEAN_API_KEY"]=''
+		["LINODE_API_KEY"]=''
+		["VULTR_API_KEY"]=''
 	) && for key in "${!BASE_CONFIG[@]}"; do
 		export "$key"="${BASE_CONFIG[$key]}"
 	done
@@ -1329,27 +1338,28 @@ deps() {
 
 download() {
 
-	local url
-	local output_name
-	local temp_file
-	local mime_type
-	local extension
-	local is_youtube
+	local url is_youtube args arg
 
 	deps curl
 
 	if [[ -p /dev/stdin ]]; then url=$(cat); else url=$1 && shift; fi
 
-	[[ -z $url ]] && echo "No URL provided"
+	[[ -z $url ]] && echo "No URL provided" && return 1
 
 	[[ $(validate url "$url") == 'false' ]] && echo "Invalid URL"
 
 	# check if this is a YouTube link
 	[[ "$(youtube id "$url")" = 'Invalid YouTube URL' ]] && is_youtube=0 || is_youtube=1
 
-	# setup environment
-	output_name="$(random string 32)"
-	temp_file="$BARE_HOME/downloads/${output_name}"
+	args=() && for arg in "$@"; do
+		case $arg in
+			--output|-o) output_file="$2" && shift 2 ;;
+			*) args+=("$1") && shift ;;
+		esac
+	done && set -- "${args[@]}"
+
+	# Set the output file name
+	[[ -z "$output_file" ]] && output_file="$BARE_HOME/downloads/$(random string 30)"
 
 	if [[ "$is_youtube" = 1 ]]; then
 
@@ -1358,39 +1368,10 @@ download() {
 	else
 
 		# Download the file to a temporary location
-		request "$url" --output "$temp_file"
-
-		# Determine the MIME type
-		mime_type=$(file --mime-type -b "$temp_file")
-
-		# Map MIME type to extension
-		declare -A mime_extension_map=(
-			["image/png"]="png"
-			["image/jpeg"]="jpg"
-			["image/gif"]="gif"
-			["image/webp"]="webp"
-			["audio/mpeg"]="mp3"
-			["video/mp4"]="mp4"
-			["application/pdf"]="pdf"
-			["application/json"]="json"
-			["text/markdown"]="md"
-			["text/plain"]="txt"
-			["text/csv"]="csv"
-			["application/zip"]="zip"
-			["text/html"]="html"
-		)
-
-		extension="${mime_extension_map[$mime_type]}"
-
-		[[ -z "$extension" ]] && echo "Unsupported MIME type: $mime_type"
-
-		# Construct the final output file name with the correct extension
-		output_file="$BARE_HOME/downloads/${output_name}.${extension}"
-
-		# Rename the file
-		mv "$temp_file" "$output_file"
+		request "$url" --output "$output_file"
 
 		echo "$output_file"
+
 	fi
 
 }
@@ -1569,26 +1550,42 @@ geo() {
 
 image() {
 
-	local command
-	local input
-	local output_filename
-	local aspect_ratio
-	local focal_orientation
-	local overwrite_mode
-	local gravity
-	local height
-	local blur_radius
-	local degrees
-	local option
-	local output_extension
+	local command input output_filename aspect_ratio focal_orientation overwrite_mode gravity height blur_radius degrees option output_extension args arg
 
 	deps magick
 
 	command=$1 && shift
+
+	output_filename="$BARE_HOME/downloads/$(random string 30)"
+	args=() && for arg in "$@"; do
+		case $arg in
+			--output|-o) output_filename="$2" && shift 2 ;;
+			*) args+=("$1") && shift ;;
+		esac
+	done && set -- "${args[@]}"
 	
 	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1 && shift; fi
 
 	case $command in
+
+		tinify)
+
+			[[ -z "$TINIFY_API_KEY" ]] && echo "TINIFY_API_KEY is not set" && return 1
+
+			# Check if the input is a file
+			[[ ! -f "$input" ]] && echo "Error: File '$input' not found." && return 1
+
+			# Compress the image using the TinyPNG API
+			response_url=$(curl -sL https://api.tinify.com/shrink \
+				--data-binary @"$input" \
+				--user "api:$TINIFY_API_KEY" | \
+			jq -r '.output.url')
+
+			download "$response_url" --output "$output_filename"
+
+			echo "$output_filename"
+
+			;;
 
 		create)
 
@@ -4146,6 +4143,6 @@ case $1 in
 
 	--upgrade) git pull origin root ;;
 
-	*) if __isBareCommand "$1"; then "$@"; fi ;;
+	*) __isBareCommand "$1" && __bareStartUp && "$@" ;;
 
 esac
