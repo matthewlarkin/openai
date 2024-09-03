@@ -1614,25 +1614,28 @@ geo() {
 
 image() {
 
-	local command input output_filename aspect_ratio focal_orientation overwrite_mode gravity height blur_radius degrees option output_extension args arg
+	local command input output_filename aspect_ratio focal_orientation overwrite_mode gravity height blur_radius degrees option output_extension args arg quality output_filename
 
 	deps magick
 
 	command=$1 && shift
 
 	output_filename="$BARE_HOME/downloads/$(random string 30)"
-	args=() && for arg in "$@"; do
-		case $arg in
+	args=() && while [[ $# -gt 0 ]]; do
+		case $1 in
 			--output|-o) output_filename="$2" && shift 2 ;;
+			--quality|-q) quality="$2" && shift 2 ;;
 			*) args+=("$1") && shift ;;
 		esac
 	done && set -- "${args[@]}"
-	
+
 	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1 && shift; fi
 
 	case $command in
 
 		tinify)
+
+			echo "$input" && return 0
 
 			[[ -z "$TINIFY_API_KEY" ]] && echo "TINIFY_API_KEY is not set" && return 1
 
@@ -1646,8 +1649,6 @@ image() {
 			jq -r '.output.url')
 
 			download "$response_url" --output "$output_filename"
-
-			echo "$output_filename"
 
 			;;
 
@@ -1814,7 +1815,7 @@ image() {
 
 interpret() {
 
-	local input args env_file BARE_HOME_FULL
+	local input args env_file
 
 	__bareStartUp
 
