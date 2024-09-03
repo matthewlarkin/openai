@@ -63,11 +63,13 @@ __bareStartUp() {
 		export RED GREEN YELLOW BLUE GRAY RESET
 	}
 
+	[[ -f ~/.bash_profile ]] && source ~/.bash_profile
+	[[ -f ~/.bashrc ]] && source ~/.bashrc
+	[[ -f ~/.barerc ]] && source ~/.barerc
+
 	__bareVerifyIntegrity
 	__getOS
 
-	[[ -f ~/.bash_profile ]] && source ~/.bash_profile
-	[[ -f ~/.bashrc ]] && source ~/.bashrc
 	# shellcheck disable=SC1091
 	source "$BARE_HOME/.barerc"
 
@@ -835,51 +837,106 @@ codec() {
 	case $command in
 
 		encrypt)
-
-			local salt pass encrypted
-
+					
+			local salt pass encrypted input file output_file
+			
 			args=() && while true; do
-				case $1 in
-					--salt|-s) salt=$2 && shift 2 ;;
-					--pass|-p) pass=$2 && shift 2 ;;
-					*) break ;;
-				esac
+			  case $1 in
+				--salt|-s) salt=$2 && shift 2 ;;
+				--pass|-p) pass=$2 && shift 2 ;;
+				--output|-o) output_file=$2 && shift 2 ;;
+				*) break ;;
+			  esac
 			done && set -- "${args[@]}"
-		
+			
 			[[ -z $pass ]] && echo "Error: pass is required." && return 1
-		
+			
 			# Generate a random salt if not provided
 			[[ -z $salt ]] && salt=$(openssl rand -hex 8)
-		
+
+			[[ -f $input ]] && file=$input
+			
+			# Read input from file if provided
+			if [[ -n $file ]]; then
+			  input=$(cat "$input")
+			else
+			  input=$1
+			fi
+			
 			# Encrypt the input
 			encrypted=$(echo "$input" | openssl enc -aes-256-cbc -S "$salt" -k "$pass" -pbkdf2 | base64)
-
-			echo "$salt:$encrypted"
-
-			;;
+			
+			# Output the encrypted data
+			if [[ -n $file ]]; then
+			  if [[ -n $output_file ]]; then
+				echo "$salt:$encrypted" > "$output_file"
+			  else
+				echo "$salt:$encrypted" > "$file"
+			  fi
+			else
+			  echo "$salt:$encrypted"
+			fi
 		
+			;;
+				
 		decrypt)
 
-			local pass
+			local pass file output_file input
 		
 			args=() && while true; do
 				case $1 in
 					--pass|-p) pass=$2 && shift 2 ;;
+					--output|-o) output_file=$2 && shift 2 ;;
 					*) break ;;
 				esac
 			done && set -- "${args[@]}"
 		
 			[[ -z $pass ]] && echo "Error: pass is required." && return 1
+		
+			[[ -f $input ]] && file=$input
+		
+			# Read input from file if provided
+			if [[ -n $file ]]; then
+				input=$(cat "$file")
+			else
+				input=$1
+			fi
+		
+			# Check if input is empty
+			if [[ -z $input ]]; then
+				echo "Error: input is empty or not provided." && return 1
+			fi
+		
+			# Remove null bytes from input
+			input=$(echo "$input" | tr -d '\0' 2>/dev/null)
 		
 			# Extract the salt and encrypted data
 			IFS=':' read -r salt encrypted <<< "$input"
 		
-			# Decrypt the input
-			if ! decrypted=$(echo "$encrypted" | base64 -d | openssl enc -d -aes-256-cbc -S "$salt" -k "$pass" -pbkdf2 2>/dev/null); then
-				return 1
+			# Check if salt and encrypted data are properly extracted
+			if [[ -z $salt || -z $encrypted ]]; then
+				echo "Error: input is improperly formatted." && return 1
 			fi
 		
-			echo "$decrypted"
+			# Decrypt the input
+			temp_file=$(mktemp)
+			chmod 600 "$temp_file"
+			if ! echo "$encrypted" | base64 -d | openssl enc -d -aes-256-cbc -S "$salt" -k "$pass" -pbkdf2 > "$temp_file" 2>/dev/null; then
+				echo "Decryption failed" && rm -f "$temp_file" && return 1
+			fi
+			decrypted=$(cat "$temp_file")
+			rm -f "$temp_file"
+		
+			# Output the decrypted data
+			if [[ -n $file ]]; then
+				if [[ -n $output_file ]]; then
+					echo "$decrypted" > "$output_file"
+				else
+					echo "$decrypted" > "$file"
+				fi
+			else
+				echo "$decrypted"
+			fi
 
 			;;
 
@@ -1299,7 +1356,7 @@ decrypt() {
 
 	local input
 
-	[[ -p /dev/stdin ]] && input=$(cat) || input=$1 && shift
+	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1 && shift; fi
 
 	codec decrypt "$input" "$@" < /dev/null
 
@@ -1444,7 +1501,14 @@ encrypt() {
 
 	local input
 
-	[[ -p /dev/stdin ]] && input=$(cat) || input=$1 && shift
+	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1 && shift; fi
+
+	for arg in "$@"; do
+		case $arg in
+			--system|-s) encrypt_system && shift 2 ;;
+		esac
+	done
+
 
 	codec encrypt "$input" "$@" < /dev/null
 
@@ -2701,7 +2765,7 @@ research() {
 
 	local input
 
-	[[ -p /dev/stdin ]] && input=$(cat) || input=$1 && shift
+	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1 && shift; fi
 
 	websearch "$input" "$@" < /dev/null
 
@@ -2713,7 +2777,7 @@ reveal() {
 
 	local input
 
-	[[ -p /dev/stdin ]] && input=$(cat) || input=$1 && shift
+	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1 && shift; fi
 
 	[[ ! -f "$input" ]] && echo "File '$input' not found"
 	cat "$input"
@@ -2882,10 +2946,10 @@ scripts() {
 
 	local input command
 
-	[[ -z $EDITOR ]] && echo "$EDITOR is not set" && return 1
+	[[ -z $EDITOR ]] && echo "\$EDITOR is not set" && return 1
 
 	command=$1 && shift
-	[[ -p /dev/stdin ]] && input=$(cat) || input=$1 && shift
+	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1 && shift; fi
 
 	case $command in
 
@@ -3396,6 +3460,32 @@ trim() {
 	local input
 	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1; fi
 	transform "$input" --trim < /dev/null
+
+}
+
+
+
+unzip() {
+
+	local arg input output localunzip
+
+	localunzip=$(which unzip)
+
+	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1 && shift; fi
+
+	for arg in "$@"; do
+		case $arg in
+			--output|-o) output="$2"; shift 2 ;;
+			*) : ;;
+		esac
+	done
+
+	[[ -z $output ]] && output="$input"
+	
+	# Unzip the file to the output directory, automatically answering "yes" to any prompts
+	yes y | "$localunzip" -q "$input" -d "$output"
+
+	echo "$output"
 
 }
 
@@ -3922,7 +4012,7 @@ websearch() {
 		esac
 	done && set -- "${args[@]}"
 
-	[[ -p /dev/stdin ]] && input=$(cat) || input=$1 && shift
+	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1 && shift; fi
 
 	limit=$((limit + 10))
 
@@ -4122,6 +4212,31 @@ youtube() {
 	unset -f download_video
 	unset -f extract_id
 	unset -f download_thumbnail
+
+}
+
+
+
+zip() {
+
+	local args input output localzip
+
+	localzip=$(which zip)
+
+	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1 && shift; fi
+
+	args=() && while [[ $# -gt 0 ]]; do
+		case $1 in
+			--to|--output|-o) output=$2 && shift 2 ;;
+			*) args+=("$1") && shift ;;
+		esac
+	done && set -- "${args[@]}"
+
+	[[ -z $output ]] && output="$input.zip"
+
+	"$localzip" -r "$output" "$input" > /dev/null
+
+	echo "$output"
 
 }
 
