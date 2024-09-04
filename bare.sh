@@ -6,6 +6,35 @@ export BARE_DIR
 
 
 
+__deps() {
+
+	local missing_deps
+	
+	# check each dependency
+	missing_deps=()
+	for dep in "$@"; do
+		if ! command -v "$dep" &> /dev/null; then
+			missing_deps+=("$dep")
+		fi
+	done
+
+	# if there are any missing dependencies, print them
+	if [ ${#missing_deps[@]} -gt 0 ]; then
+		echo "ERROR >> The following dependencies are missing and need to be installed: "
+		for i in "${!missing_deps[@]}"; do
+			dep=${missing_deps[$i]}
+			if (( i == ${#missing_deps[@]}-1 )); then
+				printf '%s' "$dep"
+			else
+				printf '%s, ' "$dep"
+			fi
+		done && echo "."
+	fi
+
+}
+
+
+
 __getOS() {
 	OS="Other"
 	case $(uname) in
@@ -594,7 +623,11 @@ airtable() {
 		
 			[[ -z $record_id ]] && echo "Error: record_id is required." && return 1
 
-			response=$(curl -sL -X DELETE "https://api.airtable.com/v0/$base_id/$(codec url.encode "$table_name")/$record_id")
+			response=$(
+				curl -sL "https://api.airtable.com/v0/$base_id/$(codec url.encode "$table_name")/$record_id" \
+					-X DELETE \
+					-H "Authorization: Bearer $api_key"
+			)
 
 			if [[ $(echo "$response" | jq -r '.error') == "null" ]]; then
 				echo "Record deleted successfully."
@@ -1352,6 +1385,14 @@ date() {
 
 
 
+db() {
+
+	if [[ -p /dev/stdin ]]; then cat | rec "$@"; else rec "$@"; fi
+
+}
+
+
+
 decrypt() {
 
 	local input
@@ -1364,40 +1405,11 @@ decrypt() {
 
 
 
-deps() {
-
-	local missing_deps
-	
-	# check each dependency
-	missing_deps=()
-	for dep in "$@"; do
-		if ! command -v "$dep" &> /dev/null; then
-			missing_deps+=("$dep")
-		fi
-	done
-
-	# if there are any missing dependencies, print them
-	if [ ${#missing_deps[@]} -gt 0 ]; then
-		echo "ERROR >> The following dependencies are missing and need to be installed: "
-		for i in "${!missing_deps[@]}"; do
-			dep=${missing_deps[$i]}
-			if (( i == ${#missing_deps[@]}-1 )); then
-				printf '%s' "$dep"
-			else
-				printf '%s, ' "$dep"
-			fi
-		done && echo "."
-	fi
-
-}
-
-
-
 download() {
 
 	local url is_youtube args arg
 
-	deps curl
+	__deps curl
 
 	if [[ -p /dev/stdin ]]; then url=$(cat); else url=$1 && shift; fi
 
@@ -1437,7 +1449,7 @@ download() {
 
 email() {
 
-	deps jq
+	__deps jq
 
 	[[ -z "$POSTMARK_API_KEY" ]] && {
 		echo "POSTMARK_API_KEY is not set"
@@ -1546,7 +1558,7 @@ filter() {
 
 geo() {
 
-	deps curl jq
+	__deps curl jq
 	touch home/.cache/geo.txt
 
 	format_location() {
@@ -1616,7 +1628,7 @@ image() {
 
 	local command input output_filename aspect_ratio focal_orientation overwrite_mode gravity height blur_radius degrees option output_extension args arg quality output_filename
 
-	deps magick
+	__deps magick
 
 	command=$1 && shift
 
@@ -1945,7 +1957,7 @@ media() {
 	local remove_original
 	local ffmpeg_command
 
-	deps ffmpeg
+	__deps ffmpeg
 
 	command=$1 && shift
 
@@ -2456,7 +2468,7 @@ pretty() {
 
 	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1 && shift; fi
 	
-	deps glow
+	__deps glow
 	echo "$input" | glow
 
 }
@@ -2465,7 +2477,7 @@ pretty() {
 
 qr() {
 
-	deps qrencode
+	__deps qrencode
 
 	local link output
 
@@ -2522,30 +2534,32 @@ random() {
 
 rec() {
 
-	deps rec2csv csvlook
+	# usage: rec <recfile||input> <command> <args>
 
-	local input
-	local command
-	local output
+	__deps rec2csv csvlook
 
-	if [[ -f $1 ]]; then
-		input=$(cat "$1") && shift;
+	local input command output recfile
+
+	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1 && shift; fi
+
+	# check for either explicit <file> or implifict home/recfiles/<file>
+	if [[ -f "$input" ]]; then
+		input=$(cat "$input")
+	elif [[ -f "$BARE_HOME/recfiles/$input" ]]; then
+		input=$(cat "$BARE_HOME/recfiles/$input")
 	else
-		if [[ -p /dev/stdin ]]; then input=$(cat); fi
+		echo "Error: no input provided" && return 1
 	fi
-
-	[[ -z $input ]] && echo "Error: no input provided" && return 1
 
 	command=$1 && shift
 
-	remaining_args=() && while [[ "$#" -gt 0 ]]; do
-		case $1 in
-			random|-m|--random) remaining_args+=(-m) && shift ;;
-			*) remaining_args+=("$1") && shift ;;
-		esac
-	done && set -- "${remaining_args[@]}"
-
 	case $command in
+
+		list)
+
+			echo "$input" | recsel "$@"
+
+			;;
 
 		--csv|--to-csv)
 
@@ -2987,7 +3001,7 @@ serve() {
 
 	local command
 
-	deps sqlpage
+	__deps sqlpage
 
 	export PORT=8282
 	export allow_exec=true
@@ -3081,7 +3095,7 @@ size() {
 
 speed() {
 
-	deps ffmpeg openssl
+	__deps ffmpeg openssl
 
 	local speed_factor input_file output_file is_video extension
 
@@ -3360,7 +3374,7 @@ transform() {
 
 translate() {
 
-	deps dig
+	__deps dig
 
 	local input output_format explain_reasoning model remaining_args
 
@@ -3996,7 +4010,7 @@ weather() {
 
 websearch() {
 
-	deps ddgr lynx
+	__deps ddgr lynx
 
 	local args input limit output urls query summary filtered_urls
 
