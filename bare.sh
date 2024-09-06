@@ -57,6 +57,7 @@ __bareStartUp() {
 		["BARE_TIMEZONE"]=UTC
 		["BARE_COLOR"]=0
 		["BARE_DEBUG"]=0
+		["BARE_STORAGE_PROVIDER"]='digitalocean'
 		# email
 		["SMTP_HOST"]=''
 		["SMTP_PORT"]=''
@@ -70,6 +71,10 @@ __bareStartUp() {
 		["POSTMARK_API_KEY"]=''
 		["TOMORROW_WEATHER_API_KEY"]=''
 		["TINIFY_API_KEY"]='' # Tiny PNG
+		["DO_SPACES_ACCESS_KEY"]=''
+		["DO_SPACES_SECRET_KEY"]=''
+		["DO_SPACES_ENDPOINT"]=''
+		["AWS_S3_API_KEY"]=''
 		# server
 		["BARE_REMOTE"]=''
 		["HETZNER_API_KEY"]=''
@@ -3158,6 +3163,103 @@ squish() {
 	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1; fi
 	transform "$input" --squish
 
+}
+
+
+
+storage() {
+    local input command args arg privacy to
+
+    command=$1 && shift
+
+	privacy='public-read'
+	to="/uploads/$(random string 32)"
+
+    args=() && while [[ $# -gt 0 ]]; do
+        case $1 in
+            --to|-t) to=$2 && shift 2 ;;
+			--private) privacy='private' && shift ;;
+            *) args+=("$1") && shift ;;
+        esac
+    done && set -- "${args[@]}"
+
+    [[ -p /dev/stdin ]] && input=$(cat) || input=$1 && shift
+
+    case $command in
+        upload)
+            # Step 1: Define the parameters for the Space you want to upload to.
+            SPACE=$(echo "$DO_SPACES_ENDPOINT" | awk -F[/:] '{print $4}' | awk -F. '{print $1}')  # Extract the space name from DO_SPACES_ENDPOINT
+            REGION=$(echo "$DO_SPACES_ENDPOINT" | sed -n 's|.*\.\([^.]*\)\.digitaloceanspaces\.com|\1|p') # Extract region from endpoint
+            STORAGETYPE="STANDARD" # Storage type, can be STANDARD, REDUCED_REDUNDANCY, etc.
+            KEY="$DO_SPACES_ACCESS_KEY" # Access key pair from your environment variables
+            SECRET="$DO_SPACES_SECRET_KEY" # Secret access key from your environment variables
+            
+            # Check if necessary variables are set
+            if [[ -z "$KEY" || -z "$SECRET" || -z "$SPACE" || -z "$REGION" ]]; then
+                echo "Missing one or more required environment variables (DO_SPACES_ACCESS_KEY, DO_SPACES_SECRET_KEY, DO_SPACES_ENDPOINT)."
+                exit 1
+            fi
+            
+            # Step 2: Define a function that uploads your object via cURL.
+            function putS3 {
+                local path="$1"  # The local path to the file
+                local file="$2"  # The file you want to upload
+                local space_path="$3"  # The path within your Space
+            
+                # Generate the current date in the appropriate format
+                date=$(date -u +"%a, %d %b %Y %T %z")
+            
+                # Define the headers and object properties
+				acl="x-amz-acl:${privacy}"  # Set the file permissions
+                content_type=$(file -b --mime-type "$path")  # Automatically get the MIME type of the file
+                storage_type="x-amz-storage-class:${STORAGETYPE}"
+            
+                # Create the string to sign
+                string="PUT\n\n${content_type}\n${date}\n${acl}\n${storage_type}\n/${SPACE}${space_path}${file}"
+            
+                # Generate the signature using HMAC-SHA1
+                signature=$(echo -en "${string}" | openssl sha1 -hmac "${SECRET}" -binary | base64)
+            
+                # Construct the correct URL
+                url="https://${SPACE}.${REGION}.digitaloceanspaces.com${space_path}${file}"
+            
+                # Perform the PUT request using cURL
+                curl -s -X PUT -T "$path" \
+                    -H "Host: ${SPACE}.${REGION}.digitaloceanspaces.com" \
+                    -H "Date: ${date}" \
+                    -H "Content-Type: ${content_type}" \
+                    -H "${storage_type}" \
+                    -H "${acl}" \
+                    -H "Authorization: AWS ${KEY}:${signature}" \
+                    "$url"
+            
+                # Output result with error capturing
+                if [[ $? -eq 0 ]]; then
+                    echo "$url"  # Return the full URL of the uploaded asset
+                else
+                    echo "Failed to upload ${file}. Check cURL output for details." && return 1
+                fi
+            }
+            
+            # Extract the file name from the "to" path
+            file_name=$(basename "$to")
+            dir_path=$(dirname "$to")
+            
+            # Ensure that the space path starts with a "/"
+            if [[ $dir_path != /* ]]; then
+                dir_path="/$dir_path"
+            fi
+            
+            # Check if the input file exists
+            if [[ ! -f "$input" ]]; then
+                echo "Error: The file $input does not exist."
+                return 1
+            fi
+            
+            putS3 "$input" "$file_name" "$dir_path/"
+            ;;
+        *) echo "Invalid command" && return 1 ;;
+    esac
 }
 
 
