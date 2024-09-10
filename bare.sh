@@ -2582,7 +2582,6 @@ rec() {
 				echo "$json_output" | jq
 			else
 				echo "Error: Conversion failed" >&2
-				
 			fi
 
 			;;
