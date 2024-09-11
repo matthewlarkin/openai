@@ -53,34 +53,36 @@ __bareStartUp() {
 	BASE_CONFIG=(
 		# bare
 		["BARE_VERSION"]=$(git log -1 --format=%ct)
-		["BARE_HOME"]="$BARE_DIR/home"
-		["BARE_TIMEZONE"]=UTC
-		["BARE_COLOR"]=0
-		["BARE_DEBUG"]=0
-		["BARE_STORAGE_PROVIDER"]='digitalocean'
+		["BARE_HOME"]="${BARE_HOME:-$BARE_DIR/home}"
+		["BARE_TIMEZONE"]="${BARE_TIMEZONE:-UTC}"
+		["BARE_COLOR"]="${BARE_COLOR:-0}"
+		["BARE_DEBUG"]="${BARE_DEBUG:-0}"
+		["BARE_STORAGE_PROVIDER"]="${BARE_STORAGE_PROVIDER:-digitalocean}"
+		["BARE_WORKING_DIR"]="${BARE_WORKING_DIR:-.}"
+		["EDITOR"]="${EDITOR:-code}"
 		# email
-		["SMTP_HOST"]=''
-		["SMTP_PORT"]=''
-		["SMTP_USER"]=''
-		["SMTP_PASS"]=''
+		["SMTP_HOST"]="${SMTP_HOST:-}"
+		["SMTP_PORT"]="${SMTP_PORT:-}"
+		["SMTP_USER"]="${SMTP_USER:-}"
+		["SMTP_PASS"]="${SMTP_PASS:-}"
 		# APIs
-		["OPENAI_API_KEY"]=''
-		["STRIPE_SECRET_KEY"]=''
-		["AIRTABLE_ACCESS_TOKEN"]=''
-		["AIRTABLE_BASE_ID"]=''
-		["POSTMARK_API_KEY"]=''
-		["TOMORROW_WEATHER_API_KEY"]=''
-		["TINIFY_API_KEY"]='' # Tiny PNG
-		["DO_SPACES_ACCESS_KEY"]=''
-		["DO_SPACES_SECRET_KEY"]=''
-		["DO_SPACES_ENDPOINT"]=''
-		["AWS_S3_API_KEY"]=''
+		["OPENAI_API_KEY"]="${OPENAI_API_KEY:-}"
+		["STRIPE_SECRET_KEY"]="${STRIPE_SECRET_KEY:-}"
+		["AIRTABLE_ACCESS_TOKEN"]="${AIRTABLE_ACCESS_TOKEN:-}"
+		["AIRTABLE_BASE_ID"]="${AIRTABLE_BASE_ID:-}"
+		["POSTMARK_API_KEY"]="${POSTMARK_API_KEY:-}"
+		["TOMORROW_WEATHER_API_KEY"]="${TOMORROW_WEATHER_API_KEY:-}"
+		["TINIFY_API_KEY"]="${TINIFY_API_KEY:-}" # Tiny PNG
+		["DO_SPACES_ACCESS_KEY"]="${DO_SPACES_ACCESS_KEY:-}"
+		["DO_SPACES_SECRET_KEY"]="${DO_SPACES_SECRET_KEY:-}"
+		["DO_SPACES_ENDPOINT"]="${DO_SPACES_ENDPOINT:-}"
+		["AWS_S3_API_KEY"]="${AWS_S3_API_KEY:-}"
 		# server
-		["BARE_REMOTE"]=''
-		["HETZNER_API_KEY"]=''
-		["DIGITALOCEAN_API_KEY"]=''
-		["LINODE_API_KEY"]=''
-		["VULTR_API_KEY"]=''
+		["BARE_REMOTE"]="${BARE_REMOTE:-}"
+		["HETZNER_API_KEY"]="${HETZNER_API_KEY:-}"
+		["DIGITALOCEAN_API_KEY"]="${DIGITALOCEAN_API_KEY:-}"
+		["LINODE_API_KEY"]="${LINODE_API_KEY:-}"
+		["VULTR_API_KEY"]="${VULTR_API_KEY:-}"
 	) && for key in "${!BASE_CONFIG[@]}"; do
 		export "$key"="${BASE_CONFIG[$key]}"
 	done
@@ -97,17 +99,26 @@ __bareStartUp() {
 		export RED GREEN YELLOW BLUE GRAY RESET
 	}
 
-	[[ -f ~/.bash_profile ]] && source ~/.bash_profile
-	[[ -f ~/.bashrc ]] && source ~/.bashrc
-	[[ -f ~/.barerc ]] && source ~/.barerc
+	# shellcheck disable=SC1090
+	{
+		[[ -f ~/.bash_profile ]] && source ~/.bash_profile
+		[[ -f ~/.bashrc ]] && source ~/.bashrc
+		[[ -f ~/.barerc ]] && source ~/.barerc
+	}
 
 	__bareVerifyIntegrity
 	__getOS
 
-	# shellcheck disable=SC1091
-	source "$BARE_HOME/.barerc"
+	# shellcheck disable=SC1090,SC1091
+	{
+		source "$BARE_HOME/.barerc"
+		[[ -n $BARERC_SHIM ]] && source "$BARERC_SHIM"
+	}
 
 	export BARE_HOME
+	export BARE_WORKING_DIR
+
+	cd "$BARE_WORKING_DIR" || return 1
 
 }
 
@@ -124,20 +135,24 @@ __bareVerifyIntegrity() {
 	cd "$BARE_HOME" || return 1
 
 	# set directories
-	mkdir -p .cache .logs csvs desktop documents downloads recfiles scripts
+	mkdir -p .cache .logs csvs desktop documents downloads recfiles scripts > /dev/null 2>&1
 	for item in document openai tasks projects routines; do
-		mkdir -p recfiles/$item; done
+		mkdir -p recfiles/$item;
+	done
 
 	# set files
 	touch .barerc
 	for item in list tags; do
-		touch recfiles/document/$item.rec; done
+		touch recfiles/document/$item.rec;
+	done
 	for item in assistants messages threads; do
-		touch recfiles/openai/$item.rec; done
+		touch recfiles/openai/$item.rec;
+	done
 	for item in tasks projects routines; do
 		touch recfiles/$item/list.rec
 		touch recfiles/$item/tags.rec
-		touch recfiles/$item/comments.rec; done
+		touch recfiles/$item/comments.rec;
+	done
 
 	cd "$BARE_DIR" || return 1
 
@@ -2197,6 +2212,8 @@ openai() {
 	local args command input
 	local assistant_name list_assistants list_threads json_mode debug mode thread_title
 
+	[[ -p /dev/stdin ]] && input=$(cat)
+
 	# capture assistant name
 	args=() && while [[ "$#" -gt 0 ]]; do
 		case $1 in
@@ -2245,9 +2262,8 @@ openai() {
 		esac
 	done && set -- "${args[@]}"
 
-	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1 && shift; fi
-
-	[[ -z "$input" ]] && echo "Error: no input provided" >&2 && return 1
+	[[ -z "$input" ]] && input=$1 && shift
+	if [[ -z "$input" ]]; then echo "Error: no input provided" >&2 && return 1; fi
 
 	case $command in 
 
@@ -2333,8 +2349,11 @@ openai() {
 			[[ $debug == 'true' ]] && {
 				request "https://api.openai.com/v1/chat/completions" --token "$OPENAI_API_KEY" --json "$payload" | jq
 			}
-			
-			response=$(request "https://api.openai.com/v1/chat/completions" --token "$OPENAI_API_KEY" --json "$payload" | jq -r '.choices[0].message.content');
+
+			response=$(curl -s -X POST "https://api.openai.com/v1/chat/completions" \
+				-H "Authorization: Bearer $OPENAI_API_KEY" \
+				-H "Content-Type: application/json" \
+				-d "$payload" | jq -r '.choices[0].message.content')
 
 			[[ -n $thread_title ]] && {
 				recins "$BARE_HOME/recfiles/openai/messages.rec" -f Thread -v "$thread_title" -f Author -v "${assistant_name-Assistant}" -f Contents -v "$response"
@@ -2547,13 +2566,13 @@ rec() {
 
 	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1 && shift; fi
 
+	[[ -z $input ]] && echo "Error: no input provided" && return 1
+
 	# check for either explicit <file> or implifict home/recfiles/<file>
 	if [[ -f "$input" ]]; then
 		input=$(cat "$input")
 	elif [[ -f "$BARE_HOME/recfiles/$input" ]]; then
 		input=$(cat "$BARE_HOME/recfiles/$input")
-	else
-		echo "Error: no input provided" && return 1
 	fi
 
 	command=$1 && shift
@@ -2627,6 +2646,34 @@ rec() {
 			;;
 
 	esac
+
+}
+
+
+
+relay() {
+
+	local input
+
+	[[ -p /dev/stdin ]] && input=$(cat)
+
+	args=() && for arg in "$@"; do
+		case $arg in
+			--var) var='true' && shift 2 ;;
+			*) args+=("$arg") && shift ;;
+		esac
+	done && set -- "${args[@]}"
+
+	[[ -n $var ]] && {
+		echo "${!input}" && return 0
+	}
+
+	[[ -z $input ]] && {
+		input=$1
+		[[ -z $input ]] && echo "Error: no input provided" && return 1
+	}
+
+	echo "$input"
 
 }
 
@@ -4354,17 +4401,13 @@ zip() {
 
 case $1 in
 
-	-i|-t|terminal)
-		__bareTerminal
-		;;
+	-i|-t|terminal) __bareTerminal ;;
 
-	--health)
-		__bareSystemHealthCheck
-		;;
+	--health) __bareSystemHealthCheck ;;
 	
 	--version|-v|-V) echo "$BARE_VERSION" ;;
 
-	--upgrade) git pull origin root ;;
+	--upgrade) cd "$BARE_DIR" && git pull origin root ;;
 
 	*) __isBareCommand "$1" && __bareStartUp && "$@" ;;
 
