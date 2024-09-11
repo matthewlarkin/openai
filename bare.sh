@@ -2653,24 +2653,21 @@ rec() {
 
 relay() {
 
-	local input
-
-	[[ -p /dev/stdin ]] && input=$(cat)
+	local input var args arg
 
 	args=() && for arg in "$@"; do
 		case $arg in
-			--var) var='true' && shift 2 ;;
+			--var) var='true' && shift ;;
 			*) args+=("$arg") && shift ;;
 		esac
 	done && set -- "${args[@]}"
 
+	[[ -p /dev/stdin ]] && input=$(cat) || input=$1
+
+	[[ -z $input ]] && echo "Error: no input provided" && return 1
+
 	[[ -n $var ]] && {
 		echo "${!input}" && return 0
-	}
-
-	[[ -z $input ]] && {
-		input=$1
-		[[ -z $input ]] && echo "Error: no input provided" && return 1
 	}
 
 	echo "$input"
