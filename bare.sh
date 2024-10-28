@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 
+BARE_WORKING_DIR=$(realpath .)
 BARE_DIR=$(realpath "$(dirname "$0")")
 cd "$BARE_DIR" || exit 1
-export BARE_DIR
+export BARE_DIR BARE_WORKING_DIR
 
 
 
@@ -51,6 +52,7 @@ __bareStartUp() {
 	# Set the values in the associative array
 	local -A BASE_CONFIG
 	BASE_CONFIG=(
+		
 		# bare
 		["BARE_VERSION"]=$(git log -1 --format=%ct)
 		["BARE_HOME"]="${BARE_HOME:-$BARE_DIR/home}"
@@ -60,29 +62,35 @@ __bareStartUp() {
 		["BARE_STORAGE_PROVIDER"]="${BARE_STORAGE_PROVIDER:-digitalocean}"
 		["BARE_WORKING_DIR"]="${BARE_WORKING_DIR:-.}"
 		["EDITOR"]="${EDITOR:-code}"
-		# email
+		
+		# Email via SMTP
 		["SMTP_HOST"]="${SMTP_HOST:-}"
 		["SMTP_PORT"]="${SMTP_PORT:-}"
-		["SMTP_USER"]="${SMTP_USER:-}"
-		["SMTP_PASS"]="${SMTP_PASS:-}"
-		# APIs
+		["SMTP_USERNAME"]="${SMTP_USERNAME:-}"
+		["SMTP_PASSWORD"]="${SMTP_PASSWORD:-}"
+		
+		# Email via Postmark
+		["POSTMARK_API_KEY"]="${POSTMARK_API_KEY:-}"
+
+		# Misc APIs
 		["OPENAI_API_KEY"]="${OPENAI_API_KEY:-}"
 		["STRIPE_SECRET_KEY"]="${STRIPE_SECRET_KEY:-}"
 		["AIRTABLE_ACCESS_TOKEN"]="${AIRTABLE_ACCESS_TOKEN:-}"
 		["AIRTABLE_BASE_ID"]="${AIRTABLE_BASE_ID:-}"
-		["POSTMARK_API_KEY"]="${POSTMARK_API_KEY:-}"
 		["TOMORROW_WEATHER_API_KEY"]="${TOMORROW_WEATHER_API_KEY:-}"
 		["TINIFY_API_KEY"]="${TINIFY_API_KEY:-}" # Tiny PNG
 		["DO_SPACES_ACCESS_KEY"]="${DO_SPACES_ACCESS_KEY:-}"
 		["DO_SPACES_SECRET_KEY"]="${DO_SPACES_SECRET_KEY:-}"
 		["DO_SPACES_ENDPOINT"]="${DO_SPACES_ENDPOINT:-}"
 		["AWS_S3_API_KEY"]="${AWS_S3_API_KEY:-}"
-		# server
+		
+		# remote sync server
 		["BARE_REMOTE"]="${BARE_REMOTE:-}"
 		["HETZNER_API_KEY"]="${HETZNER_API_KEY:-}"
 		["DIGITALOCEAN_API_KEY"]="${DIGITALOCEAN_API_KEY:-}"
 		["LINODE_API_KEY"]="${LINODE_API_KEY:-}"
 		["VULTR_API_KEY"]="${VULTR_API_KEY:-}"
+		
 	) && for key in "${!BASE_CONFIG[@]}"; do
 		export "$key"="${BASE_CONFIG[$key]}"
 	done
@@ -106,14 +114,10 @@ __bareStartUp() {
 		[[ -f ~/.barerc ]] && source ~/.barerc
 	}
 
-	__bareVerifyIntegrity
 	__getOS
 
-	# shellcheck disable=SC1090,SC1091
-	{
-		source "$BARE_HOME/.barerc"
-		[[ -n $BARERC_SHIM ]] && source "$BARERC_SHIM"
-	}
+	# shellcheck disable=SC1091
+	source "$BARE_HOME/.barerc"
 
 	export BARE_HOME
 	export BARE_WORKING_DIR
@@ -122,41 +126,6 @@ __bareStartUp() {
 
 }
 
-
-
-__bareVerifyIntegrity() {
-
-	[[ -z $BARE_HOME ]] && echo "Error: BARE_HOME is not set." && return 1
-	[[ ! -d $BARE_HOME ]] && echo "Error: BARE_HOME directory does not exist." && return 1
-	[[ ! -f $BARE_DIR/bare.sh ]] && echo "Error: not in bare directory" && return 1
-
-	local item
-
-	cd "$BARE_HOME" || return 1
-
-	# set directories
-	mkdir -p .cache .logs csvs desktop documents downloads recfiles scripts > /dev/null 2>&1
-	for item in document openai tasks projects routines; do
-		mkdir -p recfiles/$item;
-	done
-
-	# set files
-	touch .barerc
-	for item in list tags; do
-		touch recfiles/document/$item.rec;
-	done
-	for item in assistants messages threads; do
-		touch recfiles/openai/$item.rec;
-	done
-	for item in tasks projects routines; do
-		touch recfiles/$item/list.rec
-		touch recfiles/$item/tags.rec
-		touch recfiles/$item/comments.rec;
-	done
-
-	cd "$BARE_DIR" || return 1
-
-}
 
 __checkVariables() {
 
@@ -172,7 +141,7 @@ __checkVariables() {
 		"EDITOR"
 	)
 
-	logfile="$BARE_HOME/.logs/system-report.$(date +%Y-%m-%d).md"
+	logfile="$BARE_DIR/.bare/.logs/system-report.$(date +%Y-%m-%d).md"
 
 	echo ""
 	echo "${BLUE}Checking core variables ...${RESET}"
@@ -234,7 +203,7 @@ __checkDependencies() {
 		dependencies["gsed"]="gnu-sed"
 	fi
 
-	logfile="$BARE_HOME/.logs/system-report.$(date +%Y-%m-%d).md"
+	logfile="$BARE_DIR/.logs/system-report.$(date +%Y-%m-%d).md"
 
 	echo ""
 	echo "${BLUE}Checking dependencies ...${RESET}"
@@ -329,6 +298,23 @@ __isBareCommand() {
 	done
 
 	return 1
+
+}
+
+
+
+__isUserScript() {
+
+	[[ -f "$BARE_WORKING_DIR/$1" ]] && return 0
+	return 1
+
+}
+
+
+
+__runUserScript() {
+
+	bash "$BARE_WORKING_DIR/$1" "${@:2}"
 
 }
 
@@ -881,7 +867,7 @@ cloud() {
 
 codec() {
 
-	local input command index json_array output lines start end reverse_flag
+	local input command index json_array output lines line start end reverse_flag
 
 	command=$1 && shift
 
@@ -890,108 +876,61 @@ codec() {
 	case $command in
 
 		encrypt)
-					
-			local salt pass encrypted input file output_file
-			
-			args=() && while true; do
-			  case $1 in
-				--salt|-s) salt=$2 && shift 2 ;;
-				--pass|-p) pass=$2 && shift 2 ;;
-				--output|-o) output_file=$2 && shift 2 ;;
-				*) break ;;
-			  esac
-			done && set -- "${args[@]}"
-			
-			[[ -z $pass ]] && echo "Error: pass is required." && return 1
-			
-			# Generate a random salt if not provided
-			[[ -z $salt ]] && salt=$(openssl rand -hex 8)
 
-			[[ -f $input ]] && file=$input
-			
-			# Read input from file if provided
-			if [[ -n $file ]]; then
-			  input=$(cat "$input")
-			else
-			  input=$1
-			fi
-			
-			# Encrypt the input
-			encrypted=$(echo "$input" | openssl enc -aes-256-cbc -S "$salt" -k "$pass" -pbkdf2 | base64)
-			
+			local pass output_file
+			# Parse arguments
+			{ args=() && while [[ $# -gt 0 ]]; do
+				case $1 in
+					--pass|-p) pass=$2; shift 2 ;;
+					--output|-o) output_file=$2; shift 2 ;;
+					*) args+=("$1") && shift ;;
+				esac
+			done && set -- "${args[@]}"; }
+
+			# Check if the input is a file
+			[[ -f $input ]] && input=$(cat "$input")
+
+			[[ -z $pass ]] && echo "Error: --pass is required." && return 1
+
+			# Encrypt using OpenSSL and base64 encode the result
+			encrypted=$(echo -n "$input" | openssl enc -aes-256-cbc -pbkdf2 -pass pass:"$pass" -base64)
+
 			# Output the encrypted data
-			if [[ -n $file ]]; then
-			  if [[ -n $output_file ]]; then
-				echo "$salt:$encrypted" > "$output_file"
-			  else
-				echo "$salt:$encrypted" > "$file"
-			  fi
+			if [[ -n $output_file ]]; then
+				echo "$encrypted" > "$output_file"
 			else
-			  echo "$salt:$encrypted"
+				echo "$encrypted"
 			fi
-		
 			;;
-				
+
 		decrypt)
 
-			local pass file output_file input
-		
-			args=() && while true; do
+			local pass output_file
+			# Parse arguments
+			{ args=() && while [[ $# -gt 0 ]]; do
 				case $1 in
-					--pass|-p) pass=$2 && shift 2 ;;
-					--output|-o) output_file=$2 && shift 2 ;;
-					*) break ;;
+					--pass|-p) pass=$2; shift 2 ;;
+					--output|-o) output_file=$2; shift 2 ;;
+					*) args+=("$1") && shift ;;
 				esac
-			done && set -- "${args[@]}"
-		
-			[[ -z $pass ]] && echo "Error: pass is required." && return 1
-		
-			[[ -f $input ]] && file=$input
-		
-			# Read input from file if provided
-			if [[ -n $file ]]; then
-				input=$(cat "$file")
-			else
-				input=$1
-			fi
-		
-			# Check if input is empty
-			if [[ -z $input ]]; then
-				echo "Error: input is empty or not provided." && return 1
-			fi
-		
-			# Remove null bytes from input
-			input=$(echo "$input" | tr -d '\0' 2>/dev/null)
-		
-			# Extract the salt and encrypted data
-			IFS=':' read -r salt encrypted <<< "$input"
-		
-			# Check if salt and encrypted data are properly extracted
-			if [[ -z $salt || -z $encrypted ]]; then
-				echo "Error: input is improperly formatted." && return 1
-			fi
-		
-			# Decrypt the input
-			temp_file=$(mktemp)
-			chmod 600 "$temp_file"
-			if ! echo "$encrypted" | base64 -d | openssl enc -d -aes-256-cbc -S "$salt" -k "$pass" -pbkdf2 > "$temp_file" 2>/dev/null; then
-				echo "Decryption failed" && rm -f "$temp_file" && return 1
-			fi
-			decrypted=$(cat "$temp_file")
-			rm -f "$temp_file"
-		
+			done && set -- "${args[@]}"; }
+
+			# if $input is a file, read the file
+			[[ -f $input ]] && input=$(cat "$input")
+
+			[[ -z $pass ]] && echo "Error: --pass is required." && return 1
+
+			# Decode from base64 and decrypt using OpenSSL
+			decrypted=$(echo -n "$input" | base64 -d | openssl enc -d -aes-256-cbc -pbkdf2 -pass pass:"$pass")
+
 			# Output the decrypted data
-			if [[ -n $file ]]; then
-				if [[ -n $output_file ]]; then
-					echo "$decrypted" > "$output_file"
-				else
-					echo "$decrypted" > "$file"
-				fi
+			if [[ -n $output_file ]]; then
+				echo "$decrypted" > "$output_file"
 			else
 				echo "$decrypted"
 			fi
-
 			;;
+
 
 		hash)
 
@@ -1315,20 +1254,170 @@ copy() {
 
 
 
+color() {
+
+    local input hue saturation=100 lightness=50 output_format output_style
+
+    # Capture input
+    [[ -p /dev/stdin ]] && input=$(cat)
+
+    # Parse arguments
+	args=() && while [[ $# -gt 0 ]]; do
+        case $1 in
+            --hue|-h) hue=$2; shift 2 ;;
+            --saturation|-s) saturation=$2; shift 2 ;;
+            --lightness|-l) lightness=$2; shift 2 ;;
+            --hsl) output_format="hsl"; shift ;;
+            --hex) output_format="hex"; shift ;;
+            --rgb) output_format="rgb"; shift ;;
+            --raw) output_style="raw"; shift ;;
+			*) args+=("$1") && shift ;;
+        esac
+    done && set -- "${args[@]}"
+
+	# Use the input if no arguments are provided
+	[[ -z $input ]] && input=$1
+
+    # Map color aliases to hue values if hue is not provided and input is not empty
+	case $input in
+		red) hue=0 ;;
+		vermilion) hue=15 ;;
+		orange) hue=30 ;;
+		amber) hue=45 ;;
+		yellow) hue=60 ;;
+		lime) hue=75 ;;
+		chartreuse) hue=90 ;;
+		harlequin ) hue=105 ;;
+		green) hue=120 ;;
+		teal) hue=135 ;;
+		springgreen) hue=150 ;;
+		turquoise) hue=165 ;;
+		cyan) hue=180 ;;
+		skyblue) hue=195 ;;
+		azure) hue=210 ;;
+		blue) hue=235 ;;
+		hanblue) hue=250 ;;
+		indigo) hue=265 ;;
+		violet) hue=280 ;;
+		purple) hue=295 ;;
+		magenta) hue=310 ;;
+		cerise) hue=325 ;;
+		rose) hue=340 ;;
+		white) hue=0; saturation=0; lightness=100 ;;
+		black) hue=0; saturation=0; lightness=0 ;;
+		gray) hue=0; saturation=0; lightness=50 ;;
+		lightgray|silver) hue=0; saturation=0; lightness=75 ;;
+		darkgray|stone|tundora) hue=0; saturation=0; lightness=25 ;;
+	esac
+
+    # Function to convert HSL to RGB using awk
+    hsl_to_rgb() {
+        awk -v H="$1" -v S="$2" -v L="$3" '
+        function hue2rgb(p, q, t) {
+            if (t < 0) t += 1
+            if (t > 1) t -= 1
+            if (t < 1/6) return p + (q - p) * 6 * t
+            if (t < 1/2) return q
+            if (t < 2/3) return p + (q - p) * (2/3 - t) * 6
+            return p
+        }
+        BEGIN {
+            h = H / 360
+            s = S / 100
+            l = L / 100
+
+            if (s == 0) {
+                r = g = b = l
+            } else {
+                if (l < 0.5)
+                    q = l * (1 + s)
+                else
+                    q = l + s - l * s
+                p = 2 * l - q
+                r = hue2rgb(p, q, h + 1/3)
+                g = hue2rgb(p, q, h)
+                b = hue2rgb(p, q, h - 1/3)
+            }
+
+            printf "%d %d %d\n", int(r * 255 + 0.5), int(g * 255 + 0.5), int(b * 255 + 0.5)
+        }'
+    }
+
+    # Function to convert RGB to HEX
+    rgb_to_hex() {
+        if [[ $output_style == "raw" ]]; then
+            printf "%02x %02x %02x\n" "$1" "$2" "$3"
+        else
+            printf "#%02X%02X%02X\n" "$1" "$2" "$3"
+        fi
+    }
+
+    # Output based on the specified format
+    if [[ "$output_format" == "hex" ]]; then
+        read -r R G B <<< "$(hsl_to_rgb "$hue" "$saturation" "$lightness")"
+        rgb_to_hex "$R" "$G" "$B"
+    elif [[ "$output_format" == "rgb" ]]; then
+        read -r R G B <<< "$(hsl_to_rgb "$hue" "$saturation" "$lightness")"
+        if [[ "$output_style" == "raw" ]]; then
+            echo "$R $G $B"
+        else
+            echo "rgb($R, $G, $B)"
+        fi
+    elif [[ "$output_format" == "hsl" ]]; then
+        if [[ "$output_style" == "raw" ]]; then
+            echo "$hue $saturation $lightness"
+        else
+            echo "hsl($hue, $saturation%, $lightness%)"
+        fi
+    else
+        read -r R G B <<< "$(hsl_to_rgb "$hue" "$saturation" "$lightness")"
+        rgb_to_hex "$R" "$G" "$B"
+    fi
+}
+
+
+
 date() {
+    local input args date_cmd date_format input_format custom_format format_parts timezone
 
-    local input args date_cmd date_format input_format custom_format format_parts
+    date_cmd="date"
 
-	date_cmd="date"
-
-    # set system timezone temporarily
-    TZ="$BARE_TIMEZONE"
+    # Default timezone
+    timezone="$BARE_TIMEZONE"
 
     # Determine the correct date command based on the operating system
     [[ "$OS" == "macOS" ]] && date_cmd="gdate"
 
     date_format="%Y-%m-%d %H:%M:%S"
     input_format="%Y-%m-%d %H:%M:%S"
+
+    # Timezone abbreviation to full timezone mapping
+    declare -A timezone_map=(
+		["GMT"]="GMT"
+		["UTC"]="UTC"
+		["BST"]="Europe/London"
+		["IST"]="Asia/Kolkata"
+		["CET"]="Europe/Paris"
+		["CEST"]="Europe/Paris"
+		["EASTERN"]="America/New_York"
+        ["EST"]="America/New_York"
+        ["EDT"]="America/New_York"
+		["CENTRAL"]="America/Chicago"
+        ["CST"]="America/Chicago"
+        ["CDT"]="America/Chicago"
+		["MOUNTAIN"]="America/Denver"
+        ["MST"]="America/Denver"
+        ["MDT"]="America/Denver"
+		["PACIFIC"]="America/Los_Angeles"
+        ["PST"]="America/Los_Angeles"
+        ["PDT"]="America/Los_Angeles"
+		["New York"]="America/New_York"
+		["Chicago"]="America/Chicago"
+		["Denver"]="America/Denver"
+		["Los Angeles"]="America/Los_Angeles"
+		["Anchorage"]="America/Anchorage"
+		["Honolulu"]="Pacific/Honolulu"
+    )
 
     # Process arguments
     args=() && while [[ $# -gt 0 ]]; do
@@ -1344,11 +1433,11 @@ date() {
                         'M-D-Y') date_format+="%m-%d-%Y " ;;  # 08-13-2024
                         'M/D/Y') date_format+="%m/%d/%Y " ;;  # 08/13/2024
                         'Y-m-d') date_format+="%Y-%-m-%-d " ;; # 2024-8-13
-						'y-m-d') date_format+="%y-%-m-%-d " ;; # 24-8-13
+                        'y-m-d') date_format+="%y-%-m-%-d " ;; # 24-8-13
                         'm-d-Y') date_format+="%-m-%-d-%Y " ;;  # 8-13-2024
-						'm-d-y') date_format+="%-m-%-d-%y " ;;  # 8-13-24
+                        'm-d-y') date_format+="%-m-%-d-%y " ;;  # 8-13-24
                         'm/d/Y') date_format+="%-m/%-d/%Y " ;;  # 8/13/2024
-						'm/d/y') date_format+="%-m/%-d/%y " ;;  # 8/13/24
+                        'm/d/y') date_format+="%-m/%-d/%y " ;;  # 8/13/24
                         # times
                         'H:M:S'|'H:m:s') date_format+="%H:%M:%S " ;; # 14:30:00
                         'H:M'|'H:m') date_format+="%H:%M " ;; # 14:30
@@ -1359,20 +1448,29 @@ date() {
                 done
                 shift && date_format="${date_format% }"  # Remove trailing space
                 ;;
+            --timezone|-T)
+                shift
+                timezone="$1"
+				timezone_upper=$(echo "$timezone" | tr '[:lower:]' '[:upper:]')
+				if [[ -n "${timezone_map[$timezone_upper]}" ]]; then
+					timezone="${timezone_map[$timezone_upper]}"
+				fi
+                shift
+                ;;
             *) args+=("$1") && shift ;;
         esac
     done
 
     # Set the remaining arguments
     set -- "${args[@]}"
-	
-	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1; fi
+    
+    if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1; fi
 
     # If no arguments or input, default to today's date
-    [[ -z $input && $# -eq 0 ]] && input=$(TZ=$TZ $date_cmd +"%Y-%m-%d %H:%M:%S")
+    [[ -z $input && $# -eq 0 ]] && input=$(TZ=$timezone $date_cmd +"%Y-%m-%d %H:%M:%S")
     [[ -z $input ]] && input="$1"
 
-	today=$(TZ=$TZ $date_cmd +"%Y-%m-%d")
+    today=$(TZ=$timezone $date_cmd +"%Y-%m-%d")
 
     # condition yyyy-mm-dd
     if [[ $(validate date "$input" --format 'Y-m-d') == 'true' ]]; then
@@ -1397,9 +1495,9 @@ date() {
 
     # Format and print the date using the specified format, or default to standard
     if [[ $custom_format == 1 ]]; then
-        TZ=$TZ $date_cmd -d "$input" +"$date_format"
+        TZ=$timezone $date_cmd -d "$input" +"$date_format"
     else
-        TZ=$TZ /bin/date "$@"
+        TZ=$timezone $date_cmd "$@"
     fi
 }
 
@@ -1431,7 +1529,7 @@ download() {
 
 	__deps curl
 
-	if [[ -p /dev/stdin ]]; then url=$(cat); else url=$1 && shift; fi
+	if [[ -p /dev/stdin ]]; then url=$(cat); else { url=$1; shift; } fi
 
 	[[ -z $url ]] && echo "No URL provided" && return 1
 
@@ -1448,7 +1546,7 @@ download() {
 	done && set -- "${args[@]}"
 
 	# Set the output file name
-	[[ -z "$output_file" ]] && output_file="$BARE_HOME/downloads/$(random string 30)"
+	[[ -z "$output_file" ]] && output_file="$(random string 30)"
 
 	if [[ "$is_youtube" = 1 ]]; then
 
@@ -1469,61 +1567,113 @@ download() {
 
 email() {
 
-	__deps jq
+	__deps jq curl
 
-	[[ -z "$POSTMARK_API_KEY" ]] && {
-		echo "POSTMARK_API_KEY is not set"
-	}
+	local args via from to subject body cc bcc reply_to template
 
-	# set default from to BARE_EMAIL_FROM
-	from=$BARE_EMAIL_FROM
+	via='smtp'
 
-	while [[ $# -gt 0 ]]; do
+	args=() && while [[ $# -gt 0 ]]; do
 		case $1 in
-			--to) to="$2"; shift 2 ;;
-			--subject) subject="$2"; shift 2 ;;
-			--body) body="$2"; shift 2 ;;
-			--cc) cc="$2"; shift 2 ;;
-			--bcc) bcc="$2"; shift 2 ;;
-			--from) from="$2"; shift 2 ;;
-			--reply-to) reply_to="$2"; shift 2 ;;
-			--template) template="$2"; shift 2 ;;
-			*) break ;;
+			--via|-v) via="$2"; shift 2 ;;
+			--to|-t) to="$2"; shift 2 ;;
+			--subject|-s) subject="$2"; shift 2 ;;
+			--body|-B) body="$2"; shift 2 ;;
+			--cc|-c) cc="$2"; shift 2 ;;
+			--bcc|-b) bcc="$2"; shift 2 ;;
+			--from|-f) from="$2"; shift 2 ;;
+			--reply-to|-r) reply_to="$2"; shift 2 ;;
+			*) args+=("$1") && shift ;;
 		esac
-	done
+	done && set -- "${args[@]}"
 
-	[[ -n "$template" ]] && body=$(render "$template" "$@" --to-html);
+	# require to, from, subject, body
+	[[ -z "$to" ]] && echo "No recipient specified, use --to to specify a recipient" && return 1
+	[[ -z "$subject" ]] && echo "No subject specified, use --subject to specify a subject" && return 1
+	[[ -z "$body" ]] && echo "No body specified, use --body to specify a body" && return 1
 
-	# Single email mode
-	[[ -z "$to" ]] && echo "No recipient specified, use --to to specify a recipient"
-	[[ -z "$subject" ]] && echo "No subject specified, use --subject to specify a subject"
-	[[ -z "$body" ]] && echo "No body specified, use --body to specify a body"
+	case $via in
 
-	payload=$(jq -n \
-		--arg from "$from" \
-		--arg to "$to" \
-		--arg subject "$subject" \
-		--arg body "$body" \
-		--arg cc "$cc" \
-		--arg bcc "$bcc" \
-		--arg reply_to "$reply_to" \
-		'{
-			"From": $from,
-			"To": $to,
-			"Subject": $subject,
-			"HtmlBody": $body,
-			"Cc": $cc,
-			"Bcc": $bcc,
-			"ReplyTo": $reply_to
-		}'
-	)
+		smtp)
 
-	response=$(request https://api.postmarkapp.com/email \
-		--json "$payload" \
-		--header "X-Postmark-Server-Token: $POSTMARK_API_KEY");
+			[[ -z "$SMTP_SERVER" ]] && echo "SMTP_SERVER is not set" && return 1
+			[[ -z "$SMTP_PORT" ]] && echo "SMTP_PORT is not set" && return 1
+			[[ -z "$SMTP_USERNAME" ]] && echo "SMTP_USERNAME is not set" && return 1
+			[[ -z "$SMTP_PASSWORD" ]] && echo "SMTP_PASSWORD is not set" && return 1
 
-	# else
-	echo "$response" | jq -r '.MessageID'
+			# Setup mail txt file for curl
+			mail_file=$(mktemp)
+			chmod 600 "$mail_file"  # Restrict permissions for security
+			{
+				echo "From: $SMTP_USERNAME"
+				echo "To: $to"
+				echo "Subject: $subject"
+				echo ""
+				echo "$body"
+			} >> "$mail_file"
+
+			# Send email and capture the exit status
+			curl -s --url "smtp://$SMTP_SERVER:$SMTP_PORT" --ssl-reqd \
+				--mail-from "$SMTP_USERNAME" --mail-rcpt "$to" \
+				--upload-file "$mail_file" --user "$SMTP_USERNAME:$SMTP_PASSWORD"
+			curl_exit_code=$?
+
+			# Cleanup
+			rm "$mail_file"
+
+			# Check for curl success
+			if [[ $curl_exit_code -ne 0 ]]; then
+				echo "Failed to send email, curl returned exit code $curl_exit_code"
+				return $curl_exit_code
+			fi
+
+			;;
+
+
+		postmark)
+
+			[[ -z "$POSTMARK_API_KEY" ]] && {
+				echo "POSTMARK_API_KEY is not set"
+			}
+
+			[[ -n "$template" ]] && body=$(render "$template" "$@" --to-html);
+
+			# Single email mode
+			[[ -z "$to" ]] && echo "No recipient specified, use --to to specify a recipient"
+			[[ -z "$subject" ]] && echo "No subject specified, use --subject to specify a subject"
+			[[ -z "$body" ]] && echo "No body specified, use --body to specify a body"
+
+			payload=$(jq -n \
+				--arg from "$from" \
+				--arg to "$to" \
+				--arg subject "$subject" \
+				--arg body "$body" \
+				--arg cc "$cc" \
+				--arg bcc "$bcc" \
+				--arg reply_to "$reply_to" \
+				'{
+					"From": $from,
+					"To": $to,
+					"Subject": $subject,
+					"HtmlBody": $body,
+					"Cc": $cc,
+					"Bcc": $bcc,
+					"ReplyTo": $reply_to
+				}'
+			)
+
+			response=$(request https://api.postmarkapp.com/email \
+				--json "$payload" \
+				--header "X-Postmark-Server-Token: $POSTMARK_API_KEY");
+
+			# else
+			echo "$response" | jq -r '.MessageID'
+		
+			;;
+
+		*) echo "Invalid email service: $via" && return 1 ;;
+
+	esac
 
 }
 
@@ -1579,7 +1729,7 @@ filter() {
 geo() {
 
 	__deps curl jq
-	touch home/.cache/geo.txt
+	touch "$BARE_DIR/.bare/cache/geo.txt"
 
 	format_location() {
 		local loc="$1"
@@ -1587,7 +1737,7 @@ geo() {
 		if [[ -z "$loc" ]]; then
 			loc=$(curl -sL https://ipinfo.io/ip)
 		else
-			loc=${loc//, /+}
+			loc=$(echo "$loc" | sed -e 's/, /+/g' -e 's/ /+/g')
 		fi
 
 		echo "$loc"
@@ -1617,9 +1767,9 @@ geo() {
 	[[ $location =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] && type="ip" || type="city"
 
 	# Check if the location is in the geo.txt file
-	if grep -q "^$location " home/.cache/geo.txt; then
+	if grep -q "^$location " "$BARE_DIR/.bare/cache/geo.txt"; then
 		# If the location is in the file, get the coordinates from the file
-		coordinates=$(grep "^$location " home/.cache/geo.txt | cut -d ' ' -f 2)
+		coordinates=$(grep "^$location " "$BARE_DIR/.bare/cache/geo.txt" | cut -d ' ' -f 2)
 	else
 		# If the location is not in the file, fetch the coordinates from the API
 		if [[ "$type" == "city" ]]; then
@@ -1629,7 +1779,7 @@ geo() {
 		fi
 
 		# Add the location and coordinates to the geo.txt file
-		echo "$location $coordinates" >> home/.cache/geo.txt
+		echo "$location $coordinates" >> "$BARE_DIR/.bare/cache/geo.txt"
 	fi
 
 	# Format the coordinates to the requested number of decimal places
@@ -1646,28 +1796,41 @@ geo() {
 
 image() {
 
-	local command input output_filename aspect_ratio focal_orientation overwrite_mode gravity height blur_radius degrees option output_extension args arg quality output_filename
+	local command input output_filename aspect_ratio focal_orientation overwrite_mode gravity height blur_radius degrees option output_extension args arg to extension base_name return prompt
 
 	__deps magick
 
 	command=$1 && shift
 
-	output_filename="$BARE_HOME/downloads/$(random string 30)"
+	if [[ -p /dev/stdin ]]; then input=$(cat); else { input=$1; shift; }; fi
+
+	[[ -f "$input" ]] || { echo "Error: File '$input' not found." >&2; return 1; }
+		
+	extension=${input##*.}
+	base_name=${input%.*}
+
+	return='filepath'
+
+	output_filename="$(random string 30).$extension"
+
 	args=() && while [[ $# -gt 0 ]]; do
 		case $1 in
-			--output|-o) output_filename="$2" && shift 2 ;;
-			--quality|-q) quality="$2" && shift 2 ;;
+			--height|-h) height="$2" && shift 2 ;;
+			--width|-w) width="$2" && shift 2 ;;
+			--output|-o|to) output_filename="$2" && shift 2 ;;
+			--return|-r) return="$2" && shift 2 ;; # can return 'filepath' or 'url'
+			--focal) focal_orientation="$2" && shift 2 ;;
+			--aspect) aspect_ratio="$2" && shift 2 ;;
+			--prompt) prompt="$2" && shift 2 ;;
 			*) args+=("$1") && shift ;;
 		esac
 	done && set -- "${args[@]}"
 
-	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1 && shift; fi
-
 	case $command in
 
-		tinify)
+		compress|minify|tinify )
 
-			echo "$input" && return 0
+			local url response file
 
 			[[ -z "$TINIFY_API_KEY" ]] && echo "TINIFY_API_KEY is not set" && return 1
 
@@ -1675,16 +1838,31 @@ image() {
 			[[ ! -f "$input" ]] && echo "Error: File '$input' not found." && return 1
 
 			# Compress the image using the TinyPNG API
-			response_url=$(curl -sL https://api.tinify.com/shrink \
+			
+			response=$(curl -sL https://api.tinify.com/shrink \
 				--data-binary @"$input" \
-				--user "api:$TINIFY_API_KEY" | \
-			jq -r '.output.url')
+				--user "api:$TINIFY_API_KEY")
 
-			download "$response_url" --output "$output_filename"
+			url=$(echo "$response" | jq -r '.output.url')
+
+			if [[ $return == 'url' ]]; then
+				
+				echo "$url"
+				return 0
+
+			else
+
+				file=$(download "$url" --output "$output_filename" < /dev/null)
+			
+				[[ -n $file ]] && echo "$file" && return 0
+				
+				echo "Failed to compress image: $response" && return 1
+
+			fi
 
 			;;
 
-		create)
+		create )
 
 			local color dimensions filename
 
@@ -1698,15 +1876,15 @@ image() {
 
 		crop )
 
-			aspect_ratio=${1:-3:2}
-			focal_orientation=${2:-center}
-			overwrite_mode=$3
+			aspect_ratio=${aspect_ratio:-3:2}
+			focal_orientation=${focal_orientation:-center}
+			overwrite_mode=$1
 
 			# Validate aspect ratio format (e.g., 16:9)
 			if ! [[ "$aspect_ratio" =~ ^[0-9]+:[0-9]+$ ]]; then
 				echo "Aspect ratio must be in the format W:H (e.g., 16:9)"
 				return 1
-			fi 
+			fi
 
 			# Validate focal orientation
 			case $focal_orientation in
@@ -1716,12 +1894,6 @@ image() {
 					return 1
 				;;
 			esac
-
-			# Generate a semantic file name
-			output_filename="${input%.*}_${aspect_ratio//:/x}_${focal_orientation}.${input##*.}"
-
-			# Check if file exists and overwrite mode is not set to "overwrite"
-			[ -f "$output_filename" ] && [ "$overwrite_mode" != "overwrite" ] && return 1
 
 			# Determine new dimensions and crop position based on aspect ratio and focal orientation
 			case $focal_orientation in
@@ -1751,25 +1923,38 @@ image() {
 			magick "$input" "$output_filename" && echo "$output_filename" || echo "Failed to process $input"
 			;;
 
-		resize)
-
-			height=$1
-			output_filename="${input%.*}_resized.${input##*.}"
-			
-			[[ -f "$input" ]] || { echo "Error: File '$input' not found." >&2; return 1; }
-			
-			extension=${input##*.}
-			base_name=${input%.*}
-			
-			# Semantic filename
-			output_filename="${base_name}_${height}px.${extension}"
-			
-			if magick "$input" -resize x"$height" "$output_filename"; then
-				echo "$output_filename"
-			else
-				echo "Failed to process $input" >&2 && return 1
+		resize )
+		
+			[[ -z "$height" && -z "$width" ]] && {
+				if [[ -n $1 ]]; then
+					height=$1;
+				else
+					echo "Error: Height or width must be provided." >&2;
+					return 1;
+				fi
+			}
+		
+			# Resize the image based on the provided dimensions
+			if [[ -n "$height" && -n "$width" ]]; then
+				if magick "$input" -resize "${width}x${height}!" "$output_filename"; then
+					echo "$output_filename"
+				else
+					echo "Failed to process $input" >&2 && return 1
+				fi
+			elif [[ -n "$height" ]]; then
+				if magick "$input" -resize x"$height" "$output_filename"; then
+					echo "$output_filename"
+				else
+					echo "Failed to process $input" >&2 && return 1
+				fi
+			elif [[ -n "$width" ]]; then
+				if magick "$input" -resize "$width"x "$output_filename"; then
+					echo "$output_filename"
+				else
+					echo "Failed to process $input" >&2 && return 1
+				fi
 			fi
-
+		
 			;;
 
 		thumbnail )
@@ -1797,7 +1982,59 @@ image() {
 
 			;;
 
-		describe ) ;; # pending
+		describe )
+
+			# requires OPENAI_API_KEY
+			[[ -z "$OPENAI_API_KEY" ]] && echo "OPENAI_API_KEY is not set" && return 1
+
+			image_basename=$(basename "$input")
+
+			# if input is a file, upload it to the storage service
+			if [[ -f "$input" ]]; then
+				image_url=$(bare.sh storage upload "$input" --to openai/descriptions/"$image_basename" < /dev/null)
+			elif [[ $(validate url "$input") == 'true' ]]; then
+				image_url="$input"
+			else
+				echo "Error: Invalid input" >&2
+				return 1
+			fi
+
+			[[  -z "$image_url" ]] && echo "Error: Invalid image URL" && return 1
+
+			prompt=${prompt:-"Briefly describe the image."}
+		
+			# Prepare the JSON payload
+			json_payload=$(jq -n --arg image_url "$image_url" --arg prompt "$prompt" '{
+				"model": "gpt-4o",
+				"messages": [
+					{
+						"role": "user",
+						"content": [
+							{
+								"type": "text",
+								"text": $prompt
+							},
+							{
+								"type": "image_url",
+								"image_url": {
+									"url": $image_url
+								}
+							}
+						]
+					}
+				],
+				"max_tokens": 500
+			}')
+		
+			# Send the request to the API
+			response=$(curl -s https://api.openai.com/v1/chat/completions \
+				-H "Content-Type: application/json" \
+				-H "Authorization: Bearer $OPENAI_API_KEY" \
+				-d "$json_payload")
+
+			echo "$response" | jq -r '.choices[0].message.content'
+
+			;;
 
 		rotate )
 		
@@ -1820,8 +2057,20 @@ image() {
 
 		blur )
 
+			# usage: image blur <input> [blur_radius]
+
 			blur_radius="${1:-5}"  # Default blur radius is 5 if not provided
-			output_filename="${input%.*}_blurred.${input##*.}"
+
+			args=()
+			{
+				while [[ $# -gt 0 ]]; do
+					case $1 in
+						--radius|-r) blur_radius="$2" && shift 2 ;;
+						*) args+=("$1") && shift ;;
+					esac
+				done
+			}
+			set -- "${args[@]}"
 
 			if [ ! -f "$input" ]; then
 				echo "Error: File '$input' not found." >&2
@@ -1864,14 +2113,14 @@ interpret() {
 
 	input=$1 && shift
 
-	[[ ! -f "$BARE_HOME/scripts/$input" ]] && \
-		echo "No script by that name found: $BARE_HOME/scripts/$input" && return 1
+	[[ ! -f "scripts/$input" ]] && \
+		echo "No script by that name found: scripts/$input" && return 1
 
 	# Source the environment file if provided
 	[[ -n "$env_file" ]] && source "$env_file"
 
 	# Source the script with the remaining arguments
-	source "$BARE_HOME/scripts/$input" "$@"
+	source "scripts/$input" "$@"
 
 }
 
@@ -2083,7 +2332,7 @@ media() {
 		convert)
 
 			output_extension="$1"
-			output="$BARE_HOME/downloads/$(random string 32).$1"
+			output="$(random string 32).$1"
 			
 			# Check if input file exists
 			if [[ ! -f "$input" ]]; then
@@ -2112,7 +2361,7 @@ media() {
 			extension="${input##*.}"
 			start_time="$1"
 			end_time="$2"
-			output="${3:-$BARE_HOME/downloads/$(random string 32).$extension}"
+			output="${3:-$(random string 32).$extension}"
 			
 			# Determine the output format based on the file extension
 			extension="${input##*.}"
@@ -2209,51 +2458,25 @@ openai() {
 		}
 	}
 
-	local args command input
-	local assistant_name list_assistants list_threads json_mode debug mode thread_title
+	local args command input assistant_prompt
+	local assistant_name json_mode debug mode thread_title
 
 	[[ -p /dev/stdin ]] && input=$(cat)
+
+	# set defaults
+	command="chat"
+	assistant_prompt="You are a helpful assistant. Unless told otherwise, you respond succinctfully yet informatively. You are a good listener and a good communicator.";
 
 	# capture assistant name
 	args=() && while [[ "$#" -gt 0 ]]; do
 		case $1 in
-			@*) assistant_name="${1#@}"; shift ;;
-			--assistant) assistant_name="$2"; shift 2 ;;
-			--assistants) list_assistants=1 && shift ;;
-			--thread) thread_title="$2"; shift 2 ;;
-			--threads) list_threads=1 && shift ;;
 			--json) json_mode=1 && shift ;;
 			--debug) debug='true' && shift ;;
 			--high-powered) mode='high-powered'; shift 2 ;;
+			--system_prompt|--instructions) assistant_prompt="$2" && shift 2 ;;
 			*) args+=("$1"); shift ;;
 		esac
 	done && set -- "${args[@]}"
-
-	# set system prompt (according to assistant name)
-	assistant_prompt="You are a helpful assistant.";
-	[[ -n $assistant_name ]] && {
-		assistant_introduction="In this conversation thread you are '$assistant_name'."
-		assistant_instructions="$(recsel "$BARE_HOME/recfiles/openai/assistants.rec" -e "Name = '$assistant_name'" -P Contents)"
-		assistant_background="Take into consideration the conversation thread (even if some messages are not your own, as you may be entering the chat mid-conversation and should catch yourself up)."
-		assistant_prompt="%YOUR_NAME: $assistant_introduction - - - %YOUR_INSTRUCTIONS: $assistant_instructions - - - %BACKGROUND: $assistant_background - - - %YOUR TASK: Now, you have just been addressed, so respond to the last thing said in a manner consistent with %YOUR_INSTRUCTIONS."
-	}
-
-	# if --threads, just list thread title and exit
-	[[ -n $list_threads ]] && recsel "$BARE_HOME/recfiles/openai/threads.rec" -P Title && return 0
-
-	# if --assistants, just list assistants and their instructions and exit
-	[[ -n $list_assistants ]] && recsel "$BARE_HOME/recfiles/openai/assistants.rec" -p Name,Contents | awk '{
-	while (length($0) > 60) {
-		space_index = 60
-		while (substr($0, space_index, 1) != " " && space_index > 1) space_index--
-		if (space_index == 1) space_index = 60
-		print substr($0, 1, space_index)
-		$0 = substr($0, space_index + 1)
-	}
-	print
-	}' && return 0
-
-	command="chat"
 
 	args=() && for arg in "$@"; do
 		case $arg in
@@ -2269,7 +2492,7 @@ openai() {
 
 		chat )
 
-			local model system_prompt user_messages assistant_messages messages thread_contents thread_title payload response
+			local model system_prompt thread_title payload response
 
 			# Initialize variables
 			if [[ $mode == 'high-powered' ]]; then
@@ -2278,69 +2501,25 @@ openai() {
 				model=${OPENAI_DEFAULT_MODEL:-'gpt-4o-mini'}
 			fi
 			system_prompt="$assistant_prompt"
-			user_messages=()
-			assistant_messages=()
-
-			while IFS= read -r line; do
-				user_messages+=("$line")
-				break
-			done <<< "$input"
 			
 			# Parse command-line arguments
 			while [[ "$#" -gt 0 ]]; do
 				case $1 in
 					--model) model="$2" && shift 2 ;;
-					--system_prompt) system_prompt="$2" && shift 2 ;;
-					--user_messages) user_messages+=("$2") && shift 2 ;;
-					--assistant_messages) assistant_messages+=("$2") && shift 2 ;;
-					--messages) messages=$(echo "$2" | jq -c .) && shift 2 ;;
+					--system_prompt|--instructions) system_prompt="$2" && shift 2 ;;
 					*) echo "Invalid option: $1" >&2 ;;
 				esac
 			done
 
-			if [[ -n $thread_title ]]; then
-
-				[[ "$(recsel "$BARE_HOME/recfiles/openai/threads.rec" -e "Title = '$thread_title'")" ]] || recins $BARE_HOME/recfiles/openai/threads.rec -f Title -v "$thread_title"
-
-				thread_contents=$(recsel "$BARE_HOME/recfiles/openai/messages.rec" -p Created,Author,Contents -e "Thread = '$thread_title'")
-
-				recins "$BARE_HOME/recfiles/openai/messages.rec" -f Thread -v "$thread_title" -f Author -v "User" -f Contents -v "$user_messages"
-
-			fi
-
 			[[ -n $json_mode ]] && system_prompt="$system_prompt. Return as a raw JSON object (not a json code block). If the user does not specify a property to put the response in, put the response in a property named 'response'. IMPORTANT: DO NOT RETURN A MARKDOWN CODE BLOCK; RETURN A VALID JSON STRING."
 			
-			# Construct the messages array if not provided
-			if [ -z "$messages" ]; then
-				
-				# Initialize the messages array with the system prompt
-				messages=$(jq -n --arg system_prompt "$system_prompt" '[
-				{
-					"role": "system",
-					"content": $system_prompt
-				}
-				]')
-				
-				if [[ -n $thread_title ]]; then
-					# Fetch the message thread and convert it to a JSON array
-					message_thread=$(recsel "$BARE_HOME/recfiles/openai/messages.rec" -p Created,Author,Contents -e "Thread = '$thread_title'" | rec --json)
-					
-					# Format the message_thread JSON array using jq
-					formatted_message_thread=$(echo "$message_thread" | jq '[.[] | {role: (if .Author == "User" then "user" else "assistant" end), name: (if .Author != "User" then .Author else null end), content: .Contents}]')
-				else
-					# put single value of "$user_messages" and format that as a single message
-					formatted_message_thread=$(jq -n --arg user_message "${user_messages[0]}" '[{role: "user", content: $user_message}]')
-				fi
-					
-				# Append the formatted_message_thread array to the messages array
-				messages=$(jq --argjson thread "$formatted_message_thread" '. + $thread' <<< "$messages")
-
-			fi
-			
 			# Construct the final JSON string using jq
-			payload=$(jq -n --arg model "$model" --argjson messages "$messages" '{
+			payload=$(jq -n --arg model "$model" --arg system_prompt "$system_prompt" --arg input "$input" '{
 				model: $model,
-				messages: $messages
+				messages: [
+					{role: "system", content: $system_prompt},
+					{role: "user", content: $input}
+				]
 			}')
 
 			# if json_mode append "response_format": { "type": "json_object" } to payload
@@ -2405,14 +2584,14 @@ openai() {
 				-H "Authorization: Bearer $OPENAI_API_KEY" \
 				-H "Content-Type: application/json" \
 				-d "$payload" \
-				-o "$BARE_HOME/downloads/$output"
+				-o "$output"
 
 			# Check if the file was created and is not empty
-			if [ ! -s "$BARE_HOME/downloads/$output" ]; then
+			if [ ! -s "$output" ]; then
 				echo "Error: File $output was not created or is empty" >&2
 			fi
 
-			echo "$BARE_HOME/downloads/$output"
+			echo "$output"
 
 			;;
 		listen )
@@ -2505,8 +2684,9 @@ qr() {
 
 	local link output
 
-	[[ -t 0 ]] && link=$1 || link=$(cat)
-	output="$BARE_HOME/downloads/$(random string 30).png"
+	if [[ -p /dev/stdin ]]; then link=$(cat); else link=$1; fi
+
+	output="$(bare.sh random string 30).png"
 
 	qrencode -o "$output" "$link"
 
@@ -2519,9 +2699,6 @@ qr() {
 random() {
 
 	local input command length constraint
-
-	# help
-	[[ $1 == '--?' ]] && echo "(string|alpha|number:-string) ~ |(int:-16)" && return 0
 
 	if [[ -p /dev/stdin ]]; then input=$(cat); fi;
 
@@ -2651,6 +2828,46 @@ rec() {
 
 
 
+records() {
+
+	__deps recsel recins recdel
+
+	local input args command expression
+
+	expression='1 = 1'; # so we can use expressions (defaults to 'true')
+
+	args=() && while [[ $# -gt 0 ]]; do
+		case $1 in
+			select|delete|insert|update) command=$1 && shift ;;
+			where) expression=$2 && shift 2 ;;
+			*) args+=("$1") && shift ;;
+		esac
+	done && set -- "${args[@]}"
+
+	# capture $input
+	if [[ -p /dev/stdin ]]; then input=$(cat); else { input=$1 && shift; } fi
+
+	# require $input
+	[[ -z $input ]] && echo "Error: no input provided" && return 1
+
+	# coalesce $input
+	[[ -f "$input" ]] && input=$(cat "$input")
+	[[ -f "records/$input.rec" ]] && input=$(cat "records/$input.rec")
+
+	case $command in
+
+		select) echo "$input" | recsel "$@" -e "$expression" ;;
+		delete) echo "$input" | recdel "$@" ;;
+		insert) echo "$input" | recins "$@" ;;
+
+		* ) echo "Invalid command: $command" ;;
+
+	esac
+
+}
+
+
+
 relay() {
 
 	local input var args arg
@@ -2700,9 +2917,7 @@ render() {
 				}' temp.html > temp_clean.html
 				mv temp_clean.html temp.html
 				{
-					echo "<html><head><title>Summary</title><link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/sakura.css/css/sakura.css' type='text/css'></head><body>"
 					cat temp.html
-					echo "</body></html>"
 				}
 				rm temp.html
 				return 0
@@ -2716,6 +2931,8 @@ render() {
 
 				local high_powered simple_mode prompt subargs
 
+				simple_mode=1
+
 				subargs=() && for subarg in "$@"; do
 					case "$subarg" in
 						--simple) simple_mode=1 && shift ;;
@@ -2726,7 +2943,7 @@ render() {
 
 				if [[ $simple_mode == 1 ]]; then
 
-					echo "$input" | lynx -stdin -dump | pandoc -f html -t markdown
+					echo "$input" | pandoc -f html -t markdown
 
 				else
 
@@ -2743,30 +2960,9 @@ render() {
 				fi
 
 				;;
-
-			--to-pdf)
-
-				local tmp_file output_file
-
-				tmp_file=$(mktemp)
-				output_file="${1:-BARE_HOME/desktop/$(random string 32).pdf}"
-			
-				{
-					echo "<html><head><title>Summary</title><link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/sakura.css/css/sakura.css' type='text/css'></head><body>"
-					echo "$input"
-					echo "</body></html>"
-				} > "$tmp_file" > /dev/null 2>&1
-
-				pandoc -f html -t pdf --pdf-engine=weasyprint -o "$output_file" < "$tmp_file"
-
-				echo "$output_file"
-
-				;;
-
+		
 		esac
 	done && set -- "${args[@]}"
-
-	echo "$input"
 
 }
 
@@ -3005,6 +3201,17 @@ run() {
 
 
 
+script.open() {
+
+	case $1 in
+
+
+
+	esac
+}
+
+
+
 scripts() {
 
 	local input command
@@ -3016,30 +3223,48 @@ scripts() {
 
 	case $command in
 
-		list) ls "$BARE_HOME/scripts" ;;
+		list) ls "scripts" ;;
 
 		create|new)
 			[[ -z $input ]] && echo "No input provided" && return 1
-			[[ -f "$BARE_HOME/scripts/$input" ]] && echo "Script '$input' already exists" && return 1
-			echo -e "#!/usr/bin/env bash\n\n" > "$BARE_HOME/scripts/$input"
-			"$EDITOR" "$BARE_HOME/scripts/$input"
+			[[ -f "scripts/$input" ]] && echo "Script '$input' already exists" && return 1
+			echo -e "#!/usr/bin/env bash\n\n" > "scripts/$input"
+			"$EDITOR" "scripts/$input"
 			;;
 
 		open|edit)
 			[[ -z $input ]] && echo "No input provided" && return 1
-			[[ ! -f "$BARE_HOME/scripts/$input" ]] && echo "Script '$input' does not exist" && return 1
-			"$EDITOR" "$BARE_HOME/scripts/$input"
+			[[ ! -f "scripts/$input" ]] && echo "Script '$input' does not exist" && return 1
+			"$EDITOR" "scripts/$input"
 			;;
 
 		remove|delete)
 			[[ -z $input ]] && echo "No input provided" && return 1
-			[[ ! -f "$BARE_HOME/scripts/$input" ]] && echo "Script does not exist" && return 1
-			rm "$BARE_HOME/scripts/$input"
+			[[ ! -f "scripts/$input" ]] && echo "Script does not exist" && return 1
+			rm "scripts/$input"
 			;;
 		
 		*) echo "Invalid command" && return 1 ;;
 
 	esac
+
+}
+
+
+
+list() { # alias for `bare.sh records select ...`
+
+	# capture $input
+	if [[ -p /dev/stdin ]]; then input=$(cat); else { input=$1 && shift; } fi
+
+	# require $input
+	[[ -z $input ]] && echo "Error: no input provided" && return 1
+
+	# coalesce $input
+	[[ -f "$input" ]] && input=$(cat "$input")
+	[[ -f "records/$input" ]] && input=$(cat "records/$input")
+
+	echo "$input" | records select "$@"
 
 }
 
@@ -3150,7 +3375,7 @@ speed() {
 	# Default values
 	speed_factor=${1:-'0.5'}
 	input_file="$2"
-	output_file=${3:-"$BARE_HOME/downloads/$(openssl rand -hex 16).mp3"}
+	output_file=${3:-"$(openssl rand -hex 16).mp3"}
 
 	if [ -z "$input_file" ]; then
 		echo "Error: Input file is not provided" >&2
@@ -3282,6 +3507,12 @@ storage() {
             if [[ $dir_path != /* ]]; then
                 dir_path="/$dir_path"
             fi
+
+			if [[ $dir_path == '/.' ]]; then
+				dir_path=''
+			fi
+
+			# echo "$dir_path" && exit 0
             
             if [[ ! -f "$input" ]]; then
                 echo "Error: The file $input does not exist."
@@ -3295,6 +3526,7 @@ storage() {
         *) echo "Invalid command" && return 1 ;;
 		
     esac
+
 }
 
 
@@ -3460,6 +3692,7 @@ transform() {
 			--space-collapse|--squish|:squish) variant='squish' ;;
 			--trim|:trim) variant='trim' ;;
 			--all) all=1 ;;
+			--email|:email) format='email' ;;
 			*) args+=("$1") ;;
 		esac && shift
 	done && set -- "${args[@]}"
@@ -3503,6 +3736,9 @@ transform() {
 					;;
 					trim) echo "$input" | awk '{$1=$1; printf "%s", $0}' ;;
 			esac
+			;;
+		email)
+			echo "$input" | bare.sh lowercase
 			;;
 	esac
 }
@@ -3729,8 +3965,13 @@ validate() {
 				fi
 			done
 
-			[[ -n $explain ]] && echo "$response" | jq -r '.reasoning'
 			output=$(echo "$response" | jq -r '.answer')
+
+			[[ -n $explain ]] && {
+				reasoning=$(echo "$response" | jq -r '.reasoning')
+				echo "Validation: '$output'. Explanation: $reasoning"
+				exit 0
+			}
 			
 			;;
 
@@ -4031,115 +4272,124 @@ validate() {
 
 weather() {
 
-	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1 && shift; fi
+    if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1 && shift; fi
 
-	# detect if input is a lat,long
-	if [[ $input =~ ^-?[0-9]+\.[0-9]+,-?[0-9]+\.[0-9]+$ ]]; then
-		location=$input
-	else
-		location=$(geo "$input")
-	fi
+    # detect if input is a lat,long
+    if [[ $input =~ ^-?[0-9]+\.[0-9]+,-?[0-9]+\.[0-9]+$ ]]; then
+        location=$input
+    else
+        location=$(geo "$input")
+    fi
 
-	cache_path="home/.cache/weather/$(codec text.filesafe "$location")"
+    cache_path="$BARE_DIR/.bare/cache/weather/$(codec text.filesafe "$location")"
 
-	[[ $BARE_COLOR == '0' ]] && color='0' || color='1'
+    [[ $BARE_COLOR == '0' ]] && color='0' || color='1'
 
-	remaining_args=() && while [[ $# -gt 0 ]]; do
-		case $1 in
-			--no-color|no-color) color='0' && shift ;;
-			--concise|concise) json_requested='1'; concise='1' && shift ;;
-			--json|json) json_requested='1'; json='1' && shift ;;
-			--sunrise|sunrise) json_requested='1'; sunrise='1' && shift ;;
-			--sunset|sunset) json_requested='1'; sunset='1' && shift ;;
-			--moonrise|moonrise) json_requested='1'; moonrise='1' && shift ;;
-			--moonset|moonset) json_requested='1'; moonset='1' && shift ;;
-			--cloud-cover|--cloud-coverage|cloud-cover) json_requested='1'; cloud_cover='1' && shift ;;
-			--at|at) json_requested='1'; time="$(date "$2" --format 'hh:mm')" && shift 2 ;;
-			*) remaining_args+=("$1") && shift ;;
-		esac
-	done && set -- "${remaining_args[@]}"
+    remaining_args=() && while [[ $# -gt 0 ]]; do
+        case $1 in
+            --no-color|no-color) color='0' && shift ;;
+            --concise|concise) json_requested='1'; concise='1' && shift ;;
+            --json|json) json_requested='1'; json='1' && shift ;;
+            --sunrise|sunrise) json_requested='1'; sunrise='1' && shift ;;
+            --sunset|sunset) json_requested='1'; sunset='1' && shift ;;
+            --moonrise|moonrise) json_requested='1'; moonrise='1' && shift ;;
+            --moonset|moonset) json_requested='1'; moonset='1' && shift ;;
+            --cloud-cover|--cloud-coverage|cloud-cover) json_requested='1'; cloud_cover='1' && shift ;;
+            --at|at) json_requested='1'; time="$(date "$2" --format 'hh:mm')" && shift 2 ;;
+            *) remaining_args+=("$1") && shift ;;
+        esac
+    done && set -- "${remaining_args[@]}"
 
-	[[ $color == '0' ]] && color_code='T'
+    [[ $color == '0' ]] && color_code='T'
 
-	[[ $json_requested == '1' ]] && {
+    [[ $json_requested == '1' ]] && {
 
-		cacheJSON() {
-			json=$(curl -sL "wttr.in/$location?format=j1")
-			mkdir -p home/.cache/weather
-			echo "$json" > "$cache_path.json"
-		}
+        cacheJSON() {
+            json=$(curl -sL "wttr.in/$location?format=j1")
+            mkdir -p "$BARE_DIR/.bare/cache/weather"
+            echo "$json" > "$cache_path.json"
+        }
 
-		# check cache for json
-		if [[ ! -f "$cache_path.json" ]]; then
-			cacheJSON;
-		else
-			cache_age=$(age "$cache_path.json" --hours)
-			if (( $(echo "$cache_age > 1" | bc -l) )); then
-				cacheJSON;
-			fi
-		fi
-		json=$(< "$cache_path.json")
+        # check cache for json
+        if [[ ! -f "$cache_path.json" ]]; then
+            cacheJSON;
+        else
+            cache_age=$(age "$cache_path.json" --hours)
+            if (( $(echo "$cache_age > 1" | bc -l) )); then
+                cacheJSON;
+            fi
+        fi
+        json=$(< "$cache_path.json")
 
-		[[ $concise == '1' ]] && {
-			echo "$json" | jq -r '.current_condition[0].weatherDesc[0].value'
-		}
+        [[ $concise == '1' ]] && {
+            echo "$json" | jq -r '.current_condition[0].weatherDesc[0].value'
+            exit 0
+        }
 
-		[[ $sunrise == '1' ]] && {
-			echo "$json" | jq -r '.weather[0].astronomy[0].sunrise'
-		}
+        [[ $sunrise == '1' ]] && {
+            echo "$json" | jq -r '.weather[0].astronomy[0].sunrise'
+            exit 0
+        }
 
-		[[ $sunset == '1' ]] && {
-			echo "$json" | jq -r '.weather[0].astronomy[0].sunset'
-		}
+        [[ $sunset == '1' ]] && {
+            echo "$json" | jq -r '.weather[0].astronomy[0].sunset'
+            exit 0
+        }
 
-		[[ $moonrise == '1' ]] && {
-			echo "$json" | jq -r '.weather[0].astronomy[0].moonrise'
-		}
+        [[ $moonrise == '1' ]] && {
+            echo "$json" | jq -r '.weather[0].astronomy[0].moonrise'
+            exit 0
+        }
 
-		[[ $moonset == '1' ]] && {
-			echo "$json" | jq -r '.weather[0].astronomy[0].moonset'
-		}
+        [[ $moonset == '1' ]] && {
+            echo "$json" | jq -r '.weather[0].astronomy[0].moonset'
+            exit 0
+        }
 
-		[[ $cloud_cover == '1' ]] && {
-			echo "$json" | jq -r '.current_condition[0].cloudcover'
-		}
+        [[ $cloud_cover == '1' ]] && {
+            echo "$json" | jq -r '.current_condition[0].cloudcover'
+            exit 0
+        }
 
-	}
+    }
 
-	case $1 in
-		today|--today)
-			response=$(curl -sL "wttr.in/${location}?uQ${color_code}F1" | sed -n '/┌─────────────┐/,/└─────────────┘/p')
-			cache_append=".today"
-			;;
-		tomorrow|--tomorrow)
-			response=$(curl -sL "wttr.in/${location}?uQ${color_code}F2" | sed -n '/┌─────────────┐/,/└─────────────┘/p' | tail -n 10)
-			cache_append=".tomorrow"
-			;;
-		forecast|--forecast)
-			response=$(curl -sL "wttr.in/${location}?uQ${color_code}F3" | sed -n '/┌─────────────┐/,/└─────────────┘/p')
-			cache_append=".forecast"
-			;;
-		* )
-			response=$(curl -sL "wttr.in/${location}?uQ${color_code}F" | head -n 5)
-			cache_append=".now"
-	esac
+    case $1 in
+        today|--today)
+            response=$(curl -sL "wttr.in/${location}?uQ${color_code}F1" | sed -n '/┌─────────────┐/,/└─────────────┘/p')
+            cache_append=".today"
+            ;;
+        tomorrow|--tomorrow)
+            response=$(curl -sL "wttr.in/${location}?uQ${color_code}F2" | sed -n '/┌─────────────┐/,/└─────────────┘/p' | tail -n 10)
+            cache_append=".tomorrow"
+            ;;
+        forecast|--forecast)
+            response=$(curl -sL "wttr.in/${location}?uQ${color_code}F3" | sed -n '/┌─────────────┐/,/└─────────────┘/p')
+            cache_append=".forecast"
+            ;;
+        * )
+            response=$(curl -sL "wttr.in/${location}?uQ${color_code}F" | head -n 5)
+            cache_append=".now"
+    esac
 
-	# if simple request, cache and respond now
-	[[ -n $response ]] && {
-		if [[ ! -f "${cache_path}${cache_append}" ]]; then
-			mkdir -p home/.cache/weather
-			echo "$response" > "${cache_path}${cache_append}"
-		fi
-	}
+    # if simple request, cache and respond now
+    [[ -n $response ]] && {
+        if [[ ! -f "${cache_path}${cache_append}" ]]; then
+            mkdir -p "$BARE_DIR/.bare/cache/weather"
+            echo "$response" > "${cache_path}${cache_append}"
+        fi
+        echo "$response"
+        exit 0
+    }
 
-	# if no response, check cache
-	[[ -z $response ]] && {
-		if [[ -f "${cache_path}${cache_append}" ]]; then
-			cat "${cache_path}${cache_append}"
-		fi
-	}
+    # if no response, check cache
+    [[ -z $response ]] && {
+        if [[ -f "${cache_path}${cache_append}" ]]; then
+            cat "${cache_path}${cache_append}"
+            exit 0
+        fi
+    }
 
-	echo "$response"
+    echo "$response"
 
 }
 
@@ -4179,20 +4429,20 @@ websearch() {
 		lynx -dump -nolist "$url" | grep -vE 'http|www|\.com|\.net|\.org|\.edu|\.gov|@'
 		echo -e "\n\nSource: $url\n\n"
 		echo -e "\n\n- - - - -\n\n"
-	  } >> "$BARE_HOME/desktop/webresearch.contents.txt"
+	  } >> "webresearch.contents.txt"
 	done <<< "$urls"
 
 	query=$(echo "$input" | tr -d '\r')
-	summary=$(cat "$BARE_HOME/desktop/webresearch.contents.txt" | summarize -p "$prompt" -l "$length")
+	summary=$(cat "webresearch.contents.txt" | summarize -p "$prompt" -l "$length")
 
-	rm "$BARE_HOME/desktop/webresearch.contents.txt"
+	rm "webresearch.contents.txt"
 
-	touch "$BARE_HOME/desktop/webresearch.summary.rec"
+	touch "webresearch.summary.rec"
 
-	recins -f query -v "$query" -f summary -v "$summary" -f sources -v "$urls" "$BARE_HOME/desktop/webresearch.summary.rec"
-	recsel "$BARE_HOME/desktop/webresearch.summary.rec"
+	recins -f query -v "$query" -f summary -v "$summary" -f sources -v "$urls" "webresearch.summary.rec"
+	recsel "webresearch.summary.rec"
 
-	rm "$BARE_HOME/desktop/webresearch.summary.rec"
+	rm "webresearch.summary.rec"
 
 }
 
@@ -4257,7 +4507,7 @@ youtube() {
 		local relative_output
 
 		random_filename=$(random string 32)
-		output_path="$BARE_HOME/downloads/$random_filename"
+		output_path="$random_filename"
 		
 		if [[ "$format" == "mp3" ]]; then
 			final_output=$(yt-dlp --no-part -x --audio-format mp3 -o "$output_path.%(ext)s" --print after_move:filepath "$url" 2>/dev/null)
@@ -4316,7 +4566,7 @@ youtube() {
 		esac
 
 		random_filename=$(random string 32).jpg
-		output_path="$BARE_HOME/downloads/$random_filename"
+		output_path="$random_filename"
 		curl -sL "$thumbnail_url" -o "$output_path"
 		echo "$output_path"
 
@@ -4394,6 +4644,40 @@ zip() {
 
 
 
+filetype() {
+    local input
+    local mime_type
+
+    if [[ -p /dev/stdin ]]; then
+        # If input is piped, read only the first 60 characters
+        input=$(head -c 60)
+        temp_file=$(mktemp)
+        echo -n "$input" > "$temp_file"
+        mime_type=$(file --mime-type -b "$temp_file")
+        rm "$temp_file"
+    elif [[ -d $1 ]]; then
+        # If the input is a directory, output its MIME type
+        mime_type="inode/directory"
+    elif [[ -f $1 ]]; then
+        # If a valid file is passed as an argument, read first 60 bytes of the file
+        mime_type=$(head -c 60 "$1" | file --mime-type -b -)
+    else
+        # Treat input as a literal string if it's not a file or directory
+        input="${1:0:60}"
+        temp_file=$(mktemp)
+        echo -n "$input" > "$temp_file"
+        mime_type=$(file --mime-type -b "$temp_file")
+        rm "$temp_file"
+    fi
+
+    echo "$mime_type"
+}
+
+
+
+
+
+
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 case $1 in
@@ -4406,6 +4690,10 @@ case $1 in
 
 	--upgrade) cd "$BARE_DIR" && git pull origin root ;;
 
-	*) __isBareCommand "$1" && __bareStartUp && "$@" ;;
+	*)
+		__isBareCommand "$1" && __bareStartUp && "$@" && exit 0
+		__isUserScript "$1" && __bareStartUp && __runUserScript "$@" && exit 0
+		exit 1
+		;;
 
 esac

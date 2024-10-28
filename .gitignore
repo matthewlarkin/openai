@@ -1,5 +1,17 @@
-/home
+/.bare
 .DS_Store
+
+# optional helper folders
+/home
+/desktop
+/documents
+/downloads
+/images
+/financials
+/formats
+/records
+/instructions
+/scripts
 
 # legacy ignored
 /.var
