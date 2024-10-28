@@ -252,33 +252,6 @@ __bareSystemHealthCheck() {
 
 
 
-# Function to generate file list for completion
-__completions() {
-    local cur
-    cur=${COMP_WORDS[COMP_CWORD]}
-    mapfile -t COMPREPLY < <(compgen -f "$COMPLETION_DIR/$cur" | xargs -n 1 basename)
-}
-
-# Wrapper functions to set the directory and call the completion function
-__completions_run() {
-    COMPLETION_DIR="home/scripts"
-    __completions
-} && complete -F __completions_run run
-
-__completions_rec() {
-    COMPLETION_DIR="$BARE_HOME/recfiles"
-    __completions
-} && complete -F __completions_rec rec
-
-__completions_routine() {
-	COMPLETION_DIR="home/scripts"
-	__completions
-} && complete -F __completions_routine routines
-
-
-
-
-
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 # HELPER FUNCTIONS
@@ -299,71 +272,6 @@ __isBareCommand() {
 
 	return 1
 
-}
-
-
-
-__isUserScript() {
-
-	[[ -f "$BARE_WORKING_DIR/$1" ]] && return 0
-	return 1
-
-}
-
-
-
-__runUserScript() {
-
-	bash "$BARE_WORKING_DIR/$1" "${@:2}"
-
-}
-
-
-
-__bareTerminal() {
-
-	local boot_rcfile
-
-	boot_rcfile=$(mktemp)
-	
-	cat << 'EOF' > "$boot_rcfile"
-
-	export BASH_SILENCE_DEPRECATION_WARNING=1
-	source ./bare.sh
-	__bareStartUp
-	
-	if [[ "$BARE_COLOR" == 1 ]]; then
-		GREEN='\033[0;32m'
-		YELLOW='\033[0;33m'
-		RED='\033[0;31m'
-		GRAY='\033[2;37m'
-		RESET='\033[0m'
-	fi
-	
-	update_prompt() {
-		if [ "$(basename "$(pwd)")" = "bare.sh" ] && [ -f "bare.sh" ]; then
-			PS1="🐻 \[${GREEN}\]$(basename $(pwd)) \[${YELLOW}\]> \[${RESET}\]"
-		else
-			PS1="🐻 \[${RED}\]$(basename $(pwd)) \[${YELLOW}\]> \[${RESET}\]"
-		fi
-	}
-	
-	PROMPT_COMMAND=update_prompt
-	update_prompt
-	
-	printf "\n${GRAY}entering bare terminal. type exit to leave.${RESET}\n"
-EOF
-	
-	exec bash --rcfile "$boot_rcfile"
-
-}
-
-
-
-renew() {
-	# shellcheck disable=SC1091
-	source "$BARE_DIR/bare.sh"
-	__bareStartUp
 }
 
 
@@ -1063,18 +971,6 @@ codec() {
 				# Trim the trailing newline from the final output
 				echo "${output%"${output##*[![:space:]]}"}"
 			fi
-			;;
-
-		item.raw)
-			jq -r <<< "$input"
-			;;
-
-		lines.markdown)
-			echo "${input//$'\n'/$'  \n'}"
-			;;
-
-		lines.items)
-			echo "$input" | awk '{$1=$1;print}' | jq -R -s -c 'split("\n") | map(select(length > 0) | @json) | join(" ")' | sed 's/\\\"/\"/g' | sed 's/^"//;s/"$//'
 			;;
 
 		text.filesafe)
@@ -2089,38 +1985,6 @@ image() {
 		* ) echo "Invalid command: $command" ;;
 
 	esac
-
-}
-
-
-
-interpret() {
-
-	local input args env_file
-
-	__bareStartUp
-
-	[[ -z $BARE_HOME ]] && echo "BARE_HOME is not set" && return 1
-
-	args=()
-	while [[ $# -gt 0 ]]; do
-		case $1 in
-			--env) env_file=$2; shift 2 ;;
-			*) args+=("$1"); shift ;;
-		esac
-	done
-	set -- "${args[@]}"
-
-	input=$1 && shift
-
-	[[ ! -f "scripts/$input" ]] && \
-		echo "No script by that name found: scripts/$input" && return 1
-
-	# Source the environment file if provided
-	[[ -n "$env_file" ]] && source "$env_file"
-
-	# Source the script with the remaining arguments
-	source "scripts/$input" "$@"
 
 }
 
@@ -3157,101 +3021,6 @@ routines() {
 
 
 
-run() {
-
-    local args
-    local script
-    local csv
-
-    args=() && while [[ $# -gt 0 ]]; do
-        case $1 in
-            :over) csv=$2 && shift 2 ;;
-            *) args+=("$1") && shift ;;
-        esac
-    done && set -- "${args[@]}"
-
-    script="$1" && shift
-
-    if [[ -n $csv && -f $csv ]]; then
-
-		csv=$(cat "$csv")
-		
-		IFS=',' read -r -a fields <<< "$(echo "$csv" | head -n 1)"
-		
-		while IFS=',' read -r line; do
-			IFS=',' read -r -a values <<< "$line"
-		
-			for ((i=0; i<${#fields[@]}; i++)); do
-				field_name="${fields[$i]}"
-				field_value="${values[$i]}"
-				field_value=$(echo "$field_value" | xargs | sed 's/^"\|"$//g')
-				export "$field_name=$field_value"
-			done
-		
-			interpret "$script" "$@" < /dev/null
-		
-		done < <(echo "$csv" | tail -n +2)
-
-    else
-
-        interpret "$script" "$@" < /dev/null
-
-    fi
-}
-
-
-
-script.open() {
-
-	case $1 in
-
-
-
-	esac
-}
-
-
-
-scripts() {
-
-	local input command
-
-	[[ -z $EDITOR ]] && echo "\$EDITOR is not set" && return 1
-
-	command=$1 && shift
-	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1 && shift; fi
-
-	case $command in
-
-		list) ls "scripts" ;;
-
-		create|new)
-			[[ -z $input ]] && echo "No input provided" && return 1
-			[[ -f "scripts/$input" ]] && echo "Script '$input' already exists" && return 1
-			echo -e "#!/usr/bin/env bash\n\n" > "scripts/$input"
-			"$EDITOR" "scripts/$input"
-			;;
-
-		open|edit)
-			[[ -z $input ]] && echo "No input provided" && return 1
-			[[ ! -f "scripts/$input" ]] && echo "Script '$input' does not exist" && return 1
-			"$EDITOR" "scripts/$input"
-			;;
-
-		remove|delete)
-			[[ -z $input ]] && echo "No input provided" && return 1
-			[[ ! -f "scripts/$input" ]] && echo "Script does not exist" && return 1
-			rm "scripts/$input"
-			;;
-		
-		*) echo "Invalid command" && return 1 ;;
-
-	esac
-
-}
-
-
-
 list() { # alias for `bare.sh records select ...`
 
 	# capture $input
@@ -3265,46 +3034,6 @@ list() { # alias for `bare.sh records select ...`
 	[[ -f "records/$input" ]] && input=$(cat "records/$input")
 
 	echo "$input" | records select "$@"
-
-}
-
-
-
-serve() {
-
-	local command
-
-	__deps sqlpage
-
-	export PORT=8282
-	export allow_exec=true
-	export max_uploaded_file_size=50000000
-
-	[[ -n $1 ]] && command=$1
-
-	case "$command" in
-
-		--briefly )
-			serve "$@" > /dev/null 2>&1 &
-			service_pid=$!
-
-			# Give the service some time to start
-			sleep 0.2
-
-			if ps -p $service_pid > /dev/null; then
-				kill $service_pid
-				wait $service_pid 2>/dev/null
-			fi
-			;;
-
-		* )
-			cd "$BARE_HOME/www" && sqlpage
-			;;
-	esac
-
-	unset PORT
-	unset allow_exec
-	unset max_uploaded_file_size
 
 }
 
