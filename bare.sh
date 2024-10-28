@@ -1559,6 +1559,39 @@ encrypt() {
 
 
 
+filetype() {
+
+    local input
+    local mime_type
+
+    if [[ -p /dev/stdin ]]; then
+        # If input is piped, read only the first 60 characters
+        input=$(head -c 60)
+        temp_file=$(mktemp)
+        echo -n "$input" > "$temp_file"
+        mime_type=$(file --mime-type -b "$temp_file")
+        rm "$temp_file"
+    elif [[ -d $1 ]]; then
+        # If the input is a directory, output its MIME type
+        mime_type="inode/directory"
+    elif [[ -f $1 ]]; then
+        # If a valid file is passed as an argument, read first 60 bytes of the file
+        mime_type=$(head -c 60 "$1" | file --mime-type -b -)
+    else
+        # Treat input as a literal string if it's not a file or directory
+        input="${1:0:60}"
+        temp_file=$(mktemp)
+        echo -n "$input" > "$temp_file"
+        mime_type=$(file --mime-type -b "$temp_file")
+        rm "$temp_file"
+    fi
+
+    echo "$mime_type"
+
+}
+
+
+
 geo() {
 
 	__deps curl jq
@@ -4256,45 +4289,11 @@ zip() {
 
 
 
-filetype() {
-    local input
-    local mime_type
-
-    if [[ -p /dev/stdin ]]; then
-        # If input is piped, read only the first 60 characters
-        input=$(head -c 60)
-        temp_file=$(mktemp)
-        echo -n "$input" > "$temp_file"
-        mime_type=$(file --mime-type -b "$temp_file")
-        rm "$temp_file"
-    elif [[ -d $1 ]]; then
-        # If the input is a directory, output its MIME type
-        mime_type="inode/directory"
-    elif [[ -f $1 ]]; then
-        # If a valid file is passed as an argument, read first 60 bytes of the file
-        mime_type=$(head -c 60 "$1" | file --mime-type -b -)
-    else
-        # Treat input as a literal string if it's not a file or directory
-        input="${1:0:60}"
-        temp_file=$(mktemp)
-        echo -n "$input" > "$temp_file"
-        mime_type=$(file --mime-type -b "$temp_file")
-        rm "$temp_file"
-    fi
-
-    echo "$mime_type"
-}
-
-
-
-
 
 
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 case $1 in
-
-	-i|-t|terminal) __bareTerminal ;;
 
 	--health) __bareSystemHealthCheck ;;
 	
