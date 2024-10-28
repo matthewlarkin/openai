@@ -1130,26 +1130,6 @@ END
 
 
 
-
-copy() {
-
-	local file destination
-
-	if [[ -p /dev/stdin ]]; then file=$(cat); else file=$1; fi
-
-	while [[ $# -gt 1 ]]; do shift; done;
-	destination=$1
-
-
-	[[ ! -f "$file" ]] && { echo "Error: file '$file' does not exist."; return 1; }
-	[[ -z $destination ]] && { echo "Error: destination not provided."; return 1; }
-
-	cp "$file" "$destination"
-
-}
-
-
-
 color() {
 
     local input hue saturation=100 lightness=50 output_format output_style
@@ -1421,41 +1401,26 @@ decrypt() {
 
 download() {
 
-	local url is_youtube args arg
-
 	__deps curl
 
-	if [[ -p /dev/stdin ]]; then url=$(cat); else { url=$1; shift; } fi
+	local url args output
 
-	[[ -z $url ]] && echo "No URL provided" && return 1
+	[[  -p /dev/stdin ]] && url=$(cat) || { url=$1 && shift; }
 
-	[[ $(validate url "$url") == 'false' ]] && echo "Invalid URL"
+	output=$(random)
 
-	# check if this is a YouTube link
-	[[ "$(youtube id "$url")" = 'Invalid YouTube URL' ]] && is_youtube=0 || is_youtube=1
-
-	args=() && for arg in "$@"; do
-		case $arg in
-			--output|-o) output_file="$2" && shift 2 ;;
-			*) args+=("$1") && shift ;;
+	args=() && while [[ $# -gt 0 ]]; do
+		case $1 in
+			--output|-o) output=$2; shift 2 ;;
+			*) url=$1 && shift ;;
 		esac
 	done && set -- "${args[@]}"
 
-	# Set the output file name
-	[[ -z "$output_file" ]] && output_file="$(random string 30)"
+	[[ -z $url ]] && echo "No URL provided" && return 1
 
-	if [[ "$is_youtube" = 1 ]]; then
+	[[ $(validate url "$url") == 'false' ]] && echo "Invalid URL" && return 1
 
-		youtube download "$url" "$@"
-
-	else
-
-		# Download the file to a temporary location
-		request "$url" --output "$output_file"
-
-		echo "$output_file"
-
-	fi
+	curl -sL "$url" > "$output"
 
 }
 
@@ -1558,11 +1523,12 @@ email() {
 				}'
 			)
 
-			response=$(request https://api.postmarkapp.com/email \
-				--json "$payload" \
-				--header "X-Postmark-Server-Token: $POSTMARK_API_KEY");
+			response=$(curl -s "https://api.postmarkapp.com/email" \
+				-H "Accept: application/json" \
+				-H "Content-Type: application/json" \
+				-H "X-Postmark-Server-Token: $POSTMARK_API_KEY" \
+				-d "$payload")
 
-			# else
 			echo "$response" | jq -r '.MessageID'
 		
 			;;
@@ -1587,36 +1553,7 @@ encrypt() {
 		esac
 	done
 
-
 	codec encrypt "$input" "$@" < /dev/null
-
-}
-
-
-
-filter() {
-
-	local input
-
-	while [[ "$#" -gt 0 ]]; do
-		case $1 in
-			empty-lines) command="empty-lines"; shift ;;
-		esac
-	done && set -- "$@"
-
-	input="${1:-$(cat)}"
-
-	case $command in
-
-		empty-lines) 
-
-			echo "$input" | sed '/^$/d'
-
-			;;
-
-		*) echo "Invalid filter: $command" ;;
-
-	esac
 
 }
 
@@ -1625,6 +1562,7 @@ filter() {
 geo() {
 
 	__deps curl jq
+
 	touch "$BARE_DIR/.bare/cache/geo.txt"
 
 	format_location() {
@@ -2273,21 +2211,6 @@ media() {
 
 
 
-move() {
-
-	if [[ -p /dev/stdin ]]; then file=$(cat); else file=$1; fi
-
-	[[ $# == 2 ]] && destination="$2" || destination="$1"
-
-	[[ ! -f "$file" ]] && echo "Error: file '$file' does not exist."
-	[[ -z $destination ]] && echo "Error: destination not provided."
-
-	mv "$file" "$destination"
-
-}
-
-
-
 open() {
 
 	[ -z "$EDITOR" ] && echo "EDITOR is not set"
@@ -2390,7 +2313,11 @@ openai() {
 			[[ -n $json_mode ]] && payload=$(echo "$payload" | jq '. + {response_format: {type: "json_object"}}')
 
 			[[ $debug == 'true' ]] && {
-				request "https://api.openai.com/v1/chat/completions" --token "$OPENAI_API_KEY" --json "$payload" | jq
+				# request "https://api.openai.com/v1/chat/completions" --token "$OPENAI_API_KEY" --json "$payload" | jq
+				curl -s "https://api.openai.com/v1/chat/completions" \
+					-H "Authorization: Bearer $OPENAI_API_KEY" \
+					-H "Content-Type: application/json" \
+					-d "$payload" | jq
 			}
 
 			response=$(curl -s -X POST "https://api.openai.com/v1/chat/completions" \
@@ -2896,19 +2823,6 @@ research() {
 
 
 
-reveal() {
-
-	local input
-
-	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1 && shift; fi
-
-	[[ ! -f "$input" ]] && echo "File '$input' not found"
-	cat "$input"
-
-}
-
-
-
 round() {
 
 	math round "$@"
@@ -3034,18 +2948,6 @@ list() { # alias for `bare.sh records select ...`
 	[[ -f "records/$input" ]] && input=$(cat "records/$input")
 
 	echo "$input" | records select "$@"
-
-}
-
-
-
-show() {
-
-	local input
-
-	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1; fi
-	[[ -n $input ]] || { echo "No input provided"; }
-	echo "$input"
 
 }
 
@@ -3287,7 +3189,7 @@ stripe() {
 
 				list)
 
-					curl -G "https://api.stripe.com/
+					curl -G "https://api.stripe.com/"
 				
 					;;
 
@@ -3572,6 +3474,18 @@ unzip() {
 	yes y | "$localunzip" -q "$input" -d "$output"
 
 	echo "$output"
+
+}
+
+
+
+upload() {
+
+	local input
+
+	if [[ -p /dev/stdin ]]; then input=$(cat); else { input=$1 && shift ;} fi
+
+	storage upload "$input" "$@"
 
 }
 
@@ -4390,7 +4304,6 @@ case $1 in
 
 	*)
 		__isBareCommand "$1" && __bareStartUp && "$@" && exit 0
-		__isUserScript "$1" && __bareStartUp && __runUserScript "$@" && exit 0
 		exit 1
 		;;
 
