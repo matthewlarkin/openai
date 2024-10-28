@@ -117,7 +117,7 @@ __bareStartUp() {
 	__getOS
 
 	# shellcheck disable=SC1091
-	source "$BARE_HOME/.barerc"
+	source "$HOME/.barerc"
 
 	export BARE_HOME
 	export BARE_WORKING_DIR
@@ -3262,86 +3262,55 @@ storage() {
 
 stripe() {
 
-	local input command args action
+	local scope args action
 
-	action='list'
-	command=$1 && shift
-	[[ -p /dev/stdin ]] && input=$(cat)
+	scope=$1 && shift
 
-	case $command in
+	args=() && while [[ $# -gt 0 ]]; do
+		case $1 in
+			--query|-q|where) query=$2 && shift 2 ;;
+			customers|products|prices|subscriptions|invoices|payments|balances) scope=$1 && shift ;;
+			
+			*) args+=("$1") && shift ;;
+		esac
+	done && set -- "${args[@]}"
+
+	[[ -z $scope && -n $1 ]] && scope=$1 && shift
+
+	case $scope in
 
 		customers)
 
-			local limit email id all
-			
-			limit='10'
-			email=''
-			id=''
-			all='false'
-			
-			args=() && for arg in "$@"; do
-			  case $arg in
-				--email|-e) email=$2 && shift 2 ;;
-				--id|-i) id=$2 && shift 2 ;;
-				--limit|-l) limit=$2 && shift 2 ;;
-				--all) limit='100'; all='true'; shift ;;
-				*) args+=("$1") && shift ;;
-			  esac
-			done && set -- "${args[@]}"
-			
-			case $1 in
-			  create|update|delete|archive) action=$1 && shift ;;
-			  *) action='list' ;;
-			esac
-			
-			[[ -z $input ]] && input=$1 && shift
-			[[ -z $input && $action != 'list' ]] && echo "Error: no input provided" && return 1
-			
+			action=$1 && shift
+
 			case $action in
-			
-			  list)
-				if [[ $limit -le 100 && $all != 'true' ]]; then
-				  # Fetch customers once if limit is below 100 and all is not set to true
-				  response=$(curl -G -sL "https://api.stripe.com/v1/customers" \
-					-u "$STRIPE_SECRET_KEY:" \
-					-d "limit=$limit")
 
-				# Extract customers
-				customers=$(echo "$response" | jq -r '.data[] | {id: .id, email: .email, name: .name, phone: .phone}')
-				final_result=$(echo "$customers" | jq -s '.')
+				list)
+
+					curl -G "https://api.stripe.com/
 				
-				else
-				  has_more=true
-				  starting_after=''
-				
-				  # Loop to fetch all customers
-				  while [ "$has_more" = true ]; do
-					response=$(curl -G -sL "https://api.stripe.com/v1/customers" \
-					  -u "$STRIPE_SECRET_KEY:" \
-					  -d "limit=$limit" \
-					  ${starting_after:+-d "starting_after=$starting_after"})
-				
-					# Extract customers and has_more property
-					new_customers=$(echo "$response" | jq -r '.data[] | {id: .id, email: .email, name: .name, phone: .phone}')
-					mapfile -t new_customers_array < <(echo "$new_customers" | jq -c '.')
-					customers+=("${new_customers_array[@]}")
-					has_more=$(echo "$response" | jq -r '.has_more')
-					starting_after=$(echo "$response" | jq -r '.data[-1].id')
-				  done
-				
-				  # Merge all customer objects into a final array
-				  final_result=$(printf '%s\n' "${customers[@]}" | jq -s '.')
-				fi
-				
-				# Output the final result
-				echo "$final_result"
-				;;
-			
+					;;
+
+				create) ;;
+
+				update) ;;
+
+				delete) ;;
+
+				*) echo "Invalid action: $action" && return 1 ;;
+
 			esac
-
+		
 			;;
+		products) ;;
+		prices) ;;
+		subscriptions) ;;
+		invoices) ;;
+		payments) ;;
+		balances) ;;
+		*) echo "Invalid scope: $scope" && return 1 ;;
 
-	esac
+	esac	
 
 }
 
