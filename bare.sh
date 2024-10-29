@@ -1,12 +1,5 @@
 #!/usr/bin/env bash
 
-BARE_WORKING_DIR=$(realpath .)
-BARE_DIR=$(realpath "$(dirname "$0")")
-cd "$BARE_DIR" || exit 1
-export BARE_DIR BARE_WORKING_DIR
-
-
-
 __deps() {
 
 	local missing_deps
@@ -55,12 +48,10 @@ __bareStartUp() {
 		
 		# bare
 		["BARE_VERSION"]=$(git log -1 --format=%ct)
-		["BARE_HOME"]="${BARE_HOME:-$BARE_DIR/home}"
 		["BARE_TIMEZONE"]="${BARE_TIMEZONE:-UTC}"
 		["BARE_COLOR"]="${BARE_COLOR:-0}"
 		["BARE_DEBUG"]="${BARE_DEBUG:-0}"
 		["BARE_STORAGE_PROVIDER"]="${BARE_STORAGE_PROVIDER:-digitalocean}"
-		["BARE_WORKING_DIR"]="${BARE_WORKING_DIR:-.}"
 		["EDITOR"]="${EDITOR:-code}"
 		
 		# Email via SMTP
@@ -119,11 +110,6 @@ __bareStartUp() {
 	# shellcheck disable=SC1091
 	source "$HOME/.barerc"
 
-	export BARE_HOME
-	export BARE_WORKING_DIR
-
-	cd "$BARE_WORKING_DIR" || return 1
-
 }
 
 
@@ -169,85 +155,6 @@ __checkVariables() {
 	else
 		echo -e " | ${GREEN}All core variables are set!${RESET}"
 	fi
-}
-
-__checkDependencies() {
-
-	local dependencies logfile steps_required
-
-	steps_required='false'
-
-	declare -A dependencies=(
-		["jq"]="jq"
-		["yq"]="yq"
-		["yt-dlp"]="yt-dlp"
-		["curl"]="curl"
-		["ffmpeg"]="ffmpeg"
-		["recsel"]="recutils"
-		["sqlite3"]="sqlite3"
-		["httpd"]="apache2"
-		["pandoc"]="pandoc"
-		["xxd"]="xxd"
-		["php"]="php"
-		["awk"]="awk"
-		["perl"]="perl"
-		["openssl"]="openssl"
-		["magick"]="imagemagick"
-		["qrencode"]="qrencode"
-		["csvcut"]="csvkit"
-	)
-
-	# Only add gdate for macOS
-	if [[ "$OS" != "Ubuntu" ]]; then
-		dependencies["gdate"]="coreutils"
-		dependencies["gsed"]="gnu-sed"
-	fi
-
-	logfile="$BARE_DIR/.logs/system-report.$(date +%Y-%m-%d).md"
-
-	echo ""
-	echo "${BLUE}Checking dependencies ...${RESET}"
-	echo ""
-	sleep 0.2
-
-	echo "System Report $(date)" > "$logfile"
-	echo "- - - - -" >> "$logfile"
-
-	# Check and log missing dependencies
-	for package in "${!dependencies[@]}"; do
-		if ! command -v "$package" &> /dev/null; then
-			sleep 0.2
-			echo "- Dependency *'$package'* not found. Please install *'${dependencies[$package]}'* manually." >> "$logfile"
-			steps_required='true'
-		fi
-	done
-
-	sleep 0.2
-
-	if [[ "$steps_required" == 'true' ]]; then
-		echo " | ${RED}Extra steps required${RESET}: a system report with recommendations was written to:"
-		echo " | ${GRAY}$logfile${RESET}."
-	else
-		echo -e " | ${GREEN}All good!${RESET}"
-	fi
-}
-
-
-
-__bareSystemHealthCheck() {
-
-	__bareStartUp
-
-	__checkDependencies
-	__checkVariables
-
-	echo ""
-	echo "${GREEN}System check complete.${RESET}"
-	echo ""
-
-	unset -f __checkDependencies
-	unset -f __checkVariables
-
 }
 
 
@@ -431,7 +338,8 @@ airtable() {
 			--offset|-o) offset=$2 && shift 2 ;;
 			*) args+=("$1") && shift ;;
 		esac
-	done && set -- "${args[@]}"
+	done
+	set -- "${args[@]}"
 
 	[[ -z $base_id ]] && echo "Error: base_id is required." && return 1
 	[[ -z $table_name ]] && echo "Error: table_name is required." && return 1
@@ -570,7 +478,8 @@ capitalize() {
 			--all) all=1 && shift ;;
 			*) args+=("$1") && shift ;;
 		esac
-	done && set -- "${args[@]}"
+	done
+	set -- "${args[@]}"
 
 	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$*; fi
 
@@ -793,7 +702,8 @@ codec() {
 					--output|-o) output_file=$2; shift 2 ;;
 					*) args+=("$1") && shift ;;
 				esac
-			done && set -- "${args[@]}"; }
+			done
+			set -- "${args[@]}"; }
 
 			# Check if the input is a file
 			[[ -f $input ]] && input=$(cat "$input")
@@ -821,7 +731,8 @@ codec() {
 					--output|-o) output_file=$2; shift 2 ;;
 					*) args+=("$1") && shift ;;
 				esac
-			done && set -- "${args[@]}"; }
+			done
+			set -- "${args[@]}"; }
 
 			# if $input is a file, read the file
 			[[ -f $input ]] && input=$(cat "$input")
@@ -1149,7 +1060,8 @@ color() {
             --raw) output_style="raw"; shift ;;
 			*) args+=("$1") && shift ;;
         esac
-    done && set -- "${args[@]}"
+    done
+	set -- "${args[@]}"
 
 	# Use the input if no arguments are provided
 	[[ -z $input ]] && input=$1
@@ -1414,7 +1326,8 @@ download() {
 			--output|-o) output=$2; shift 2 ;;
 			*) url=$1 && shift ;;
 		esac
-	done && set -- "${args[@]}"
+	done
+	set -- "${args[@]}"
 
 	[[ -z $url ]] && echo "No URL provided" && return 1
 
@@ -1430,23 +1343,29 @@ email() {
 
 	__deps jq curl
 
-	local args via from to subject body cc bcc reply_to template
+	local args via from to subject body cc bcc reply_to template attachments
 
 	via='smtp'
+	attachments=()
 
 	args=() && while [[ $# -gt 0 ]]; do
 		case $1 in
 			--via|-v) via="$2"; shift 2 ;;
-			--to|-t) to="$2"; shift 2 ;;
-			--subject|-s) subject="$2"; shift 2 ;;
-			--body|-B) body="$2"; shift 2 ;;
-			--cc|-c) cc="$2"; shift 2 ;;
-			--bcc|-b) bcc="$2"; shift 2 ;;
-			--from|-f) from="$2"; shift 2 ;;
-			--reply-to|-r) reply_to="$2"; shift 2 ;;
+			--to|-t|to) to="$2"; shift 2 ;;
+			--subject|-s|regarding|subject) subject="$2"; shift 2 ;;
+			--body|-b|body) body="$2"; shift 2 ;;
+			--cc|cc) cc="$2"; shift 2 ;;
+			--bcc|bcc) bcc="$2"; shift 2 ;;
+			--from|-f|from) from="$2"; shift 2 ;;
+			--reply-to|-r|reply-to) reply_to="$2"; shift 2 ;;
+			--attachment|-a|attachment) [[ -f "$2" ]] && attachments+=($(realpath "$2")) && shift 2 ;;
+			with|and) shift ;; # allows for more lyrical commands
 			*) args+=("$1") && shift ;;
 		esac
-	done && set -- "${args[@]}"
+	done
+	set -- "${args[@]}"
+
+	attachments=$(IFS=','; echo "${attachments[*]}")
 
 	# require to, from, subject, body
 	[[ -z "$to" ]] && echo "No recipient specified, use --to to specify a recipient" && return 1
@@ -1456,38 +1375,78 @@ email() {
 	case $via in
 
 		smtp)
-
+				
 			[[ -z "$SMTP_SERVER" ]] && echo "SMTP_SERVER is not set" && return 1
 			[[ -z "$SMTP_PORT" ]] && echo "SMTP_PORT is not set" && return 1
 			[[ -z "$SMTP_USERNAME" ]] && echo "SMTP_USERNAME is not set" && return 1
 			[[ -z "$SMTP_PASSWORD" ]] && echo "SMTP_PASSWORD is not set" && return 1
-
+		
 			# Setup mail txt file for curl
 			mail_file=$(mktemp)
 			chmod 600 "$mail_file"  # Restrict permissions for security
+		
+			# Create the email headers and body
 			{
 				echo "From: $SMTP_USERNAME"
 				echo "To: $to"
+				echo "Cc: $cc"
+				echo "Bcc: $bcc"
+				echo "Reply-To: $reply_to"
 				echo "Subject: $subject"
+				echo "MIME-Version: 1.0"
+				echo "Content-Type: multipart/mixed; boundary=\"boundary42\""
+				echo ""
+				echo "--boundary42"
+				echo "Content-Type: text/plain; charset=UTF-8"
+				echo "Content-Transfer-Encoding: 7bit"
 				echo ""
 				echo "$body"
 			} >> "$mail_file"
-
+		
+			# Add attachments if any
+			if [[ -n "$attachments" ]]; then
+				IFS=',' read -ra files <<< "$attachments"
+				for file in "${files[@]}"; do
+					if [[ -f "$file" ]]; then
+						absolute_path=$(realpath "$file")
+						{
+							echo ""
+							echo "--boundary42"
+							echo "Content-Type: $(file --mime-type -b "$absolute_path")"
+							echo "Content-Transfer-Encoding: base64"
+							echo "Content-Disposition: attachment; filename=\"$(basename "$absolute_path")\""
+							echo ""
+							base64 -i "$absolute_path"
+						} >> "$mail_file"
+					else
+						echo "Error: '$file' is not a valid file." >&2
+						rm "$mail_file"
+						return 1
+					fi
+				done
+			fi
+		
+			# End the MIME message
+			{
+				echo ""
+				echo "--boundary42--"
+			} >> "$mail_file"
+		
 			# Send email and capture the exit status
 			curl -s --url "smtp://$SMTP_SERVER:$SMTP_PORT" --ssl-reqd \
 				--mail-from "$SMTP_USERNAME" --mail-rcpt "$to" \
 				--upload-file "$mail_file" --user "$SMTP_USERNAME:$SMTP_PASSWORD"
 			curl_exit_code=$?
-
+		
 			# Cleanup
 			rm "$mail_file"
-
+		
 			# Check for curl success
 			if [[ $curl_exit_code -ne 0 ]]; then
 				echo "Failed to send email, curl returned exit code $curl_exit_code"
 				return $curl_exit_code
 			fi
-
+		
 			;;
 
 
@@ -1559,34 +1518,116 @@ encrypt() {
 
 
 
-filetype() {
+examine() {
 
-    local input
-    local mime_type
+	__deps jq ffmpeg ffprobe file stat realpath
 
-    if [[ -p /dev/stdin ]]; then
-        # If input is piped, read only the first 60 characters
-        input=$(head -c 60)
-        temp_file=$(mktemp)
-        echo -n "$input" > "$temp_file"
-        mime_type=$(file --mime-type -b "$temp_file")
-        rm "$temp_file"
-    elif [[ -d $1 ]]; then
-        # If the input is a directory, output its MIME type
-        mime_type="inode/directory"
-    elif [[ -f $1 ]]; then
-        # If a valid file is passed as an argument, read first 60 bytes of the file
-        mime_type=$(head -c 60 "$1" | file --mime-type -b -)
+    local args input tmp_dir cover_image_path mime_type file_size_human metadata pick ffprobe_output
+    local filepath filename basename extension file_size
+
+	[[ -p /dev/stdin ]] && input=$(cat)
+
+	args=() && while [[ $# -gt 0 ]]; do
+		case $1 in
+			--json) args+=("$1") && shift ;;
+			--pick|-p) pick=$2 && shift 2 ;;
+			*) input=$1 && shift ;;
+		esac
+	done
+	set -- "${args[@]}"
+
+	[[ -z "$input" ]] && input=$1
+	[[ -z "$input" ]] && echo "No input file provided" && return 1
+	[[ ! -f "$input" ]] && echo "File not found: $input" && return 1
+
+    # Get basic file information
+    filepath=$(realpath "$input")
+    filename=$(basename "$input")
+    extension="${filename##*.}"
+    basename="${filename%.*}"
+
+    # Get the MIME type of the file
+    mime_type=$(file --mime-type -b "$input")
+
+    # Get the file size in bytes
+    if [[ "$OSTYPE" == "darwin"* ]]; then
+        file_size=$(stat -f%z "$input")
     else
-        # Treat input as a literal string if it's not a file or directory
-        input="${1:0:60}"
-        temp_file=$(mktemp)
-        echo -n "$input" > "$temp_file"
-        mime_type=$(file --mime-type -b "$temp_file")
-        rm "$temp_file"
+        file_size=$(stat -c%s "$input")
     fi
 
-    echo "$mime_type"
+    # Convert file size to a human-readable format
+    human_readable_size() {
+        local size=$1
+        local units=("B" "KB" "MB" "GB" "TB")
+        local unit_index=0
+
+        while (( size >= 1024 && unit_index < ${#units[@]} - 1 )); do
+            size=$(( size / 1024 ))
+            unit_index=$(( unit_index + 1 ))
+        done
+
+        echo "$size ${units[$unit_index]}"
+    }
+
+    file_size_human=$(human_readable_size "$file_size")
+
+    # Initialize metadata JSON object
+    metadata=$(jq -n \
+        --arg filepath "$filepath" \
+        --arg filename "$filename" \
+        --arg basename "$basename" \
+        --arg extension "$extension" \
+        --arg type "$mime_type" \
+        --arg size "$file_size_human" \
+        '{
+            filename: $filename,
+            basename: $basename,
+            ext: $extension,
+            path: $filepath,
+            type: $type,
+            size: $size
+        }'
+    )
+
+    # Try to extract media metadata if possible
+    ffprobe_output=$(ffprobe -v quiet -print_format json -show_format "$input" 2>/dev/null)
+
+    if [[ -n "$ffprobe_output" ]]; then
+        # Extract metadata fields
+        media_metadata=$(echo "$ffprobe_output" | jq -r '{
+            title: .format.tags.title,
+            artist: .format.tags.artist,
+            album: .format.tags.album,
+            track: .format.tags.track,
+            year: .format.tags.date
+        } | with_entries(select(.value != null and .value != ""))')
+
+        # Merge media metadata into main metadata
+        metadata=$(echo "$metadata" "$media_metadata" | jq -s '.[0] * .[1]')
+
+        # Try to extract cover image
+        tmp_dir=$(mktemp -d)
+        cover_image_path="$tmp_dir/cover.jpg"
+        ffmpeg -i "$input" -an -vcodec copy "$cover_image_path" -y -loglevel quiet
+
+        if [[ -f "$cover_image_path" ]]; then
+            metadata=$(echo "$metadata" | jq --arg cover "$cover_image_path" '. + {cover: $cover}')
+        else
+            rm -rf "$tmp_dir"
+        fi
+    fi
+
+	output=$(echo "$metadata" | jq '.' | bare.sh rec --from-json)
+
+	if [[ -n $pick ]]; then
+		echo "$output" | recsel -P "$pick"
+	else
+		echo "$output"
+	fi
+
+    # Clean up temporary directory if it exists
+    [[ -d "$tmp_dir" ]] && rm -rf "$tmp_dir"
 
 }
 
@@ -1610,11 +1651,7 @@ geo() {
 		echo "$loc"
 	}
 
-	local location
-	local type
-	local decimals
-	local coordinates
-	local args
+	local location type decimals coordinates args
 
 	args=() && while [[ $# -gt 0 ]]; do
 		case $1 in
@@ -1623,7 +1660,8 @@ geo() {
 			--location) location="$2"; shift 2 ;;
 			*) args+=("$1"); shift ;;
 		esac
-	done && set -- "${args[@]}"
+	done
+	set -- "${args[@]}"
 
 	# Set defaults
 	[[ -z "$location" ]] && location=${1:-asheville-nc}
@@ -1691,7 +1729,8 @@ image() {
 			--prompt) prompt="$2" && shift 2 ;;
 			*) args+=("$1") && shift ;;
 		esac
-	done && set -- "${args[@]}"
+	done
+	set -- "${args[@]}"
 
 	case $command in
 
@@ -1729,7 +1768,7 @@ image() {
 
 			;;
 
-		create )
+		create|yield )
 
 			local color dimensions filename
 
@@ -1961,18 +2000,6 @@ image() {
 
 
 
-lowercase() {
-
-	local input
-
-	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1; fi
-	
-	transform "$input" --lowercase < /dev/null
-
-}
-
-
-
 math() {
 
 	local operation
@@ -1983,7 +2010,8 @@ math() {
 			round|floor|ceiling|ceil) operation=$1 && shift ;;
 			*) remaining_args+=("$1") && shift ;;
 		esac
-	done && set -- "${remaining_args[@]}"
+	done
+	set -- "${remaining_args[@]}"
 
 	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1 && shift; fi
 
@@ -2045,21 +2073,7 @@ math() {
 
 media() {
 
-	local command
-	local input
-	local remaining_args
-	local tmp_dir
-	local cover_image_path
-	local metadata
-	local title
-	local album
-	local artist
-	local output
-	local year
-	local track
-	local cover
-	local remove_original
-	local ffmpeg_command
+	local command input args tmp_dir cover_image_path metadata title album artist output year track cover remove_original ffmpeg_command
 
 	__deps ffmpeg
 
@@ -2067,47 +2081,17 @@ media() {
 
 	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1 && shift; fi
 
-	remaining_args=() && while [[ $# -gt 0 ]]; do
+	args=() && while [[ $# -gt 0 ]]; do
 		case $1 in
 			--cleanup) remove_original=1 && shift ;;
-			*) remaining_args+=("$1") && shift ;;
+			--input|-i|input) input_file="$2" && shift 2 ;;
+			--output|-o|output|--to|-t|to) output_file="$2" && shift 2 ;;
+			*) args+=("$1") && shift ;;
 		esac
-	done && set -- "${remaining_args[@]}"
+	done
+	set -- "${args[@]}"
 
 	case $command in
-
-			examine)
-		
-			# Check if the input file exists
-			[[ ! -f $input ]] && echo "Error: expected file input"
-		
-			# Create a temporary directory for the extracted image
-			tmp_dir=$(mktemp -d)
-			
-			# Extract the cover image from the MP3 file
-			cover_image_path="$tmp_dir/cover.jpg"
-			ffmpeg -i "$input" -an -vcodec copy "$cover_image_path" -y 2>/dev/null
-		
-			# Check if the cover image was successfully extracted
-			[[ ! -f "$cover_image_path" ]] && cover_image_path="null"
-		
-			# Extract basic metadata using ffprobe and format as a single JSON object
-			metadata=$(ffprobe -v quiet -print_format json -show_format "$input" | jq -r \
-			--arg cover_image_path "$cover_image_path" \
-				'{
-					title: .format.tags.title,
-					artist: .format.tags.artist,
-					album: .format.tags.album,
-					track: .format.tags.track,
-					year: .format.tags.date,
-					cover: $cover_image_path
-				}'
-			)
-		
-			# Output the metadata as a JSON object
-			echo "$metadata" | rec --from-json
-		
-			;;
 		
 		detail)
 		
@@ -2121,7 +2105,7 @@ media() {
 			artist=$(media examine "$input" | recsel -P artist)
 			output=$input
 		
-			remaining_args=() && while [[ $# -gt 0 ]]; do
+			args=() && while [[ $# -gt 0 ]]; do
 				case $1 in
 					--title) title="$2" && shift 2 ;;
 					--album) album="$2" && shift 2 ;;
@@ -2130,9 +2114,10 @@ media() {
 					--cover) cover="$2" && shift 2 ;;
 					--track) track="$2" && shift 2 ;;
 					--output) output="$2" && shift 2 ;;
-					*) remaining_args+=("$1") && shift ;;
+					*) args+=("$1") && shift ;;
 				esac
-			done && set -- "${remaining_args[@]}"
+			done
+			set -- "${args[@]}"
 			
 			[[ -z $title ]] && echo "Error: title is required"
 			[[ -z $album ]] && echo "Error: album is required"
@@ -2296,14 +2281,16 @@ openai() {
 			--system_prompt|--instructions) assistant_prompt="$2" && shift 2 ;;
 			*) args+=("$1"); shift ;;
 		esac
-	done && set -- "${args[@]}"
+	done
+	set -- "${args[@]}"
 
 	args=() && for arg in "$@"; do
 		case $arg in
 			chat|voice|listen|transcribe) command=$arg && shift ;;
 			*) args+=("$arg") && shift ;;
 		esac
-	done && set -- "${args[@]}"
+	done
+	set -- "${args[@]}"
 
 	[[ -z "$input" ]] && input=$1 && shift
 	if [[ -z "$input" ]]; then echo "Error: no input provided" >&2 && return 1; fi
@@ -2666,7 +2653,8 @@ records() {
 			where) expression=$2 && shift 2 ;;
 			*) args+=("$1") && shift ;;
 		esac
-	done && set -- "${args[@]}"
+	done
+	set -- "${args[@]}"
 
 	# capture $input
 	if [[ -p /dev/stdin ]]; then input=$(cat); else { input=$1 && shift; } fi
@@ -2701,7 +2689,8 @@ relay() {
 			--var) var='true' && shift ;;
 			*) args+=("$arg") && shift ;;
 		esac
-	done && set -- "${args[@]}"
+	done
+	set -- "${args[@]}"
 
 	[[ -p /dev/stdin ]] && input=$(cat) || input=$1
 
@@ -2763,7 +2752,8 @@ render() {
 						--high-powerd) high_powered=1 && shift ;;
 						*) subargs+=("$subarg") && shift ;;
 					esac
-				done && set -- "${subargs[@]}"
+				done
+				set -- "${subargs[@]}"
 
 				if [[ $simple_mode == 1 ]]; then
 
@@ -2786,7 +2776,8 @@ render() {
 				;;
 		
 		esac
-	done && set -- "${args[@]}"
+	done
+	set -- "${args[@]}"
 
 }
 
@@ -2839,26 +2830,6 @@ request() {
 	"${curl_cmd[@]}"
 	
 	unset -f split_data_into_form_fields
-
-}
-
-
-
-research() {
-
-	local input
-
-	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1 && shift; fi
-
-	websearch "$input" "$@" < /dev/null
-
-}
-
-
-
-round() {
-
-	math round "$@"
 
 }
 
@@ -3113,7 +3084,8 @@ storage() {
 			--private) privacy='private' && shift ;;
             *) args+=("$1") && shift ;;
         esac
-    done && set -- "${args[@]}"
+    done
+	set -- "${args[@]}"
 
     [[ -p /dev/stdin ]] && input=$(cat) || input=$1 && shift
 
@@ -3197,57 +3169,409 @@ storage() {
 
 stripe() {
 
-	local scope args action
+    local scope action field operator value limit pick output_file
+    local args=()
+    local params=()
 
-	scope=$1 && shift
+    [[ -p /dev/stdin ]] && action=$(cat)
 
-	args=() && while [[ $# -gt 0 ]]; do
-		case $1 in
-			--query|-q|where) query=$2 && shift 2 ;;
-			customers|products|prices|subscriptions|invoices|payments|balances) scope=$1 && shift ;;
-			
-			*) args+=("$1") && shift ;;
-		esac
-	done && set -- "${args[@]}"
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            -p|pick)
+                pick=$2
+                shift 2
+                ;;
+            limit)
+                limit=$2
+                shift 2
+                ;;
+            where)
+                [[ -z $2 ]] && echo "Error: Field is required" && return 1
+                field=$2
+                shift 2
+                ;;
+            =|is)
+                if [[ $2 == 'not' ]]; then
+                    operator='!='
+                    shift
+                elif [[ $2 == 'like' ]]; then
+                    operator='~'
+                    shift
+                else
+                    operator='='
+                    shift
+                fi
+                ;;
+            like)
+                operator='~'
+                shift
+                ;;
+            !=|isnt)
+                operator='!='
+                shift
+                ;;
+			payments) scope='payment_intents' && shift ;;
+            customers|subscriptions|products|invoices|prices|charges|refunds|payouts|balance_transactions|disputes|transfers|payment_intents)
+                scope=$1
+                shift
+                ;;
+            list|create|update|delete)
+                action=$1
+                shift
+                ;;
+            *)
+                args+=("$1")
+                shift
+                ;;
+        esac
+    done
 
-	[[ -z $scope && -n $1 ]] && scope=$1 && shift
+    # Set default action if not specified
+    [[ -z $action ]] && action='list'
 
-	case $scope in
+    # Set default operator if not set
+    [[ -z $operator ]] && operator='='
 
-		customers)
+    # Extract value if provided
+    if [[ ${#args[@]} -gt 0 ]]; then
+        value=${args[0]}
+    fi
 
-			action=$1 && shift
+    # Validate required parameters
+    if [[ -z $scope ]]; then
+        echo "Error: Scope (e.g., customers, subscriptions) is required"
+        return 1
+    fi
 
-			case $action in
+    # Make temp file to store response
+    output_file=$(mktemp)
 
-				list)
+    # Initialize output_file as an empty array
+    echo '[]' > "$output_file"
 
-					curl -G "https://api.stripe.com/"
-				
-					;;
+    # Map scope to the correct endpoint if necessary
+    declare -A endpoint_map
+    endpoint_map[balance_transactions]="balance_transactions"
+    endpoint_map[charges]="charges"
+    endpoint_map[customers]="customers"
+    endpoint_map[disputes]="disputes"
+    endpoint_map[invoices]="invoices"
+    endpoint_map[payment_intents]="payment_intents"
+    endpoint_map[payouts]="payouts"
+    endpoint_map[prices]="prices"
+    endpoint_map[products]="products"
+    endpoint_map[refunds]="refunds"
+    endpoint_map[subscriptions]="subscriptions"
+    endpoint_map[transfers]="transfers"
 
-				create) ;;
+    endpoint=${endpoint_map[$scope]}
 
-				update) ;;
+    if [[ -z $endpoint ]]; then
+        echo "Error: Unsupported scope '$scope'"
+        rm "$output_file"
+        return 1
+    fi
 
-				delete) ;;
+    # Determine the endpoint URL and parameters based on action
+    base_url="https://api.stripe.com/v1/$endpoint"
+    params=()
+    params+=("-u" "$STRIPE_SECRET_KEY:")
 
-				*) echo "Invalid action: $action" && return 1 ;;
+    # Add limit if specified
+    if [[ -n $limit ]]; then
+        params+=("-d" "limit=$limit")
+    fi
 
-			esac
-		
-			;;
-		products) ;;
-		prices) ;;
-		subscriptions) ;;
-		invoices) ;;
-		payments) ;;
-		balances) ;;
-		*) echo "Invalid scope: $scope" && return 1 ;;
+    # Handle search queries for resources that support it
+    if [[ $action == 'list' && -n $field && -n $operator && -n $value ]]; then
+        # Only certain resources support search
+        # For example, customers and charges support search
+        if [[ "$scope" == "customers" ]] || [[ "$scope" == "charges" ]] || [[ "$scope" == "payment_intents" ]]; then
+            base_url+=""/"search"
+            params+=("-d" "query=$field$operator'$value'")
+        else
+            # For resources that don't support search, use list filters
+            params+=("-d" "$field=$value")
+        fi
+    fi
 
-	esac	
+    # First API request
+    response=$(curl -G -s "$base_url" "${params[@]}")
 
+    # Determine fields to extract based on scope
+    declare -A field_sets
+    field_sets[customers]='
+        {
+            id: .id,
+            balance: .balance,
+            created: .created,
+            email: .email,
+            name: .name
+        }
+        +
+        (if .address != null then
+            {
+                address_city: .address.city,
+                address_country: .address.country,
+                address_line1: .address.line1,
+                address_line2: .address.line2,
+                address_postal_code: .address.postal_code,
+                address_state: .address.state
+            }
+        else {} end)
+        +
+        (if .shipping != null then
+            {
+                shipping_city: .shipping.address.city,
+                shipping_country: .shipping.address.country,
+                shipping_line1: .shipping.address.line1,
+                shipping_line2: .shipping.address.line2,
+                shipping_postal_code: .shipping.address.postal_code,
+                shipping_state: .shipping.address.state,
+                shipping_name: .shipping.name,
+                shipping_phone: .shipping.phone
+            }
+        else {} end)
+    '
+    field_sets[subscriptions]='
+        {
+            id: .id,
+            customer: .customer,
+            status: .status,
+            start_date: .start_date,
+            current_period_start: .current_period_start,
+            current_period_end: .current_period_end,
+            cancel_at_period_end: .cancel_at_period_end,
+            canceled_at: .canceled_at
+        }
+    '
+    field_sets[products]='
+        {
+            id: .id,
+            name: .name,
+            description: .description,
+            active: .active,
+            created: .created,
+            updated: .updated
+        }
+    '
+    field_sets[invoices]='
+        {
+            id: .id,
+            customer: .customer,
+            amount_due: .amount_due,
+            amount_paid: .amount_paid,
+            created: .created,
+            due_date: .due_date,
+            status: .status
+        }
+    '
+    field_sets[charges]='
+        {
+            id: .id,
+            amount: .amount,
+            currency: .currency,
+            created: .created,
+            status: .status,
+            customer: .customer,
+            payment_method: .payment_method,
+            description: .description,
+            receipt_email: .receipt_email
+        }
+    '
+    field_sets[refunds]='
+        {
+            id: .id,
+            amount: .amount,
+            currency: .currency,
+            created: .created,
+            status: .status,
+            charge: .charge,
+            reason: .reason
+        }
+    '
+    field_sets[payouts]='
+        {
+            id: .id,
+            amount: .amount,
+            currency: .currency,
+            created: .created,
+            arrival_date: .arrival_date,
+            status: .status,
+            method: .method,
+            description: .description,
+            failure_message: .failure_message
+        }
+    '
+    field_sets[balance_transactions]='
+        {
+            id: .id,
+            amount: .amount,
+            currency: .currency,
+            created: .created,
+            available_on: .available_on,
+            type: .type,
+            description: .description,
+            fee: .fee,
+            net: .net,
+            source: .source
+        }
+    '
+    field_sets[disputes]='
+        {
+            id: .id,
+            amount: .amount,
+            currency: .currency,
+            created: .created,
+            status: .status,
+            reason: .reason,
+            charge: .charge,
+            evidence_details: .evidence_details
+        }
+    '
+    field_sets[transfers]='
+        {
+            id: .id,
+            amount: .amount,
+            currency: .currency,
+            created: .created,
+            destination: .destination,
+            status: .status,
+            description: .description
+        }
+    '
+    field_sets[payment_intents]='
+        {
+            id: .id,
+            amount: .amount,
+            currency: .currency,
+            created: .created,
+            status: .status,
+            customer: .customer,
+            payment_method: .payment_method,
+            description: .description,
+            receipt_email: .receipt_email
+        }
+    '
+
+    # Get the appropriate jq filter for the current scope
+    jq_filter=${field_sets[$scope]}
+
+    # Check if the scope is supported
+    if [[ -z $jq_filter ]]; then
+        echo "Error: Unsupported scope '$scope'"
+        rm "$output_file"
+        return 1
+    fi
+
+    total_fetched=0
+
+    # Extract data and merge into output_file
+    data=$(echo "$response" | jq "
+        [
+            .data[]? |
+            $jq_filter
+            | walk(if . == null then \"\" else . end)
+        ]")
+
+    fetched_count=$(echo "$data" | jq 'length')
+    total_fetched=$((total_fetched + fetched_count))
+
+    if [ "$data" != "null" ] && [ "$data" != "[]" ]; then
+        tmp=$(mktemp)
+        jq -s 'add' "$output_file" <(echo "$data") > "$tmp" && mv "$tmp" "$output_file"
+    fi
+
+    has_more=$(echo "$response" | jq -r '.has_more')
+
+    # If data array is empty, last_id would be null
+    last_id=$(echo "$response" | jq -r '.data[-1].id')
+
+    # Paginate if necessary
+    while [[ $has_more == 'true' ]]; do
+
+        # Check if total_fetched >= limit (if limit is specified)
+        if [[ -n $limit ]] && (( total_fetched >= limit )); then
+            break
+        fi
+
+        # Reset params for pagination
+        params_paginated=("-u" "$STRIPE_SECRET_KEY:")
+
+        # Calculate remaining limit
+        if [[ -n $limit ]]; then
+            remaining_limit=$((limit - total_fetched))
+            # Stripe API has a minimum limit of 1
+            if (( remaining_limit < 1 )); then
+                remaining_limit=1
+            fi
+            params_paginated+=("-d" "limit=$remaining_limit")
+        else
+            # If no limit specified, use default or maximum allowed by API
+            params_paginated+=("-d" "limit=100")
+        fi
+
+        # Add starting_after parameter
+        params_paginated+=("-d" "starting_after=$last_id")
+
+        # If searching, add the query parameter
+        if [[ $action == 'list' && -n $field && -n $operator && -n $value ]]; then
+            # Only certain resources support search
+            if [[ "$scope" == "customers" ]] || [[ "$scope" == "charges" ]] || [[ "$scope" == "payment_intents" ]]; then
+                base_url="https://api.stripe.com/v1/$endpoint/search"
+                params_paginated+=("-d" "query=$field$operator'$value'")
+            else
+                base_url="https://api.stripe.com/v1/$endpoint"
+                params_paginated+=("-d" "$field=$value")
+            fi
+        else
+            base_url="https://api.stripe.com/v1/$endpoint"
+        fi
+
+        response=$(curl -G -s "$base_url" "${params_paginated[@]}")
+
+        data=$(echo "$response" | jq "
+            [
+                .data[]? |
+                $jq_filter
+                | walk(if . == null then \"\" else . end)
+            ]")
+
+        fetched_count=$(echo "$data" | jq 'length')
+        total_fetched=$((total_fetched + fetched_count))
+
+        if [ "$data" != "null" ] && [ "$data" != "[]" ]; then
+            tmp=$(mktemp)
+            jq -s 'add' "$output_file" <(echo "$data") > "$tmp" && mv "$tmp" "$output_file"
+        fi
+
+        has_more=$(echo "$response" | jq -r '.has_more')
+        last_id=$(echo "$response" | jq -r '.data[-1].id')
+
+    done
+
+    # Output the final result
+
+    # If limit is specified, we might have fetched more data than needed due to the last page.
+    # So we need to trim the output to the specified limit.
+
+    if [[ -n $limit ]]; then
+        # Use jq to limit the output to the specified number of records
+        tmp=$(mktemp)
+        jq ". | .[:$limit]" "$output_file" > "$tmp" && mv "$tmp" "$output_file"
+    fi
+
+    if [[ -n $pick ]]; then
+        cat "$output_file" | bare.sh rec --from-json | recsel -P "$pick"
+    else
+        cat "$output_file" | bare.sh rec --from-json
+    fi
+
+    # Cleanup
+    rm "$output_file"
 }
+
 
 
 
@@ -3264,7 +3588,8 @@ sub() {
             in) input=$2; shift 2 ;;
             *) args+=("$1"); shift ;;
         esac
-    done && set -- "${args[@]}"
+    done
+	set -- "${args[@]}"
 
 	echo "${input//$replacing/$replacement}"
 
@@ -3282,7 +3607,8 @@ summarize() {
 			--prompt|-p) prompt="$2"; shift 2 ;;
 			*) args+=("$1"); shift ;;
 		esac
-	done && set -- "${args[@]}"
+	done
+	set -- "${args[@]}"
 
 	[[ -p /dev/stdin ]] && input=$(cat | codec json.encode) || input=$1
 
@@ -3328,7 +3654,8 @@ transform() {
 			--email|:email) format='email' ;;
 			*) args+=("$1") ;;
 		esac && shift
-	done && set -- "${args[@]}"
+	done
+	set -- "${args[@]}"
 
 	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1 && shift; fi
 
@@ -3395,7 +3722,8 @@ translate() {
 			--*) output_format="${1#--}" && shift ;;
 			*) remaining_args+=("$1") && shift ;;
 		esac
-	done && set -- "${remaining_args[@]}"
+	done
+	set -- "${remaining_args[@]}"
 
 	[[ -z $input ]] && {
 		if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1; fi
@@ -3507,28 +3835,6 @@ unzip() {
 	yes y | "$localunzip" -q "$input" -d "$output"
 
 	echo "$output"
-
-}
-
-
-
-upload() {
-
-	local input
-
-	if [[ -p /dev/stdin ]]; then input=$(cat); else { input=$1 && shift ;} fi
-
-	storage upload "$input" "$@"
-
-}
-
-
-
-uppercase() {
-
-	local input
-	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1; fi
-	transform "$input" --uppercase < /dev/null
 
 }
 
@@ -3943,7 +4249,8 @@ weather() {
             --at|at) json_requested='1'; time="$(date "$2" --format 'hh:mm')" && shift 2 ;;
             *) remaining_args+=("$1") && shift ;;
         esac
-    done && set -- "${remaining_args[@]}"
+    done
+	set -- "${remaining_args[@]}"
 
     [[ $color == '0' ]] && color_code='T'
 
@@ -4040,83 +4347,29 @@ weather() {
 
 
 
-websearch() {
-
-	__deps ddgr lynx
-
-	local args input limit output urls query summary filtered_urls
-
-	limit=5
-	prompt='Summarize with markdown formatting enhancements'
-	length='1000'
-
-	args=() && while [[ $# -gt 0 ]]; do
-		case $1 in
-			--length) length=$2 && shift 2 ;;
-			--limit) limit=$2 && shift 2 ;;
-			--prompt) prompt=$2 && shift 2 ;;
-			*) args+=("$1") && shift ;;
-		esac
-	done && set -- "${args[@]}"
-
-	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1 && shift; fi
-
-	limit=$((limit + 10))
-
-	filtered_urls=$(ddgr --json -n "$limit" "$input" | jq -r '.[].url' | grep -vE 'youtube.com|facebook.com|twitter.com|instagram.com|linkedin.com|amazon.com|google.com|reddit.com|ebay.com|medium.com')
-
-	# take only the top five urls
-	urls=$(echo "$filtered_urls" | head -n 5)
-
-	# Process each URL
-	while IFS= read -r url; do
-	  {
-		lynx -dump -nolist "$url" | grep -vE 'http|www|\.com|\.net|\.org|\.edu|\.gov|@'
-		echo -e "\n\nSource: $url\n\n"
-		echo -e "\n\n- - - - -\n\n"
-	  } >> "webresearch.contents.txt"
-	done <<< "$urls"
-
-	query=$(echo "$input" | tr -d '\r')
-	summary=$(cat "webresearch.contents.txt" | summarize -p "$prompt" -l "$length")
-
-	rm "webresearch.contents.txt"
-
-	touch "webresearch.summary.rec"
-
-	recins -f query -v "$query" -f summary -v "$summary" -f sources -v "$urls" "webresearch.summary.rec"
-	recsel "webresearch.summary.rec"
-
-	rm "webresearch.summary.rec"
-
-}
-
-
-
 write() {
 
 	local contents args file
 
 	# Read from stdin if not a terminal
-	if [[ -p /dev/stdin ]]; then contents=$(cat); fi
+	[[ -p /dev/stdin ]] && contents=$(cat)
 
 	# Parse arguments
 	args=() && while [[ $# -gt 0 ]]; do
 		case $1 in
-			--to) file="$2" && shift 2 ;;
-			--contents) contents="$2" && shift 2 ;;
+			--to|to|--file|-f|file) file="$2" && shift 2 ;;
+			--into|into) [[ $2 == 'file' ]] && file="$3" && shift 3 || file="$2" && shift 2 ;;
+			--contents|contents|content) contents="$2" && shift 2 ;;
+			with|and) shift ;; # permits more lyrical language
 			*) args+=("$1") && shift ;;
 		esac
-	done && set -- "${args[@]}"
+	done
+	set -- "${args[@]}"
 
-	# Handle positional arguments
-	[[ $# -eq 1 && -n $file ]] && contents="$1"
-	[[ $# -eq 1 && -n $contents ]] && file="$1"
-	[[ $# -eq 2 ]] && { contents="$1"; file="$2"; }
 
-	# Check for missing arguments
-	[[ -z $contents ]] && echo "Error: Missing contents" >&2
-	[[ -z $file ]] && echo "Error: Missing file" >&2
+	[[ -z $contents ]] && contents=$1
+	[[ -z $contents ]] && echo "Error: Missing contents" >&2 && return 1
+	[[ -z $file ]] && echo "Error: Missing file" >&2 && return 1
 
 	# Clean carriage return characters from contents
 	contents=$(echo "$contents" | tr -d '\r')
@@ -4128,164 +4381,22 @@ write() {
 
 
 
-youtube() {
+# aliases & delegations
 
-	local command quality thumbnail_quality url
+ai() { openai "$@" ; return 0 ; }
 
-	command=$1 && shift
+filetype() { bare.sh examine "$@" -p type ; return 0 ; }
 
-	[[ -t 0 ]] && url="$1" && shift || url=$(cat)
+filepath() { bare.sh examine "$@" -p path ; return 0 ; }
 
-	quality="720" # Default quality for videos
-	thumbnail_quality="0" # Default quality for thumbnails (0 for default hd)
+lowercase() { bare.sh transform "$@" --lowercase ; return 0 ; }
 
-	if [[ ! "$url" =~ ^(https?://)?(www\.)?(m\.)?(youtube\.com|youtu\.be|youtube-nocookie\.com) ]]; then
-		echo "Invalid YouTube URL"
-	fi
+round() { math round "$@" ; return 0 ; }
 
-	# Function to download video
-	download_video() {
+upload() { storage upload "$@" ; return 0 ; }
 
-		local random_filename
-		local output_path
-		local final_output
-		local relative_output
+uppercase() { transform "$@" --uppercase ; return 0 ; }
 
-		random_filename=$(random string 32)
-		output_path="$random_filename"
-		
-		if [[ "$format" == "mp3" ]]; then
-			final_output=$(yt-dlp --no-part -x --audio-format mp3 -o "$output_path.%(ext)s" --print after_move:filepath "$url" 2>/dev/null)
-		else
-			final_output=$(yt-dlp -f "bestvideo[height<=$quality]+bestaudio/best" -o "$output_path.%(ext)s" --print after_move:filepath "$url" 2>/dev/null)
-		fi
-		
-		# Convert the full path to a relative path
-		relative_output="${final_output#"$(pwd)/"}"
-		
-		if [ -f "$relative_output" ]; then
-			echo "$relative_output"
-		else
-			echo "Error downloading video"
-		fi
-
-	}
-
-	# Function to extract YouTube video ID
-	extract_id() {
-
-		local url
-
-		url=$1
-
-		echo "$url" | awk -F'[?&/=]' '{
-			for(i=1;i<=NF;i++) {
-				if ($i == "v") {
-					print $(i+1);
-					exit
-				}
-				if ($i == "embed" || $i == "shorts" || $i == "youtu.be") {
-					print $(i+1);
-					exit
-				}
-			}
-		}'
-
-	}
-
-	# Function to download thumbnail
-	download_thumbnail() {
-
-		local url
-		local video_id
-		local thumbnail_url
-		local random_filename
-		local output
-
-		video_id=$(extract_id "$url")
-
-		case "$thumbnail_quality" in
-			"md") thumbnail_url="https://i.ytimg.com/vi/${video_id}/mqdefault.jpg" ;;
-			"max") thumbnail_url="https://i.ytimg.com/vi/${video_id}/maxresdefault.jpg" ;;
-			*) thumbnail_url="https://i.ytimg.com/vi/${video_id}/hqdefault.jpg" ;;
-		esac
-
-		random_filename=$(random string 32).jpg
-		output_path="$random_filename"
-		curl -sL "$thumbnail_url" -o "$output_path"
-		echo "$output_path"
-
-	}
-
-	case $command in
-		download)
-			while [[ $# -gt 0 ]]; do
-				case $1 in
-					--quality) quality=$2 && shift 2 ;;
-					--mp3) format="mp3" && shift ;;
-					--thumbnail|--thumb)
-						shift && while [[ $# -gt 0 ]]; do
-							case $1 in
-								--md) thumbnail_quality="md" && shift ;;
-								--max) thumbnail_quality="max" && shift ;;
-								# *) echo "Unknown option: $1" >&2 ;;
-							esac
-						done && download_thumbnail "$url"
-						;;
-					# *) echo "Unknown option: $1" >&2 ;;
-				esac
-			done
-			download_video
-			;;
-
-		id) extract_id ;;
-
-		thumbnail)
-			shift 2 # Remove the first two arguments
-			while [[ $# -gt 0 ]]; do
-				case $1 in
-					--md) thumbnail_quality="md" && shift ;;
-					--max) thumbnail_quality="max" && shift ;;
-					# *) echo "Unknown option: $1" >&2 ;;
-				esac
-			done
-			download_thumbnail
-			;;
-
-		*) echo "Unknown command: $command" >&2 ;;
-		
-	esac
-
-	unset -f download_video
-	unset -f extract_id
-	unset -f download_thumbnail
-
-}
-
-
-
-zip() {
-
-	local args input output localzip
-
-	localzip=$(which zip)
-
-	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1 && shift; fi
-
-	args=() && while [[ $# -gt 0 ]]; do
-		case $1 in
-			--to|--output|-o) output=$2 && shift 2 ;;
-			*) args+=("$1") && shift ;;
-		esac
-	done && set -- "${args[@]}"
-
-	[[ -z $output ]] && output="$input.zip"
-
-	"$localzip" -r "$output" "$input" > /dev/null
-
-	echo "$output"
-
-}
 
 
 
@@ -4294,16 +4405,13 @@ zip() {
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 case $1 in
-
-	--health) __bareSystemHealthCheck ;;
 	
 	--version|-v|-V) echo "$BARE_VERSION" ;;
 
 	--upgrade) cd "$BARE_DIR" && git pull origin root ;;
 
-	*)
-		__isBareCommand "$1" && __bareStartUp && "$@" && exit 0
-		exit 1
-		;;
+	*) __isBareCommand "$1" && __bareStartUp && "$@" && exit 0 ;;
 
 esac
+
+exit 1
