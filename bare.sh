@@ -4544,7 +4544,14 @@ case $1 in
 	
 	--version|-v|-V) echo "$BARE_VERSION" ;;
 
-	--upgrade) cd "$BARE_DIR" && git pull origin root ;;
+	--upgrade)
+
+		[[ -f "$(which bare.sh)" ]] && {
+			curl -sL "https://raw.githubusercontent.com/matthewlarkin/bare.sh/refs/heads/root/bare.sh" > "$(which bare.sh)"
+			echo "Bare.sh has been upgraded to the latest version."
+		}
+
+		;;
 
 	*) __isBareCommand "$1" && __bareStartUp && "$@" && exit 0 ;;
 
