@@ -24,56 +24,17 @@ bare.sh color orange -s 20 -l 80 --rgb
 # rgb(214, 204, 194)
 ```
 
-## 📜 Age ##
-
-```bash
-bare.sh age "1990-01-01" --years
-# 34.85
-
-bare.sh age ~/Desktop/my_old_file.txt --days
-# 4119
-
-bare.sh age ~/Desktop/my_old_file.txt --minutes --modified
-# 13.28
-```
-
-## 🔗 QR Codes ##
-
-```bash
-bare.sh qr "Hello"
-# 3NrheqGwY2k0ocWqx3BVd8VX1KlURr.png
-
-bare.sh qr "https://google.com"
-# MeRdbWfuRfjqpWk2uJpi0XqLVK5W9d.png
-```
-
-## 🧮 Maths ##
-
-```bash
-bare.sh round 7.5
-# 8
-
-bare.sh round up 7.1
-# 8
-
-bare.sh round down "7.9"
-# 7
-
-bare.sh math "7 * 8" # quotes required
-# 56
-
-bare.sh math "(1 + 2) / 3" # quotes required
-# 1
-```
-
 ## 👍/👎 Validations ##
 
 ```bash
-bare.sh validate email "sample@gmail.com"
+bare.sh validate email "info@bare.sh"
 # true
 
 bare.sh validate email "sample@.com"
 # false
+
+bare.sh validate phone "(828) 252-0000" # US based for now
+# true
 
 bare.sh validate url "This is not a url"
 # false
@@ -98,6 +59,40 @@ bare.sh validate date "2019-10-10"
 
 bare.sh validate date "2019-10-32"
 # false
+```
+
+## 🔐 Encryption ##
+
+```bash
+bare.sh encrypt 'Nashville, TN' with password 'testing'
+# U2FsdGVkX19aKk/E71YqHLvm7MrQpf93HvzfvkZSmC8=
+
+bare.sh decrypt 'U2FsdGVkX19aKk/E71YqHLvm7MrQpf93HvzfvkZSmC8=' with password 'testing'
+# Nashville, TN
+
+bare.sh encrypt 'Hello, World!' --pass "password"
+# U2FsdGVkX18G+cjpJeId27FiONIuL4QyGmUqR2R2ORw=
+
+bare.sh decrypt 'U2FsdGVkX18G+cjpJeId27FiONIuL4QyGmUqR2R2ORw=' --pass "password"
+# Hello, World!
+
+bare.sh encrypt myfile.txt --pass "password" --output myfile.enc
+cat myfile.enc
+# U2FsdGVkX19+LC9EUOPG1ll0iBAdb78bVKwdMVfJmQ0=
+
+bare.sh decrypt myfile.enc --pass "password" --output myfile.txt
+cat myfile.txt
+# Hello, World!
+```
+
+## 🔗 QR Codes ##
+
+```bash
+bare.sh qr "Hello"
+# 3NrheqGwY2k0ocWqx3BVd8VX1KlURr.png
+
+bare.sh qr "https://google.com"
+# MeRdbWfuRfjqpWk2uJpi0XqLVK5W9d.png
 ```
 
 ## 🤖 AI Assistance ##
@@ -130,97 +125,6 @@ bare.sh image resize ~/Desktop/sample.jpg --height 100 -o ~/Desktop/resized.jpg
 
 bare.sh image describe ~/Desktop/sample.jpg
 # The image is a close-up of a cat with long white fur and green eyes.
-```
-
-## 🔐 Encryption ##
-
-```bash
-bare.sh encrypt 'Nashville, TN' with password 'testing'
-# U2FsdGVkX19aKk/E71YqHLvm7MrQpf93HvzfvkZSmC8=
-
-bare.sh decrypt 'U2FsdGVkX19aKk/E71YqHLvm7MrQpf93HvzfvkZSmC8=' with password 'testing'
-# Nashville, TN
-
-bare.sh encrypt 'Hello, World!' --pass "password"
-# U2FsdGVkX18G+cjpJeId27FiONIuL4QyGmUqR2R2ORw=
-
-bare.sh decrypt 'U2FsdGVkX18G+cjpJeId27FiONIuL4QyGmUqR2R2ORw=' --pass "password"
-# Hello, World!
-
-bare.sh encrypt myfile.txt --pass "password" --output myfile.enc
-cat myfile.enc
-# U2FsdGVkX19+LC9EUOPG1ll0iBAdb78bVKwdMVfJmQ0=
-
-bare.sh decrypt myfile.enc --pass "password" --output myfile.txt
-cat myfile.txt
-# Hello, World!
-```
-
-## ✅ Validations ##
-
-```bash
-bare.sh validate email "info@bare.sh"
-# true
-
-bare.sh validate file ~/Desktop/does-not-exist.jpg
-# false
-
-bare.sh validate url "https://www.google.com"
-# true
-
-bare.sh validate phone "(828) 252-0000" # US based for now
-# true
-```
-
-## 📝 Text Processing ##
-
-```bash
-cat note.md
-# # My Note
-# This is a sample note with some text.
-# ## Subheading
-# More text here with **bold** and *italic* formatting.
-
-bare.sh render note.md --to-html
-# <h1 id="my-note">My Note</h1>
-# <p>This is a sample note with some text.</p>
-# <h2 id="subheading">Subheading</h2>
-# <p>More text here with <strong>bold</strong> and <em>italic</em> formatting.</p>
-
-bare.sh render othernote.html --to-md
-# # My Other Note
-
-# This is another sample note with some text.
-
-# ## Subheading
-
-# More text here with **bold** and *italic* tags.
-```
-
-## 🌎 Geography ##
-
-```bash
-bare.sh geo paris-france
-# 48.86,2.32
-
-bare.sh geo "Asheville, NC"
-# 35.60,-82.55
-
-bare.sh geo google.com
-# 13.98,44.17
-```
-
-## 📂 File management ##
-
-```bash
-bare.sh filetype ~/Desktop/sample.webp
-# image/webp
-
-bare.sh filetype "Hi there!"
-# text/plain
-
-bare.sh filetype ~/Desktop/does-not-exist.jpg
-# text/plain
 ```
 
 ## ⚙️ Text Utilities ##
@@ -348,4 +252,102 @@ bare.sh weather asheville-nc forecast
 # │      `-’      6 mi           │      `-’      6 mi           │      `-’      6 mi           │      `-’      6 mi           │
 # │     /   \     0.0 in | 0%    │     /   \     0.0 in | 0%    │     /   \     0.0 in | 0%    │     /   \     0.0 in | 0%    │
 # └──────────────────────────────┴──────────────────────────────┴──────────────────────────────┴──────────────────────────────┘
+```
+
+## 🗂️ File Details ##
+
+```bash
+bare.sh age ~/Desktop/my_old_file.txt --days
+# 4119
+
+bare.sh age ~/Desktop/my_old_file.txt --minutes --modified
+# 13.28
+
+bare.sh examine ~/Desktop/profile.png
+# filename: profile.png
+# basename: profile
+# ext: png
+# path: /Users/matthewlarkin/Desktop/profile.png
+# type: image/png
+# size: 1 MB
+# cover: /var/folders/sr/LjxMjPgqa9FJ4vJ1G3coQ4HBJaQ2n6/T/tmp.rRseCEmi/cover.jpg
+
+bare.sh examine ~/Desktop/profile.png -p size
+# 1 MB
+
+bare.sh filetype ~/Desktop/profile.png
+# image/png
+
+bare.sh filepath ~/Desktop/profile.png
+# /Users/matthewlarkin/Desktop/profile.png
+```
+
+## 🧮 Maths ##
+
+```bash
+bare.sh round 7.5
+# 8
+
+bare.sh round up 7.1
+# 8
+
+bare.sh round down "7.9"
+# 7
+
+bare.sh math "7 * 8" # quotes required
+# 56
+
+bare.sh math "(1 + 2) / 3" # quotes required
+# 1
+```
+
+## 📝 Text Rendering (HTML, Markdown) ##
+
+```bash
+cat note.md
+# # My Note
+# This is a sample note with some text.
+# ## Subheading
+# More text here with **bold** and *italic* formatting.
+
+bare.sh render note.md --to-html
+# <h1 id="my-note">My Note</h1>
+# <p>This is a sample note with some text.</p>
+# <h2 id="subheading">Subheading</h2>
+# <p>More text here with <strong>bold</strong> and <em>italic</em> formatting.</p>
+
+bare.sh render othernote.html --to-md
+# # My Other Note
+
+# This is another sample note with some text.
+
+# ## Subheading
+
+# More text here with **bold** and *italic* tags.
+```
+
+## 🌎 Geography ##
+
+```bash
+bare.sh geo paris-france
+# 48.86,2.32
+
+bare.sh geo "Asheville, NC"
+# 35.60,-82.55
+
+bare.sh geo google.com
+# 13.98,44.17
+```
+
+## 📂 File management ##
+
+```bash
+bare.sh filetype ~/Desktop/sample.webp
+# image/webp
+
+bare.sh filetype "Hi there!"
+# text/plain
+
+bare.sh filetype ~/Desktop/does-not-exist.jpg
+# text/plain
 ```
