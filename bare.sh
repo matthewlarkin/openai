@@ -4507,6 +4507,71 @@ write() {
 }
 
 
+recloop() {
+
+	local recordset_file script record field value
+
+	# Function to set variables dynamically
+	set_variables() {
+		local key
+		for key in "${!record[@]}"; do
+			export "$key"="${record[$key]}"
+		done
+	}
+
+	# Function to unset variables dynamically
+	unset_variables() {
+		local key
+		for key in "${!record[@]}"; do
+			unset "$key"
+		done
+	}
+
+	# Function to process each record
+	process_record() {
+		set_variables
+		# Execute the passed script
+		if [[ -f "$script" ]]; then
+			source "$script"
+		else
+			eval "$script"
+		fi
+		unset_variables
+	}
+
+	# Read the arguments
+	recordset_file="$1" && shift
+	script="$1" && shift
+
+	# Declare an associative array
+	declare -A record
+
+	# Read the file line by line
+	while IFS= read -r line; do
+		# Check if the line is empty, indicating the end of a record
+		if [[ -z $line ]]; then
+			# Process the current record and reset the array
+			process_record
+			record=()
+		else
+			# Extract the field name and value
+			if [[ $line =~ ^([^:]+):\ (.*) ]]; then
+				field="${BASH_REMATCH[1]}"
+				value="${BASH_REMATCH[2]}"
+				# Store the field and value in the array
+				record["$field"]="$value"
+			fi
+		fi
+	done <<< "$(recsel $recordset_file "$@")"
+
+	# Process the last record if the file does not end with an empty line
+	if [[ ${#record[@]} -gt 0 ]]; then
+		process_record
+	fi
+
+}
+
+
 
 # aliases & delegations
 
