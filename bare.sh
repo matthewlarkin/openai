@@ -49,7 +49,6 @@ __bareStartUp() {
 	BASE_CONFIG=(
 		
 		# bare
-		["BARE_VERSION"]=$(git log -1 --format=%ct)
 		["BARE_TIMEZONE"]="${BARE_TIMEZONE:-UTC}"
 		["BARE_COLOR"]="${BARE_COLOR:-0}"
 		["BARE_DEBUG"]="${BARE_DEBUG:-0}"
@@ -4541,8 +4540,6 @@ uppercase() { transform "$@" --uppercase ; return 0 ; }
 # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
 case $1 in
-	
-	--version|-v|-V) echo "$BARE_VERSION" ;;
 
 	--upgrade)
 
