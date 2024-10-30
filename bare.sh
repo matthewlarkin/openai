@@ -420,30 +420,6 @@ airtable() {
 
 
 
-capitalize() {
-
-	local all input args
-
-	args=() && while [[ $# -gt 0 ]]; do
-		case $1 in
-			--all) all=1 && shift ;;
-			*) args+=("$1") && shift ;;
-		esac
-	done
-	set -- "${args[@]}"
-
-	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$*; fi
-
-	# if 'all', capitalize all words
-	if [[ -n "$all" ]]; then
-		transform "$input" --capitalize --all
-	else
-		transform "$input" --capitalize
-	fi
-
-}
-
-
 cloud() {
 
 	getCloudProvider() {
@@ -647,14 +623,18 @@ codec() {
 
 			local pass output_file
 			# Parse arguments
-			{ args=() && while [[ $# -gt 0 ]]; do
-				case $1 in
-					--pass|-p) pass=$2; shift 2 ;;
-					--output|-o) output_file=$2; shift 2 ;;
-					*) args+=("$1") && shift ;;
-				esac
-			done
-			set -- "${args[@]}"; }
+			args=()
+			{
+				while [[ $# -gt 0 ]]; do
+					case $1 in
+						with|and|to) shift ;; # permits more lyrical commands
+						--pass|-p|pass|password) pass=$2; shift 2 ;;
+						--output|-o|output) output_file=$2; shift 2 ;;
+						*) args+=("$1") && shift ;;
+					esac
+				done
+			}
+			set -- "${args[@]}"
 
 			# Check if the input is a file
 			[[ -f $input ]] && input=$(cat "$input")
@@ -670,20 +650,25 @@ codec() {
 			else
 				echo "$encrypted"
 			fi
+
 			;;
 
 		decrypt)
 
 			local pass output_file
 			# Parse arguments
-			{ args=() && while [[ $# -gt 0 ]]; do
-				case $1 in
-					--pass|-p) pass=$2; shift 2 ;;
-					--output|-o) output_file=$2; shift 2 ;;
-					*) args+=("$1") && shift ;;
-				esac
-			done
-			set -- "${args[@]}"; }
+			args=()
+			{
+				while [[ $# -gt 0 ]]; do
+					case $1 in
+						with|and|to) shift ;; # permits more lyrical commands
+						--pass|-p|pass|password) pass=$2; shift 2 ;;
+						--output|-o|output) output_file=$2; shift 2 ;;
+						*) args+=("$1") && shift ;;
+					esac
+				done
+			}
+			set -- "${args[@]}"
 
 			# if $input is a file, read the file
 			[[ -f $input ]] && input=$(cat "$input")
@@ -1242,26 +1227,6 @@ date() {
 
 
 
-db() {
-
-	if [[ -p /dev/stdin ]]; then cat | rec "$@"; else rec "$@"; fi
-
-}
-
-
-
-decrypt() {
-
-	local input
-
-	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1 && shift; fi
-
-	codec decrypt "$input" "$@" < /dev/null
-
-}
-
-
-
 download() {
 
 	__deps curl
@@ -1446,24 +1411,6 @@ email() {
 		*) echo "Invalid email service: $via" && return 1 ;;
 
 	esac
-
-}
-
-
-
-encrypt() {
-
-	local input
-
-	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1 && shift; fi
-
-	for arg in "$@"; do
-		case $arg in
-			--system|-s) encrypt_system && shift 2 ;;
-		esac
-	done
-
-	codec encrypt "$input" "$@" < /dev/null
 
 }
 
@@ -2459,38 +2406,213 @@ qr() {
 
 
 random() {
+    local length=16
+    local use_lowercase=true
+    local use_uppercase=true
+    local use_digits=true
+    local use_symbols=false
+    local custom_symbols=""
+    local min_lowercase=0
+    local min_uppercase=0
+    local min_digits=0
+    local min_symbols=0
+    local chars_lower="abcdefghijklmnopqrstuvwxyz"
+    local chars_upper="ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    local chars_digits="0123456789"
+    local chars_symbols='!@#$%^&*+-='
+    local chars=""
 
-	local input command length constraint
+    # Parse arguments
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            alpha)
+                use_digits=false
+                use_symbols=false
+                shift ;;
+            alphanumeric|string)
+                use_symbols=false
+                shift ;;
+            number|numbers|digits)
+                use_lowercase=false
+                use_uppercase=false
+                use_symbols=false
+                use_digits=true
+                shift ;;
+            symbols)
+                use_lowercase=false
+                use_uppercase=false
+                use_digits=false
+                use_symbols=true
+                shift ;;
+			--custom-symbols)
+				[[ -z $2 ]] && echo "Error: No custom symbols provided" && return 1
+				custom_symbols="$2" && shift 2 ;;
+            [0-9]*)
+                length=$1
+                shift ;;
+            --include|include)
+                shift
+                while [[ $# -gt 0 ]]; do
+                    case $1 in
+                        lowercase) use_lowercase=true ;;
+                        uppercase) use_uppercase=true ;;
+                        digits|numbers) use_digits=true ;;
+                        symbols) use_symbols=true ;;
+                        and) ;;  # Ignore 'and'
+                        *) break ;;
+                    esac
+                    shift
+                done ;;
+            --exclude|exclude)
+                shift
+                while [[ $# -gt 0 ]]; do
+                    case $1 in
+                        lowercase) use_lowercase=false ;;
+                        uppercase) use_uppercase=false ;;
+                        digits|numbers) use_digits=false ;;
+                        symbols) use_symbols=false ;;
+                        and) ;;  # Ignore 'and'
+                        *) break ;;
+                    esac
+                    shift
+                done ;;
+            --require|require)
+                shift
+                while [[ $# -gt 0 ]]; do
+                    case $1 in
+                        lowercase) min_lowercase=1 ;;
+                        uppercase) min_uppercase=1 ;;
+                        digits|numbers) min_digits=1 ;;
+                        symbols) min_symbols=1 ;;
+                        and) ;;  # Ignore 'and'
+                        *) break ;;
+                    esac
+                    shift
+                done ;;
+            --length)
+                length=$2
+                shift 2 ;;
+            *)
+                echo "Invalid argument: $1"
+                return 1 ;;
+        esac
+    done
 
-	if [[ -p /dev/stdin ]]; then input=$(cat); fi;
+	[[ -n $custom_symbols ]] && chars_symbols="$custom_symbols"
 
-	command='string'
-	length=${input:-16}
+    # Ensure required character types are included if they are required
+    if (( min_lowercase > 0 )); then
+        use_lowercase=true
+    fi
+    if (( min_uppercase > 0 )); then
+        use_uppercase=true
+    fi
+    if (( min_digits > 0 )); then
+        use_digits=true
+    fi
+    if (( min_symbols > 0 )); then
+        use_symbols=true
+    fi
 
-	for arg in "$@"; do
-		case $arg in
-			string|alpha|number) command=$arg && shift ;;
-			[0-9]*) length=$arg && shift ;;
-			*) : ;;
-		esac
-	done
+    # Build the character set
+    [[ $use_lowercase == true ]] && chars+="$chars_lower"
+    [[ $use_uppercase == true ]] && chars+="$chars_upper"
+    [[ $use_digits == true ]] && chars+="$chars_digits"
+    [[ $use_symbols == true ]] && chars+="$chars_symbols"
 
-	# Validate the length
-	if [[ ! $length =~ ^[0-9]+$ ]]; then
-		echo "Invalid length: $length. Must be a positive integer."
-	fi
+    # Ensure the character set is not empty
+    if [ -z "$chars" ]; then
+        echo "Character set is empty. Cannot generate random string."
+        return 1
+    fi
 
-	# Character sets for each command
-	case $command in
-		string) constraint='a-zA-Z0-9' ;;
-		alpha) constraint='a-zA-Z' ;;
-		number) constraint='0-9' ;;
-		*) echo "Invalid command: $command" ;;
-	esac
+    # Ensure required character types are included
+    if [[ $min_lowercase -gt 0 && $use_lowercase == false ]]; then
+        echo "Cannot require lowercase characters when they are excluded."
+        return 1
+    fi
+    if [[ $min_uppercase -gt 0 && $use_uppercase == false ]]; then
+        echo "Cannot require uppercase characters when they are excluded."
+        return 1
+    fi
+    if [[ $min_digits -gt 0 && $use_digits == false ]]; then
+        echo "Cannot require digits when they are excluded."
+        return 1
+    fi
+    if [[ $min_symbols -gt 0 && $use_symbols == false ]]; then
+        echo "Cannot require symbols when they are excluded."
+        return 1
+    fi
 
-	# Generate random string
-	LC_ALL=C tr -dc "$constraint" < /dev/urandom | head -c "$length"; echo
-	
+    # Calculate total required characters
+    local total_required=$(( min_lowercase + min_uppercase + min_digits + min_symbols ))
+    if (( total_required > length )); then
+        echo "Total required characters ($total_required) exceed the desired length ($length)."
+        return 1
+    fi
+
+    # Function to generate random characters from a character set
+    get_random_chars() {
+        local count=$1
+        local char_set=$2
+        local output=""
+        local char_set_len=${#char_set}
+
+        for _ in $(seq 1 $count); do
+            local rand_index=$(( RANDOM % char_set_len ))
+            output+=${char_set:rand_index:1}
+        done
+
+        echo "$output"
+    }
+
+    # Generate required characters
+    local password=""
+    local remaining_length=$length
+
+    # Add required lowercase letters
+    if (( min_lowercase > 0 )); then
+        local lowercase_chars
+        lowercase_chars=$(get_random_chars $min_lowercase "$chars_lower")
+        password+="$lowercase_chars"
+        remaining_length=$(( remaining_length - min_lowercase ))
+    fi
+
+    # Add required uppercase letters
+    if (( min_uppercase > 0 )); then
+        local uppercase_chars
+        uppercase_chars=$(get_random_chars $min_uppercase "$chars_upper")
+        password+="$uppercase_chars"
+        remaining_length=$(( remaining_length - min_uppercase ))
+    fi
+
+    # Add required digits
+    if (( min_digits > 0 )); then
+        local digit_chars
+        digit_chars=$(get_random_chars $min_digits "$chars_digits")
+        password+="$digit_chars"
+        remaining_length=$(( remaining_length - min_digits ))
+    fi
+
+    # Add required symbols
+    if (( min_symbols > 0 )); then
+        local symbol_chars
+        symbol_chars=$(get_random_chars $min_symbols "$chars_symbols")
+        password+="$symbol_chars"
+        remaining_length=$(( remaining_length - min_symbols ))
+    fi
+
+    # Add remaining random characters
+    if (( remaining_length > 0 )); then
+        local random_chars
+        random_chars=$(get_random_chars $remaining_length "$chars")
+        password+="$random_chars"
+    fi
+
+    # Shuffle the password
+    password=$(echo "$password" | fold -w1 | shuf | tr -d '\n')
+
+    echo "$password"
 }
 
 
@@ -3536,7 +3658,6 @@ stripe() {
 
 
 
-
 sub() {
 
     local replacing replacement input args
@@ -3774,7 +3895,7 @@ trim() {
 
 }
 
-
+capitalize() { bare.sh transform "$@" --capitalize; return 0; }
 
 unzip() {
 
@@ -3826,27 +3947,15 @@ validate() {
 
 			[[ -f $input ]] && input=$(cat "$input")
 
-			if [[ $(echo "$input" | csvclean --dry-run) == 'No errors.' ]]; then
+			if [[ $(echo "$input" | csvclean --dry-run 2>&1) == 'No errors.' ]]; then
 				output="true"
 			fi
 
 			;;
 
-		dir|directory|folder)
+		dir|directory|folder) [[ -d $input ]] && output="true" ;;
 
-			if [[ -d $input ]]; then
-				output="true"
-			fi
-
-			;;
-
-		file)
-
-			if [[ -f $input ]]; then
-				output="true"
-			fi
-
-			;;
+		file) [[ -f $input ]] && output="true" ;;
 
 		ai)
 
@@ -4347,11 +4456,19 @@ write() {
 
 ai() { openai "$@" ; return 0 ; }
 
+capitalize() { bare.sh transform "$@" --capitalize; return 0; }
+
+decrypt() { bare.sh codec decrypt "$@"; return 0; }
+
+encrypt() { bare.sh codec encrypt "$@"; return 0; }
+
 filetype() { bare.sh examine "$@" -p type ; return 0 ; }
 
 filepath() { bare.sh examine "$@" -p path ; return 0 ; }
 
 lowercase() { bare.sh transform "$@" --lowercase ; return 0 ; }
+
+password() { random --length 16 "$@"; return 0; }
 
 round() { math round "$@" ; return 0 ; }
 

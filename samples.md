@@ -24,6 +24,19 @@ bare.sh color orange -s 20 -l 80 --rgb
 # rgb(214, 204, 194)
 ```
 
+## 📜 Age ##
+
+```bash
+bare.sh age "1990-01-01" --years
+# 34.85
+
+bare.sh age ~/Desktop/my_old_file.txt --days
+# 4119
+
+bare.sh age ~/Desktop/my_old_file.txt --minutes --modified
+# 13.28
+```
+
 ## 🔗 QR Codes ##
 
 ```bash
@@ -51,6 +64,40 @@ bare.sh math "7 * 8" # quotes required
 
 bare.sh math "(1 + 2) / 3" # quotes required
 # 1
+```
+
+## 👍/👎 Validations ##
+
+```bash
+bare.sh validate email "sample@gmail.com"
+# true
+
+bare.sh validate email "sample@.com"
+# false
+
+bare.sh validate url "This is not a url"
+# false
+
+bare.sh validate json '{"name": "John", "age": 30}'
+# true
+
+bare.sh validate json my_valid_file.json
+# true
+
+bare.sh validate csv my_invalid_file.csv
+# false
+
+bare.sh validate uppercase "HELLO"
+# true
+
+bare.sh validate capitalized "Hello"
+# true
+
+bare.sh validate date "2019-10-10"
+# true
+
+bare.sh validate date "2019-10-32"
+# false
 ```
 
 ## 🤖 AI Assistance ##
@@ -88,17 +135,23 @@ bare.sh image describe ~/Desktop/sample.jpg
 ## 🔐 Encryption ##
 
 ```bash
-bare.sh codec encrypt 'Hello, World!' --pass "password"
+bare.sh encrypt 'Nashville, TN' with password 'testing'
+# U2FsdGVkX19aKk/E71YqHLvm7MrQpf93HvzfvkZSmC8=
+
+bare.sh decrypt 'U2FsdGVkX19aKk/E71YqHLvm7MrQpf93HvzfvkZSmC8=' with password 'testing'
+# Nashville, TN
+
+bare.sh encrypt 'Hello, World!' --pass "password"
 # U2FsdGVkX18G+cjpJeId27FiONIuL4QyGmUqR2R2ORw=
 
-bare.sh codec decrypt 'U2FsdGVkX18G+cjpJeId27FiONIuL4QyGmUqR2R2ORw=' --pass "password"
+bare.sh decrypt 'U2FsdGVkX18G+cjpJeId27FiONIuL4QyGmUqR2R2ORw=' --pass "password"
 # Hello, World!
 
-bare.sh codec encrypt myfile.txt --pass "password" --output myfile.enc
+bare.sh encrypt myfile.txt --pass "password" --output myfile.enc
 cat myfile.enc
 # U2FsdGVkX19+LC9EUOPG1ll0iBAdb78bVKwdMVfJmQ0=
 
-bare.sh codec decrypt myfile.enc --pass "password" --output myfile.txt
+bare.sh decrypt myfile.enc --pass "password" --output myfile.txt
 cat myfile.txt
 # Hello, World!
 ```
@@ -134,15 +187,14 @@ bare.sh render note.md --to-html
 # <h2 id="subheading">Subheading</h2>
 # <p>More text here with <strong>bold</strong> and <em>italic</em> formatting.</p>
 
-bare.sh render note.md --to-html > note.html
-bare.sh render note.html --to-md
-# # My Note
+bare.sh render othernote.html --to-md
+# # My Other Note
 
-# This is a sample note with some text.
+# This is another sample note with some text.
 
 # ## Subheading
 
-# More text here with **bold** and *italic* formatting.
+# More text here with **bold** and *italic* tags.
 ```
 
 ## 🌎 Geography ##
