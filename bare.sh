@@ -2,7 +2,7 @@
 
 __deps() {
 
-	local missing_deps
+	local dep missing_deps i
 	
 	# check each dependency
 	missing_deps=()
@@ -30,12 +30,14 @@ __deps() {
 
 
 __getOS() {
+
 	OS="Other"
 	case $(uname) in
 		Linux) grep -q 'Ubuntu' /etc/os-release && OS="Ubuntu" ;;
 		Darwin) OS="macOS";;
 	esac
 	export OS
+
 }
 
 
@@ -115,7 +117,7 @@ __bareStartUp() {
 
 __checkVariables() {
 
-	local variables logfile steps_required
+	local variables logfile steps_required variables var
 
 	steps_required='false'
 
@@ -190,129 +192,78 @@ __isBareCommand() {
 
 
 age() {
+    # Determine if GNU date is available
+    if date --version >/dev/null 2>&1; then
+        date_cmd="date"
+    elif command -v gdate >/dev/null 2>&1; then
+        date_cmd="gdate"
+    else
+        echo "GNU date is required."
+        return 1
+    fi
 
-	local input date_cmd stat_cmd output in variant
+    # Default values
+    unit="seconds"
+    variant="birth"
+    display_date=false
 
-	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1 && shift; fi
+    # Parse options
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+			last|when|in|of) shift ;; # permits more lyrical commands
+            --modified|modified) variant="modified"; shift ;;
+            --years|years|--months|months|--weeks|weeks|--days|days|--hours|hours|--minutes|minutes|--seconds|seconds)
+                unit="${1#--}"; shift ;;
+            --date|date|--birth|birth) display_date=true; shift ;;
+            *) input="$1"; shift ;;
+        esac
+    done
 
-	[[ -z "$input" ]] && echo "No input provided"
+    # Check input
+    if [[ -z "$input" ]]; then
+        echo "Error: no input provided."
+        return 1
+    fi
 
-	# Check if gdate and gstat are available, otherwise use date and stat
-	if command -v gdate &> /dev/null; then
-		date_cmd="gdate"
-	else
-		date_cmd="date"
-	fi
+    # Try to get timestamp from date input
+    date_timestamp=$($date_cmd -d "$input" +%s 2>/dev/null)
 
-	if command -v gstat &> /dev/null; then
-		stat_cmd="gstat"
-	else
-		stat_cmd="stat"
-	fi
+    if [[ $? -eq 0 ]]; then
+        # Input is a date string
+        timestamp=$date_timestamp
+    elif [[ -f "$input" ]]; then
+        # Input is a file
+        if [[ "$variant" == "modified" ]]; then
+            timestamp=$(stat -c %Y "$input" 2>/dev/null || stat -f %m "$input")
+        else
+            # Try to get birth time, fallback to modified time
+            timestamp=$(stat -c %W "$input" 2>/dev/null)
+            if [[ -z "$timestamp" || "$timestamp" == "0" ]]; then
+                timestamp=$(stat -c %Y "$input" 2>/dev/null || stat -f %B "$input")
+            fi
+        fi
+    else
+        echo "Invalid input: expected file or date."
+        return 1
+    fi
 
-	# Function to validate date input strictly for yyyy-mm-dd or yyyy-mm-dd hh:mm:ss
-	validate_date() {
-		local date_input="$1"
-		if [[ "$date_input" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || [[ "$date_input" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}\ [0-9]{2}:[0-9]{2}:[0-9]{2}$ ]]; then
-			"$date_cmd" -d "$date_input" +"%Y-%m-%d %H:%M:%S" >/dev/null 2>&1
-			return $?
-		else
-			return 1
-		fi
-	}
+    if [[ "$display_date" == true ]]; then
+        output=$($date_cmd -d "@$timestamp" +"%Y-%m-%d %H:%M:%S")
+    else
+        current_timestamp=$($date_cmd +%s)
+        diff=$((current_timestamp - timestamp))
+        case "$unit" in
+            years)    output=$(awk "BEGIN {printf \"%.2f\", $diff/31536000}") ;;
+            months)   output=$(awk "BEGIN {printf \"%.2f\", $diff/2592000}") ;;
+            weeks)    output=$(awk "BEGIN {printf \"%.2f\", $diff/604800}") ;;
+            days)     output=$(awk "BEGIN {printf \"%.2f\", $diff/86400}") ;;
+            hours)    output=$(awk "BEGIN {printf \"%.2f\", $diff/3600}") ;;
+            minutes)  output=$(awk "BEGIN {printf \"%.2f\", $diff/60}") ;;
+            seconds)  output="$diff" ;;
+        esac
+    fi
 
-	# Function to get the timestamp from a date string
-	get_date_timestamp() {
-		local date_input="$1"
-		"$date_cmd" -d "$date_input" +%s
-	}
-
-	# Function to get the file's creation or modification timestamp
-	get_file_timestamp() {
-		local file_path="$1" variant="$2"
-		
-		if [[ $variant == "modified" ]]; then
-			"$stat_cmd" -c %Y "$file_path"
-		else
-			# Some systems don't have birth time (%W), fallback to %Y if not available
-			birth_time=$($stat_cmd -c %W "$file_path" 2>/dev/null)
-			[[ -z "$birth_time" || "$birth_time" == "0" ]] && birth_time=$($stat_cmd -c %Y "$file_path")
-			echo "$birth_time"
-		fi
-	}
-
-	# Default values
-	output="0"
-	in="seconds"
-	variant="birth"
-
-	# Gather flags
-	for arg in "$@"; do
-	    case "$arg" in
-	        --modified) variant="modified" ;;
-	        --years) in="years" ;;
-	        --months) in="months" ;;
-	        --weeks) in="weeks" ;;
-	        --days) in="days" ;;
-	        --hours) in="hours" ;;
-	        --minutes) in="minutes" ;;
-	        --date|--birth) in="date" ;;
-	        *) echo "Unknown option: $arg" && return 0 ;;
-	    esac
-	done
-
-	# Determine if the input is a file or a date
-	if [[ -f "$input" ]]; then
-		# It's a file, get the appropriate timestamp
-		file_timestamp=$(get_file_timestamp "$input" "$variant")
-		current_timestamp=$($date_cmd +%s)
-		output=$((current_timestamp - file_timestamp))
-	elif validate_date "$input"; then
-		# It's a date string, convert to timestamp
-		date_timestamp=$(get_date_timestamp "$input")
-		current_timestamp=$($date_cmd +%s)
-		output=$((current_timestamp - date_timestamp))
-	else
-		echo "Invalid input: expected file or date format (yyyy-mm-dd or yyyy-mm-dd hh:mm:ss)"
-	fi
-
-	# Function to convert time based on the selected unit
-	convert_time() {
-		local unit_seconds=$1
-		echo "scale=2; $output / $unit_seconds" | bc
-	}
-
-	# Define time units in seconds
-	declare -A time_units=(
-		[years]=31536000
-		[months]=2592000
-		[weeks]=604800
-		[days]=86400
-		[hours]=3600
-		[minutes]=60
-	)
-
-	# Convert the output if needed
-	if [[ -n ${time_units[$in]} ]]; then
-		output=$(convert_time "${time_units[$in]}")
-	fi
-
-	# Handle --date option to display the file's modification or creation date
-	if [[ $in == "date" ]]; then
-		if [[ "$OS" == "macOS" ]]; then
-			output=$(stat -f %Sm -t "%Y-%m-%d %H:%M:%S" "$input")
-		else
-			output=$(stat -c %y "$input" | cut -d'.' -f1)
-		fi
-	fi
-
-	echo "$output"
-
-	unset -f validate_date
-	unset -f get_date_timestamp
-	unset -f get_file_timestamp
-	unset -f convert_time
-
+    echo "$output"
 }
 
 
@@ -3071,6 +3022,7 @@ squish() {
 
 
 storage() {
+
     local input command args arg privacy to
 
     command=$1 && shift
@@ -3177,20 +3129,25 @@ stripe() {
 
     # Parse arguments
     while [[ $# -gt 0 ]]; do
+
         case $1 in
+
             -p|pick)
                 pick=$2
                 shift 2
                 ;;
+
             limit)
                 limit=$2
                 shift 2
                 ;;
+
             where)
                 [[ -z $2 ]] && echo "Error: Field is required" && return 1
                 field=$2
                 shift 2
                 ;;
+
             =|is)
                 if [[ $2 == 'not' ]]; then
                     operator='!='
@@ -3203,34 +3160,42 @@ stripe() {
                     shift
                 fi
                 ;;
+
             like)
                 operator='~'
                 shift
                 ;;
+
             !=|isnt)
                 operator='!='
                 shift
                 ;;
+
 			payments) scope='payment_intents' && shift ;;
-            customers|subscriptions|products|invoices|prices|charges|refunds|payouts|balance_transactions|disputes|transfers|payment_intents)
+
+            customers|subscriptions|products|\
+			invoices|prices|charges|refunds|payouts|\
+			balance_transactions|disputes|transfers|payment_intents)
                 scope=$1
                 shift
                 ;;
+
             list|create|update|delete)
                 action=$1
                 shift
                 ;;
+
             *)
                 args+=("$1")
                 shift
                 ;;
+
         esac
+
     done
 
-    # Set default action if not specified
+    # Set defaults
     [[ -z $action ]] && action='list'
-
-    # Set default operator if not set
     [[ -z $operator ]] && operator='='
 
     # Extract value if provided
@@ -3239,10 +3204,7 @@ stripe() {
     fi
 
     # Validate required parameters
-    if [[ -z $scope ]]; then
-        echo "Error: Scope (e.g., customers, subscriptions) is required"
-        return 1
-    fi
+    [[ -z $scope ]] && echo "Error: Scope (e.g., customers, subscriptions) is required" && return 1
 
     # Make temp file to store response
     output_file=$(mktemp)
