@@ -3014,60 +3014,57 @@ routines() {
 
 lexorank() {
 
-	local args=("$@")
-	local prev next midpoint
+    local args=("$@")
+    local prev next midpoint
 
-	get_midpoint_rank() {
-		
-		local a=$1
-		local b=$2
-		local len=$(( ${#a} > ${#b} ? ${#a} : ${#b} ))
+    get_midpoint_rank() {
 
-		# Pad ranks to the same length
-		while [[ ${#a} -lt $len ]]; do a+="a"; done
-		while [[ ${#b} -lt $len ]]; do b+="a"; done
+        local a=$1
+        local b=$2
+        local len=$(( ${#a} > ${#b} ? ${#a} : ${#b} ))
 
-		# Calculate midpoint
-		local midpoint=""
-		local carry=0
-		for (( i=0; i<$len; i++ )); do
-			local char_a=$(printf "%d" "'${a:$i:1}")
-			local char_b=$(printf "%d" "'${b:$i:1}")
+        # Pad ranks to the same length
+        while [[ ${#a} -lt $len ]]; do a+="a"; done
+        while [[ ${#b} -lt $len ]]; do b+="a"; done
 
-			# Calculate midpoint only if space between characters allows it
-			if (( char_b - char_a > 1 )); then
-				local mid_char=$(( (char_a + char_b) / 2 ))
-				midpoint+=$(printf "\\$(printf '%03o' $mid_char)")
-				carry=0
-				break
-			else
-				midpoint+="${a:$i:1}"
-				carry=1
-			fi
-		done
+        # Calculate midpoint
+        local midpoint=""
+        local carry=0
+        for (( i=0; i<$len; i++ )); do
+            local char_a=$(printf "%d" "'${a:$i:1}")
+            local char_b=$(printf "%d" "'${b:$i:1}")
 
-		# Add extra character if midpoint is too close to previous rank
-		[[ $carry -eq 1 ]] && midpoint+="m"
+            # Calculate midpoint only if space between characters allows it
+            if (( char_b - char_a > 1 )); then
+                local mid_char=$(( (char_a + char_b) / 2 ))
+                midpoint+=$(printf "\\$(printf '%03o' $mid_char)")
+                carry=0
+                break
+            else
+                midpoint+="${a:$i:1}"
+                carry=1
+            fi
+        done
 
-		echo "$midpoint"
+        # Add extra character if midpoint is too close to previous rank
+        [[ $carry -eq 1 ]] && midpoint+="m"
 
-	}
+        echo "$midpoint"
+    }
 
-	# Check if the first argument is "between" and exactly three arguments are given
-	if [[ ${args[0]} == "between" && $# -eq 3 ]]; then
-		prev=${args[1]}
-		next=${args[2]}
-		midpoint=$(get_midpoint_rank "$prev" "$next")
-		echo "$midpoint"
-	else
-		# Otherwise, perform lexicographical sorting of all arguments
-		IFS=$'\n' sorted_args=($(sort <<<"${args[*]}"))
-		unset IFS
-		printf "%s\n" "${sorted_args[@]}"
-	fi
+    # Check if the first argument is "between" and exactly three arguments are given
+    if [[ ${args[0]} == "between" && $# -eq 3 ]]; then
+        prev=${args[1]}
+        next=${args[2]}
+        midpoint=$(get_midpoint_rank "$prev" "$next")
+        echo "$midpoint"
+    else
+        # Otherwise, perform lexicographical sorting of all arguments
+        printf "%s\n" "${args[@]}" | sort
+    fi
 
 	unset -f get_midpoint_rank
-	
+
 }
 
 
