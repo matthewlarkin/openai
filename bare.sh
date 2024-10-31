@@ -4792,7 +4792,8 @@ case $1 in
 
 		[[ -f "$(which bare.sh)" ]] && {
 			curl -sL "https://raw.githubusercontent.com/matthewlarkin/bare.sh/refs/heads/root/bare.sh" > "$(which bare.sh)"
-			echo "Bare.sh has been upgraded to the latest version."
+			echo "bare.sh has been upgraded to the latest version."
+			exit 0
 		}
 
 		;;
