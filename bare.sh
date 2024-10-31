@@ -2405,6 +2405,7 @@ qr() {
 
 
 random() {
+
     local length=16
     local use_lowercase=true
     local use_uppercase=true
@@ -2420,35 +2421,20 @@ random() {
     local chars_digits="0123456789"
     local chars_symbols='!@#$%^&*+-='
     local chars=""
-
+    
     # Parse arguments
     while [[ $# -gt 0 ]]; do
         case $1 in
-            alpha)
-                use_digits=false
-                use_symbols=false
-                shift ;;
-            alphanumeric|string)
-                use_symbols=false
-                shift ;;
+            alpha) use_digits=false; use_symbols=false ;;
+            alphanumeric|string) use_symbols=false ;;
             number|numbers|digits)
-                use_lowercase=false
-                use_uppercase=false
-                use_symbols=false
-                use_digits=true
-                shift ;;
+                use_lowercase=false; use_uppercase=false; use_symbols=false; use_digits=true ;;
             symbols)
-                use_lowercase=false
-                use_uppercase=false
-                use_digits=false
-                use_symbols=true
-                shift ;;
-			--custom-symbols)
-				[[ -z $2 ]] && echo "Error: No custom symbols provided" && return 1
-				custom_symbols="$2" && shift 2 ;;
-            [0-9]*)
-                length=$1
-                shift ;;
+                use_lowercase=false; use_uppercase=false; use_digits=false; use_symbols=true ;;
+            --custom-symbols)
+                [[ -z $2 ]] && echo "Error: No custom symbols provided" && return 1
+                custom_symbols="$2"; shift ;;
+            [0-9]*) length=$1 ;;
             --include|include)
                 shift
                 while [[ $# -gt 0 ]]; do
@@ -2457,7 +2443,7 @@ random() {
                         uppercase) use_uppercase=true ;;
                         digits|numbers) use_digits=true ;;
                         symbols) use_symbols=true ;;
-                        and) ;;  # Ignore 'and'
+                        and) ;;
                         *) break ;;
                     esac
                     shift
@@ -2470,7 +2456,7 @@ random() {
                         uppercase) use_uppercase=false ;;
                         digits|numbers) use_digits=false ;;
                         symbols) use_symbols=false ;;
-                        and) ;;  # Ignore 'and'
+                        and) ;;
                         *) break ;;
                     esac
                     shift
@@ -2479,139 +2465,47 @@ random() {
                 shift
                 while [[ $# -gt 0 ]]; do
                     case $1 in
-                        lowercase) min_lowercase=1 ;;
-                        uppercase) min_uppercase=1 ;;
-                        digits|numbers) min_digits=1 ;;
-                        symbols) min_symbols=1 ;;
-                        and) ;;  # Ignore 'and'
+                        lowercase) min_lowercase=1; use_lowercase=true ;;
+                        uppercase) min_uppercase=1; use_uppercase=true ;;
+                        digits|numbers) min_digits=1; use_digits=true ;;
+                        symbols) min_symbols=1; use_symbols=true ;;
+                        and) ;;
                         *) break ;;
                     esac
                     shift
                 done ;;
-            --length)
-                length=$2
-                shift 2 ;;
-            *)
-                echo "Invalid argument: $1"
-                return 1 ;;
+            --length) length=$2; shift ;;
+            *) echo "Invalid argument: $1"; return 1 ;;
         esac
+        shift
     done
 
-	[[ -n $custom_symbols ]] && chars_symbols="$custom_symbols"
+    [[ -n $custom_symbols ]] && chars_symbols="$custom_symbols"
+    chars="$([[ $use_lowercase == true ]] && echo -n "$chars_lower")$([[ $use_uppercase == true ]] && echo -n "$chars_upper")$([[ $use_digits == true ]] && echo -n "$chars_digits")$([[ $use_symbols == true ]] && echo -n "$chars_symbols")"
+    [[ -z $chars ]] && echo "Character set is empty. Cannot generate random string." && return 1
+    total_required=$(( min_lowercase + min_uppercase + min_digits + min_symbols ))
+    (( total_required > length )) && echo "Total required characters exceed the desired length." && return 1
 
-    # Ensure required character types are included if they are required
-    if (( min_lowercase > 0 )); then
-        use_lowercase=true
-    fi
-    if (( min_uppercase > 0 )); then
-        use_uppercase=true
-    fi
-    if (( min_digits > 0 )); then
-        use_digits=true
-    fi
-    if (( min_symbols > 0 )); then
-        use_symbols=true
-    fi
-
-    # Build the character set
-    [[ $use_lowercase == true ]] && chars+="$chars_lower"
-    [[ $use_uppercase == true ]] && chars+="$chars_upper"
-    [[ $use_digits == true ]] && chars+="$chars_digits"
-    [[ $use_symbols == true ]] && chars+="$chars_symbols"
-
-    # Ensure the character set is not empty
-    if [ -z "$chars" ]; then
-        echo "Character set is empty. Cannot generate random string."
-        return 1
-    fi
-
-    # Ensure required character types are included
-    if [[ $min_lowercase -gt 0 && $use_lowercase == false ]]; then
-        echo "Cannot require lowercase characters when they are excluded."
-        return 1
-    fi
-    if [[ $min_uppercase -gt 0 && $use_uppercase == false ]]; then
-        echo "Cannot require uppercase characters when they are excluded."
-        return 1
-    fi
-    if [[ $min_digits -gt 0 && $use_digits == false ]]; then
-        echo "Cannot require digits when they are excluded."
-        return 1
-    fi
-    if [[ $min_symbols -gt 0 && $use_symbols == false ]]; then
-        echo "Cannot require symbols when they are excluded."
-        return 1
-    fi
-
-    # Calculate total required characters
-    local total_required=$(( min_lowercase + min_uppercase + min_digits + min_symbols ))
-    if (( total_required > length )); then
-        echo "Total required characters ($total_required) exceed the desired length ($length)."
-        return 1
-    fi
-
-    # Function to generate random characters from a character set
     get_random_chars() {
         local count=$1
         local char_set=$2
         local output=""
         local char_set_len=${#char_set}
-
-        for _ in $(seq 1 $count); do
-            local rand_index=$(( RANDOM % char_set_len ))
-            output+=${char_set:rand_index:1}
+        [[ $char_set_len -eq 0 ]] && echo "Character set is empty in get_random_chars." && return 1
+        for _ in $(seq 1 "$count"); do
+            output+=${char_set:RANDOM%char_set_len:1}
         done
-
         echo "$output"
     }
 
-    # Generate required characters
-    local password=""
-    local remaining_length=$length
-
-    # Add required lowercase letters
-    if (( min_lowercase > 0 )); then
-        local lowercase_chars
-        lowercase_chars=$(get_random_chars $min_lowercase "$chars_lower")
-        password+="$lowercase_chars"
-        remaining_length=$(( remaining_length - min_lowercase ))
-    fi
-
-    # Add required uppercase letters
-    if (( min_uppercase > 0 )); then
-        local uppercase_chars
-        uppercase_chars=$(get_random_chars $min_uppercase "$chars_upper")
-        password+="$uppercase_chars"
-        remaining_length=$(( remaining_length - min_uppercase ))
-    fi
-
-    # Add required digits
-    if (( min_digits > 0 )); then
-        local digit_chars
-        digit_chars=$(get_random_chars $min_digits "$chars_digits")
-        password+="$digit_chars"
-        remaining_length=$(( remaining_length - min_digits ))
-    fi
-
-    # Add required symbols
-    if (( min_symbols > 0 )); then
-        local symbol_chars
-        symbol_chars=$(get_random_chars $min_symbols "$chars_symbols")
-        password+="$symbol_chars"
-        remaining_length=$(( remaining_length - min_symbols ))
-    fi
-
-    # Add remaining random characters
-    if (( remaining_length > 0 )); then
-        local random_chars
-        random_chars=$(get_random_chars $remaining_length "$chars")
-        password+="$random_chars"
-    fi
-
-    # Shuffle the password
-    password=$(echo "$password" | fold -w1 | shuf | tr -d '\n')
-
-    echo "$password"
+    password=""
+    (( min_lowercase )) && password+=$(get_random_chars "$min_lowercase" "$chars_lower") && length=$(( length - min_lowercase ))
+    (( min_uppercase )) && password+=$(get_random_chars "$min_uppercase" "$chars_upper") && length=$(( length - min_uppercase ))
+    (( min_digits )) && password+=$(get_random_chars "$min_digits" "$chars_digits") && length=$(( length - min_digits ))
+    (( min_symbols )) && password+=$(get_random_chars "$min_symbols" "$chars_symbols") && length=$(( length - min_symbols ))
+    (( length > 0 )) && password+=$(get_random_chars "$length" "$chars")
+    echo "$password" | fold -w1 | shuf | tr -d '\n'; echo
+    
 }
 
 
@@ -2702,6 +2596,95 @@ rec() {
 			[[ -z $input ]] && echo "ERROR: no input provided"
 			output="$(echo "$input" | sed '1s/^\xEF\xBB\xBF//' | csv2rec)"
 			[[ -n $1 ]] && echo "$output" >> "$1" || echo "$output"
+
+			;;
+
+	esac
+
+}
+
+
+
+recmove() {
+
+	local dataset records args
+	local primary_record primary_key primary_value entity rank_column
+
+	[[ -p /dev/stdin ]] && dataset=$(cat)
+
+	records=()
+	args=()
+
+	while [[ $# -gt 0 ]]; do
+		case "$1" in
+			in) dataset="$2" && shift 2 ;;
+			by) primary_key="$2" && shift 2 ;;
+			using) rank_column="$2" && shift 2 ;;
+			between)
+				shift
+				records+=("$1") && shift
+				[[ $1 == 'and' ]] && shift
+				records+=("$1") && shift
+				;;
+			*) args+=("$1") && shift ;;
+		esac
+	done
+	set -- "${args[@]}"
+
+	[[ -z $dataset ]] && echo "No dataset provided" && exit 1
+
+	[[ -n $1 ]] && primary_record=$1
+
+	entity=$(echo "$primary_record" | cut -d':' -f1)
+	primary_value=$(echo "$primary_record" | cut -d':' -f2)
+
+	# # #
+
+	is_recfile=$(bare.sh validate recfile "$dataset")
+	is_sqlite=$(bare.sh validate sqlite "$dataset")
+	is_recformat=$(bare.sh validate recformat "$dataset")
+
+	format=$(
+		[[ $is_recfile == 'true' ]] && echo recfile
+		[[ $is_recformat == 'true' ]] && echo recformat
+		[[ $is_sqlite == 'true' ]] && echo sqlite
+	)
+
+	case $format in
+
+		recfile)
+
+			args=()
+			[[ -n $entity ]] && args+=("-t" "$entity")
+
+			# get record rank of records
+			ranks=()
+			ranks+=($(recsel "$dataset" "${args[@]}" -e "$primary_key = '${records[0]}'" -P "$rank_column"))
+			ranks+=($(recsel "$dataset" "${args[@]}" -e "$primary_key = '${records[1]}'" -P "$rank_column"))
+
+			new_rank=$(bare.sh lexorank between "${ranks[@]}")
+
+			# update primary record with new rank
+			recset "$dataset" "${args[@]}" -e "$primary_key = '$primary_value'" -f "$rank_column" -s "$new_rank"
+
+			;;
+
+		sqlite)
+
+			# pending
+
+			;;
+
+		recformat)
+
+			# pending
+
+			;;
+
+		*)
+			
+			echo "Invalid format"
+			exit 1
 
 			;;
 
@@ -3013,56 +2996,301 @@ routines() {
 
 lexorank() {
 
-    local args=("$@")
-    local prev next midpoint
+	local command input
 
-    get_midpoint_rank() {
+	[[ -p /dev/stdin ]] && input=$(cat)
 
-        local a=$1
-        local b=$2
-        local len=$(( ${#a} > ${#b} ? ${#a} : ${#b} ))
+	# Function to check if a LexoRank value is valid
+	isValidLexValue() {
+		local value="$1"
+		if [[ "$value" =~ ^[0-9a-z]*[1-9a-z]$ ]]; then
+			return 0  # valid
+		else
+			return 1  # invalid
+		fi
+	}
 
-        # Pad ranks to the same length
-        while [[ ${#a} -lt $len ]]; do a+="a"; done
-        while [[ ${#b} -lt $len ]]; do b+="a"; done
+	# Function to check if a LexoRank bucket is valid
+	isValidLexBucket() {
+		local bucket="$1"
+		if [[ "$bucket" =~ ^[0-2]$ ]]; then
+			return 0  # valid
+		else
+			return 1  # invalid
+		fi
+	}
 
-        # Calculate midpoint
-        local midpoint=""
-        local carry=0
-        for (( i=0; i<$len; i++ )); do
-            local char_a=$(printf "%d" "'${a:$i:1}")
-            local char_b=$(printf "%d" "'${b:$i:1}")
+	# Function to parse a LexoRank string
+	parseLexoRank() {
+		local lex="$1"
+		if [[ "$lex" =~ ^([0-2])\|([0-9a-z]*[1-9a-z])$ ]]; then
+			bucket="${BASH_REMATCH[1]}"
+			value="${BASH_REMATCH[2]}"
+			return 0
+		else
+			echo "Invalid lex string: $lex" >&2
+			return 1
+		fi
+	}
 
-            # Calculate midpoint only if space between characters allows it
-            if (( char_b - char_a > 1 )); then
-                local mid_char=$(( (char_a + char_b) / 2 ))
-                midpoint+=$(printf "\\$(printf '%03o' $mid_char)")
-                carry=0
-                break
-            else
-                midpoint+="${a:$i:1}"
-                carry=1
-            fi
-        done
+	# Function to increment a character
+	incrementChar() {
+		local char="$1"
+		if [[ "$char" == "z" ]]; then
+			echo "-1"
+		elif [[ "$char" == "9" ]]; then
+			echo "a"
+		else
+			local ord
+			ord=$(printf "%d" "'$char")
+			local new_ord=$(( ord + 1 ))
+			printf "\\$(printf '%03o' "$new_ord")"
+		fi
+	}
 
-        # Add extra character if midpoint is too close to previous rank
-        [[ $carry -eq 1 ]] && midpoint+="m"
+	# Function to decrement a character
+	decrementChar() {
+		local char="$1"
+		if [[ "$char" == "1" ]]; then
+			echo "-1"
+		elif [[ "$char" == "a" ]]; then
+			echo "9"
+		else
+			local ord
+			ord=$(printf "%d" "'$char")
+			local new_ord=$(( ord - 1 ))
+			printf "\\$(printf '%03o' "$new_ord")"
+		fi
+	}
 
-        echo "$midpoint"
-    }
+	# Function to increment a LexoRank value
+	lexoRankIncrement() {
+		local lex="$1"
+		parseLexoRank "$lex" || return 1
 
-    # Check if the first argument is "between" and exactly three arguments are given
-    if [[ ${args[0]} == "between" && $# -eq 3 ]]; then
-        prev=${args[1]}
-        next=${args[2]}
-        midpoint=$(get_midpoint_rank "$prev" "$next")
-        echo "$midpoint"
-    else
-        # Otherwise, perform lexicographical sorting of all arguments
-        printf "%s\n" "${args[@]}" | sort
-    fi
+		local idx=$(( ${#value} - 1 ))
+		while [[ $idx -ge 0 ]]; do
+			local char="${value:$idx:1}"
+			if [[ "$char" == "z" ]]; then
+			(( idx-- ))
+			continue
+			fi
+			local prefix="${value:0:$idx}"
+			local new_char
+			new_char=$(incrementChar "$char")
+			if [[ "$new_char" == "-1" ]]; then
+			(( idx-- ))
+			continue
+			fi
+			local newVal="$prefix$new_char"
+			echo "$bucket|$newVal"
+			return 0
+		done
+		local newVal="${value}1"
+		echo "$bucket|$newVal"
+	}
 
-	unset -f get_midpoint_rank
+	# Function to decrement a LexoRank value
+	lexoRankDecrement() {
+		local lex="$1"
+		parseLexoRank "$lex" || return 1
+
+		local length=${#value}
+		local char="${value:$((length - 1)):1}"
+
+		if [[ "$char" != "1" ]]; then
+			local prefix="${value:0:$((length - 1))}"
+			local new_char
+			new_char=$(decrementChar "$char")
+			local newVal="$prefix$new_char"
+			echo "$bucket|$newVal"
+			return 0
+		fi
+
+		if [[ $length -gt 1 && ! "${value:0:$((length - 1))}" =~ ^0+$ ]]; then
+			local newVal
+			newVal=$(cleanTrailingZeros "${value:0:$((length - 1))}")
+			echo "$bucket|$newVal"
+			return 0
+		fi
+
+		local newVal="0$value"
+		echo "$bucket|$newVal"
+	}
+
+	# Function to clean trailing zeros
+	cleanTrailingZeros() {
+		local str="$1"
+		if [[ "$str" =~ ^([0-9a-z]*[1-9a-z])0*$ ]]; then
+			echo "${BASH_REMATCH[1]}"
+		else
+			echo "Invalid lex string: $str" >&2
+			return 1
+		fi
+	}
+
+	# Function to compare two LexoRank values
+	lexoRankLessThan() {
+		local lex1="$1"
+		local lex2="$2"
+
+		parseLexoRank "$lex1" || return 1
+		local value1="$value"
+
+		parseLexoRank "$lex2" || return 1
+		local value2="$value"
+
+		local len1=${#value1}
+		local len2=${#value2}
+		local len=$(( len1 > len2 ? len1 : len2 ))
+
+		for (( idx=0; idx<len; idx++ )); do
+			local charA="${value1:$idx:1}"
+			local charB="${value2:$idx:1}"
+
+			if [[ -z "$charB" ]]; then
+			echo "false"
+			return 0
+			fi
+			if [[ -z "$charA" ]]; then
+			echo "true"
+			return 0
+			fi
+			if [[ "$charA" < "$charB" ]]; then
+			echo "true"
+			return 0
+			elif [[ "$charA" > "$charB" ]]; then
+			echo "false"
+			return 0
+			fi
+		done
+
+		echo "false"
+	}
+
+	# Function to find a LexoRank between two LexoRank values
+	lexoRankBetween() {
+
+		ordered=$(bare.sh lexorank "$1" "$2" | tr '\n' ' ')
+		set -- $ordered
+
+		local lexBefore="$1"
+		local lexAfter="$2"
+
+		if [[ -z "$lexBefore" && -z "$lexAfter" ]]; then
+			echo "Only one argument may be null" >&2
+			return 1
+		fi
+
+		if [[ -z "$lexAfter" ]]; then
+			lexoRankIncrement "$lexBefore"
+			return $?
+		fi
+
+		if [[ -z "$lexBefore" ]]; then
+			lexoRankDecrement "$lexAfter"
+			return $?
+		fi
+
+		parseLexoRank "$lexBefore" || return 1
+		local before_value="$value"
+		local before_bucket="$bucket"
+
+		parseLexoRank "$lexAfter" || return 1
+		local after_value="$value"
+		local after_bucket="$bucket"
+
+		if [[ "$before_bucket" != "$after_bucket" ]]; then
+			echo "Lex buckets must be the same" >&2
+			return 1
+		fi
+
+		local less
+		less=$(lexoRankLessThan "$lexBefore" "$lexAfter") || return 1
+		if [[ "$less" != "true" ]]; then
+			echo "${before_value} is not less than ${after_value}" >&2
+			return 1
+		fi
+
+		local incremented
+		incremented=$(lexoRankIncrement "$lexBefore") || return 1
+		less=$(lexoRankLessThan "$incremented" "$lexAfter") || return 1
+		if [[ "$less" == "true" ]]; then
+			echo "$incremented"
+			return 0
+		fi
+
+		local plus1="${before_bucket}|${before_value}1"
+		less=$(lexoRankLessThan "$plus1" "$lexAfter") || return 1
+		if [[ "$less" == "true" ]]; then
+			echo "$plus1"
+			return 0
+		fi
+
+		local pre='0'
+		while true; do
+			local plus="${before_bucket}|${before_value}${pre}1"
+			less=$(lexoRankLessThan "$plus" "$lexAfter") || return 1
+			if [[ "$less" == "true" ]]; then
+			echo "$plus"
+			return 0
+			fi
+			pre="${pre}0"
+		done
+	}
+
+	case "$1" in
+		increment)
+			lex="$2"
+			lexoRankIncrement "$lex"
+			;;
+		decrement)
+			lex="$2"
+			lexoRankDecrement "$lex"
+			;;
+		lessThan)
+			lex1="$2"
+			lex2="$3"
+			lexoRankLessThan "$lex1" "$lex2"
+			;;
+		between)
+			lexBefore="$2"
+			lexAfter="$3"
+			[[ "$lexBefore" == "null" ]] && lexBefore=""
+			[[ "$lexAfter" == "null" ]] && lexAfter=""
+			lexoRankBetween "$lexBefore" "$lexAfter"
+			;;
+		--help)
+			echo "Usage: $0 {increment|decrement|lessThan|between} args..."
+			echo ""
+			echo "Commands:"
+			echo "  increment <lex_value>           Increment the LexoRank value"
+			echo "  decrement <lex_value>           Decrement the LexoRank value"
+			echo "  lessThan <lex1> <lex2>          Compare two LexoRank values"
+			echo "  between <lexBefore> <lexAfter>  Find a LexoRank between two values"
+			echo "                                  Use 'null' for one of the values if needed"
+			exit 1
+			;;
+		*)
+			if [ $# -gt 0 ]; then
+				echo "$@" | tr ' ' '\n' | sort
+			# if no arguments given, read from stdin
+			else
+				echo "$input" | tr ' ' '\n' | sort
+			fi
+			;;
+	esac
+
+	unset -f isValidLexValue
+	unset -f isValidLexBucket
+	unset -f parseLexoRank
+	unset -f incrementChar
+	unset -f decrementChar
+	unset -f lexoRankIncrement
+	unset -f lexoRankDecrement
+	unset -f cleanTrailingZeros
+	unset -f lexoRankLessThan
+	unset -f lexoRankBetween
 
 }
 
@@ -3899,16 +4127,6 @@ translate() {
 
 
 
-trim() {
-
-	local input
-	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1; fi
-	transform "$input" --trim < /dev/null
-
-}
-
-capitalize() { bare.sh transform "$@" --capitalize; return 0; }
-
 unzip() {
 
 	local arg input output localunzip
@@ -3944,6 +4162,10 @@ validate() {
 	output="false"
 
 	case $type in
+
+		recformat) echo "$input" | recfix &>/dev/null && output="true" ;;
+		recfile) recfix "$input" &>/dev/null && output="true" ;;
+		sqlite3|sqlite) { [[ -f "$input" ]] && head -c 16 "$input" | grep -q "SQLite format 3" ; } && output="true" ;;
 
 		json|json-format)
 
@@ -4463,6 +4685,7 @@ write() {
 }
 
 
+
 recloop() {
 
 	local recordset_file script record field value
@@ -4551,10 +4774,11 @@ round() { math round "$@" ; return 0 ; }
 
 squish() { transform "$@" --squish ; return 0 ; }
 
+trim() { transform "$@" --trim ; return 0 ; }
+
 upload() { storage upload "$@" ; return 0 ; }
 
 uppercase() { transform "$@" --uppercase ; return 0 ; }
-
 
 
 
