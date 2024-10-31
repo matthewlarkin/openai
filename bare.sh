@@ -3155,17 +3155,6 @@ speed() {
 
 
 
-squish() {
-
-	local input
-
-	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1; fi
-	transform "$input" --squish
-
-}
-
-
-
 storage() {
 
     local input command args arg privacy to
@@ -4559,6 +4548,8 @@ lowercase() { bare.sh transform "$@" --lowercase ; return 0 ; }
 password() { random --length 16 "$@"; return 0; }
 
 round() { math round "$@" ; return 0 ; }
+
+squish() { transform "$@" --squish ; return 0 ; }
 
 upload() { storage upload "$@" ; return 0 ; }
 
