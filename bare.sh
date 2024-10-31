@@ -3097,39 +3097,6 @@ silence() {
 
 
 
-size() {
-
-	local input stat_cmd
-
-	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1; fi
-
-	# Check the OS type and set the appropriate stat command
-	if [[ "$(uname)" == "Darwin" ]]; then
-		stat_cmd="stat -f%z"
-	else
-		stat_cmd="stat --format=%s"
-	fi
-
-	# Calculate the total size
-	# shellcheck disable=SC2086 # (we want word splitting here)
-	find "$input" -type f -exec $stat_cmd {} + | awk '{
-		total += $1
-	}
-	END {
-		if (total >= 1073741824) 
-			printf "%.2f GB\n", total / 1073741824
-		else if (total >= 1048576) 
-			printf "%.2f MB\n", total / 1048576
-		else if (total >= 1024) 
-			printf "%.2f KB\n", total / 1024
-		else 
-			printf "%d bytes\n", total
-	}'
-
-}
-
-
-
 speed() {
 
 	__deps ffmpeg openssl
