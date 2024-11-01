@@ -1312,7 +1312,7 @@ email() {
 				echo "Content-Type: multipart/mixed; boundary=\"boundary42\""
 				echo ""
 				echo "--boundary42"
-				echo "Content-Type: text/plain; charset=UTF-8"
+				echo "Content-Type: text/html; charset=UTF-8"
 				echo "Content-Transfer-Encoding: 7bit"
 				echo ""
 				echo "$body"
