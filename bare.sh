@@ -4714,6 +4714,141 @@ write() {
 
 
 
+youtube() {
+
+	local command quality thumbnail_quality url
+
+	command=$1 && shift
+
+	[[ -t 0 ]] && url="$1" && shift || url=$(cat)
+
+	quality="720" # Default quality for videos
+	thumbnail_quality="0" # Default quality for thumbnails (0 for default hd)
+
+	if [[ ! "$url" =~ ^(https?://)?(www\.)?(m\.)?(youtube\.com|youtu\.be|youtube-nocookie\.com) ]]; then
+		echo "Invalid YouTube URL"
+	fi
+
+	# Function to download video
+	download_video() {
+
+		local output_path
+		local final_output
+		
+		output_path=$(random string 32)
+		
+		# build args
+		args=()
+		args+=("--no-warnings")
+		[[ "$format" == 'mp3' ]] && args+=("--extract-audio" "--audio-format" "mp3")
+		args+=("--output" "$output_path.%(ext)s")
+		args+=("$url")
+		
+		# execute command silently and capture exit status
+		yt-dlp "${args[@]}" >/dev/null 2>&1 && final_output="0" || final_output="1"
+		
+		# Output the relative path if successful
+		if [ "$final_output" -eq "0" ]; then
+			echo "${output_path}.mp3"
+		else
+			echo "Error: Failed to download video" >&2
+		fi
+		
+	}
+
+	# Function to extract YouTube video ID
+	extract_id() {
+
+		local url
+
+		url=$1
+
+		echo "$url" | awk -F'[?&/=]' '{
+			for(i=1;i<=NF;i++) {
+				if ($i == "v") {
+					print $(i+1);
+					exit
+				}
+				if ($i == "embed" || $i == "shorts" || $i == "youtu.be") {
+					print $(i+1);
+					exit
+				}
+			}
+		}'
+
+	}
+
+	# Function to download thumbnail
+	download_thumbnail() {
+
+		local url
+		local video_id
+		local thumbnail_url
+		local random_filename
+		local output
+
+		video_id=$(extract_id "$url")
+
+		case "$thumbnail_quality" in
+			"md") thumbnail_url="https://i.ytimg.com/vi/${video_id}/mqdefault.jpg" ;;
+			"max") thumbnail_url="https://i.ytimg.com/vi/${video_id}/maxresdefault.jpg" ;;
+			*) thumbnail_url="https://i.ytimg.com/vi/${video_id}/hqdefault.jpg" ;;
+		esac
+
+		random_filename=$(random string 32).jpg
+		output_path="$BARE_HOME/downloads/$random_filename"
+		curl -sL "$thumbnail_url" -o "$output_path"
+		echo "$output_path"
+
+	}
+
+	case $command in
+		download)
+			while [[ $# -gt 0 ]]; do
+				case $1 in
+					--quality) quality=$2 && shift 2 ;;
+					--mp3) format="mp3" && shift ;;
+					--thumbnail|--thumb)
+						shift && while [[ $# -gt 0 ]]; do
+							case $1 in
+								--md) thumbnail_quality="md" && shift ;;
+								--max) thumbnail_quality="max" && shift ;;
+								# *) echo "Unknown option: $1" >&2 ;;
+							esac
+						done && download_thumbnail "$url"
+						;;
+					# *) echo "Unknown option: $1" >&2 ;;
+				esac
+			done
+			download_video
+			;;
+
+		id) extract_id ;;
+
+		thumbnail)
+			shift 2 # Remove the first two arguments
+			while [[ $# -gt 0 ]]; do
+				case $1 in
+					--md) thumbnail_quality="md" && shift ;;
+					--max) thumbnail_quality="max" && shift ;;
+					# *) echo "Unknown option: $1" >&2 ;;
+				esac
+			done
+			download_thumbnail
+			;;
+
+		*) echo "Unknown command: $command" >&2 ;;
+		
+	esac
+
+	unset -f download_video
+	unset -f extract_id
+	unset -f download_thumbnail
+
+}
+
+
+
 recloop() {
 
 	local recordset_file script record field value
@@ -4793,6 +4928,8 @@ encrypt() { bare.sh codec encrypt "$@"; return 0; }
 filetype() { bare.sh examine "$@" -p type ; return 0 ; }
 
 filepath() { bare.sh examine "$@" -p path ; return 0 ; }
+
+filesize() { bare.sh examine "$@" -p size ; return 0 ; }
 
 lowercase() { bare.sh transform "$@" --lowercase ; return 0 ; }
 
