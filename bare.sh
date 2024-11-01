@@ -4956,6 +4956,7 @@ case $1 in
 	--upgrade)
 
 		[[ -f "$(which bare.sh)" ]] && {
+			echo ""
 			echo "   - - - "
 			echo ""
 			echo "   Upgrading bare.sh..."
@@ -4967,6 +4968,7 @@ case $1 in
 			echo "   ✅ bare.sh has been upgraded to the latest version!"
 			echo ""
 			echo "   - - - "
+			echo ""
 			exit 0
 		}
 
