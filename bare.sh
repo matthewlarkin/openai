@@ -452,7 +452,7 @@ cloud() {
 			city: .datacenter.location.city,
 			os: .image.description
 		}]')
-		echo "$json" | jq | rec --from-json
+		echo "$json" | jq | rec from
 
 	}
 
@@ -488,7 +488,7 @@ cloud() {
 	hetzner_listSSH() {
 		# only return: .ssh_keys[], and .id, .public_key
 		curl -sL -H "Authorization: Bearer $HETZNER_API_KEY" \
-			"https://api.hetzner.cloud/v1/ssh_keys" | jq '[.ssh_keys[] | {id: .id, name: .name, pub: .public_key}]' | rec --from-json
+			"https://api.hetzner.cloud/v1/ssh_keys" | jq '[.ssh_keys[] | {id: .id, name: .name, pub: .public_key}]' | rec from
 	}
 
 	# shellcheck disable=SC2317
@@ -513,7 +513,7 @@ cloud() {
 			echo "Error: $(echo "$response" | jq -r '.error.message')"
 		fi
 
-		echo "$response" | jq '.firewall | {id, name, rules: .rules[].direction + " " + .rules[].protocol + " " + .rules[].port + " " + .rules[].source_ips}' | rec --from-json
+		echo "$response" | jq '.firewall | {id, name, rules: .rules[].direction + " " + .rules[].protocol + " " + .rules[].port + " " + .rules[].source_ips}' | rec from
 
 	}
 
@@ -557,7 +557,7 @@ cloud() {
 			location: .datacenter.location.name,
 			city: .datacenter.location.city,
 			os: .image.description
-		}' | rec --from-json
+		}' | rec from
 
 	}
 
@@ -1515,7 +1515,7 @@ examine() {
         fi
     fi
 
-	output=$(echo "$metadata" | jq '.' | bare.sh rec --from-json)
+	output=$(echo "$metadata" | jq '.' | bare.sh rec from)
 
 	if [[ -n $pick ]]; then
 		echo "$output" | recsel -P "$pick"
@@ -2512,91 +2512,107 @@ random() {
 
 rec() {
 
-	# usage: rec <recfile||input> <command> <args>
+	# recsel teachers.rec | rec to csv
+	# recsel teachers.rec | rec to json
+	# rec teachers.rec to csv
+	# rec teachers.rec to json
+	# rec from teachers.json
+	# rec from teachers.csv
+	# cat teachers.json | rec from
+	# cat teachers.csv | rec from
 
 	__deps rec2csv csvlook
 
-	local input command output recfile
+	local input command output recfile args
 
-	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1 && shift; fi
+	[[ -p /dev/stdin ]] && input=$(cat)
 
+	args=()
+	while [[ $# -gt 0 ]]; do
+		case $1 in
+			to) output_format="$2" && shift 2 ;;
+			from) [[ $# -gt 1 ]] && input="$2" && shift 2 || shift ;;
+			*) args+=("$1") && shift ;;
+		esac
+	done
+	set -- "${args[@]}"
+
+	[[ -n $1 ]] && input=$1 && shift
+
+	[[ -f $input ]] && input=$(cat "$input")
 	[[ -z $input ]] && echo "Error: no input provided" && return 1
 
-	# check for either explicit <file> or implifict home/recfiles/<file>
-	if [[ -f "$input" ]]; then
-		input=$(cat "$input")
-	elif [[ -f "$BARE_HOME/recfiles/$input" ]]; then
-		input=$(cat "$BARE_HOME/recfiles/$input")
-	fi
+	[[ $(bare.sh validate recformat "$input") == 'true' ]] && input_format='recfile'
+	[[ $(bare.sh validate json "$input") == 'true' ]] && input_format='json'
+	[[ $(bare.sh validate csv "$input") == 'true' ]] && input_format='csv'
 
-	command=$1 && shift
+	[[ $input_format == 'json' ]] && output_format='recformat'
+	[[ $input_format == 'csv' ]] && output_format='recformat'
 
-	case $command in
+	# echo "$input_format"
+	# echo "$output_format"
+	# echo "$input"
+	# exit 0
 
-		list)
+	case $output_format in
 
-			echo "$input" | recsel "$@"
-
-			;;
-
-		--csv|--to-csv)
-
+		csv)
+			[[ $input_format != 'recfile' ]] && echo "Invalid input format (expected recformat)" && return 1
 			echo "$input" | rec2csv
-
 			;;
 
-		--json|--to-json)
+		json)
+
+			[[ $input_format != 'recfile' ]] && echo "Invalid input format (expected recformat)" && return 1
 
 			# Convert recsel output to CSV, then to JSON, and format with jq
 			json_output=$(echo "$input" | rec2csv 2>/dev/null | python3 -c 'import csv, json, sys; print(json.dumps([dict(r) for r in csv.DictReader(sys.stdin)]))' 2>/dev/null | jq 2>/dev/null)
 
 			# Check if the conversion was successful
 			if [[ $? -eq 0 ]]; then
-				echo "$json_output" | jq
+				# minified json output (no color)
+				echo "$json_output" | jq -c -M
 			else
 				echo "Error: Conversion failed" >&2
 			fi
 
 			;;
 
-		--from-json)
-			
-			[[ -f "$1" ]] && input="$(cat "$1")" && shift
-			[[ -z $input ]] && echo "ERROR: no input provided" && exit 1
-			
-			# Check if the input is an object or an array
-			if echo "$input" | jq -e 'type == "object"' > /dev/null; then
-				input="[$input]"
-			fi
-			
-			# Function to sanitize keys
-			sanitize_keys() {
-				jq 'map(
-					with_entries(
-						.key |= gsub("[^a-zA-Z0-9_]"; "_")
-					)
-				)'
+		recformat)
+
+			[[ $input_format == 'json' ]] && {
+				
+				# Check if the input is an object or an array
+				if echo "$input" | jq -e 'type == "object"' > /dev/null; then
+					input="[$input]"
+				fi
+				
+				# Function to sanitize keys
+				sanitize_keys() {
+					jq 'map(
+						with_entries(
+							.key |= gsub("[^a-zA-Z0-9_]"; "_")
+						)
+					)'
+				}
+				
+				# Sanitize keys and check if the array is empty
+				sanitized_input=$(echo "$input" | sanitize_keys)
+				if [[ $(echo "$sanitized_input" | jq 'length') -eq 0 ]]; then
+					exit 0
+				fi
+				
+				# Convert given input to CSV
+				output=$(echo "$sanitized_input" | jq -r '(.[0] | keys_unsorted) as $keys | $keys, map([.[ $keys[] ]])[] | @csv' | csv2rec)
+				[[ -n $1 ]] && echo "$output" >> "$1" || echo "$output"
+				return 0
 			}
-			
-			# Sanitize keys and check if the array is empty
-			sanitized_input=$(echo "$input" | sanitize_keys)
-			if [[ $(echo "$sanitized_input" | jq 'length') -eq 0 ]]; then
-				exit 0
-			fi
-			
-			# Convert given input to CSV
-			output=$(echo "$sanitized_input" | jq -r '(.[0] | keys_unsorted) as $keys | $keys, map([.[ $keys[] ]])[] | @csv' | csv2rec)
-			[[ -n $1 ]] && echo "$output" >> "$1" || echo "$output"
-			
-			;;
 
-		--from-csv)
-
-			[[ -f "$1" ]] && input="$(cat "$1")" && shift
-			[[ -z $input ]] && echo "ERROR: no input provided"
-			output="$(echo "$input" | sed '1s/^\xEF\xBB\xBF//' | csv2rec)"
-			[[ -n $1 ]] && echo "$output" >> "$1" || echo "$output"
-
+			[[ $input_format == 'csv' ]] && {
+				output="$(echo "$input" | sed '1s/^\xEF\xBB\xBF//' | csv2rec)"
+				[[ -n $1 ]] && echo "$output" >> "$1" || echo "$output"
+				return 0
+			}
 			;;
 
 	esac
@@ -3915,9 +3931,9 @@ stripe() {
     fi
 
     if [[ -n $pick ]]; then
-        cat "$output_file" | bare.sh rec --from-json | recsel -P "$pick"
+        cat "$output_file" | bare.sh rec from | recsel -P "$pick"
     else
-        cat "$output_file" | bare.sh rec --from-json
+        cat "$output_file" | bare.sh rec from
     fi
 
     # Cleanup
@@ -4209,9 +4225,7 @@ validate() {
 
 			[[ -f $input ]] && input=$(cat "$input")
 
-			if [[ $(echo "$input" | csvclean --dry-run 2>&1) == 'No errors.' ]]; then
-				output="true"
-			fi
+			echo "$input" | csvclean -a &>/dev/null && output="true"
 
 			;;
 
@@ -4851,7 +4865,7 @@ youtube() {
 
 recloop() {
 
-	local recordset_file script record field value
+	local recordset script record field value
 
 	# Function to set variables dynamically
 	set_variables() {
@@ -4882,7 +4896,7 @@ recloop() {
 	}
 
 	# Read the arguments
-	recordset_file="$1" && shift
+	recordset="$1" && shift
 	script="$1" && shift
 
 	# Declare an associative array
@@ -4904,7 +4918,7 @@ recloop() {
 				record["$field"]="$value"
 			fi
 		fi
-	done <<< "$(recsel $recordset_file "$@")"
+	done <<< "$(recsel "$recordset" "$@")"
 
 	# Process the last record if the file does not end with an empty line
 	if [[ ${#record[@]} -gt 0 ]]; then
