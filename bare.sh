@@ -2405,107 +2405,158 @@ qr() {
 
 
 random() {
-
     local length=16
-    local use_lowercase=true
-    local use_uppercase=true
-    local use_digits=true
-    local use_symbols=false
-    local custom_symbols=""
-    local min_lowercase=0
-    local min_uppercase=0
-    local min_digits=0
-    local min_symbols=0
     local chars_lower="abcdefghijklmnopqrstuvwxyz"
     local chars_upper="ABCDEFGHIJKLMNOPQRSTUVWXYZ"
     local chars_digits="0123456789"
     local chars_symbols='!@#$%^&*+-='
-    local chars=""
-    
+    local chars="$chars_lower$chars_upper$chars_digits"
+    local include_symbols=false
+    local exclude_symbols=false
+    local include_numbers=false
+    local include_letters=false
+    local only_chars=""
+    local required_chars=""
+    local required_length=0
+    local unprocessed_args=()
+
     # Parse arguments
     while [[ $# -gt 0 ]]; do
-        case $1 in
-            alpha) use_digits=false; use_symbols=false ;;
-            alphanumeric|string) use_symbols=false ;;
-            number|numbers|digits)
-                use_lowercase=false; use_uppercase=false; use_symbols=false; use_digits=true ;;
-            symbols)
-                use_lowercase=false; use_uppercase=false; use_digits=false; use_symbols=true ;;
-            --custom-symbols)
-                [[ -z $2 ]] && echo "Error: No custom symbols provided" && return 1
-                custom_symbols="$2"; shift ;;
-            [0-9]*) length=$1 ;;
-            --include|include)
+        arg="$1"
+        case "$arg" in
+            only)
                 shift
                 while [[ $# -gt 0 ]]; do
-                    case $1 in
-                        lowercase) use_lowercase=true ;;
-                        uppercase) use_uppercase=true ;;
-                        digits|numbers) use_digits=true ;;
-                        symbols) use_symbols=true ;;
-                        and) ;;
+                    case "$1" in
+                        lowercase) only_chars+="$chars_lower"; shift ;;
+                        uppercase) only_chars+="$chars_upper"; shift ;;
+                        digits|numbers) only_chars+="$chars_digits"; shift ;;
+                        symbols) only_chars+="$chars_symbols"; shift ;;
                         *) break ;;
                     esac
-                    shift
-                done ;;
-            --exclude|exclude)
+                done
+                chars="$only_chars"
+                ;;
+            include|with)
                 shift
                 while [[ $# -gt 0 ]]; do
-                    case $1 in
-                        lowercase) use_lowercase=false ;;
-                        uppercase) use_uppercase=false ;;
-                        digits|numbers) use_digits=false ;;
-                        symbols) use_symbols=false ;;
-                        and) ;;
+                    case "$1" in
+                        symbols) include_symbols=true; shift ;;
+                        numbers|digits) include_numbers=true; shift ;;
+                        letters) include_letters=true; shift ;;
                         *) break ;;
                     esac
-                    shift
-                done ;;
-            --require|require)
+                done
+                ;;
+            exclude)
                 shift
                 while [[ $# -gt 0 ]]; do
-                    case $1 in
-                        lowercase) min_lowercase=1; use_lowercase=true ;;
-                        uppercase) min_uppercase=1; use_uppercase=true ;;
-                        digits|numbers) min_digits=1; use_digits=true ;;
-                        symbols) min_symbols=1; use_symbols=true ;;
-                        and) ;;
+                    case "$1" in
+                        symbols)
+                            exclude_symbols=true
+                            chars="${chars//[$chars_symbols]/}"
+                            shift
+                            ;;
+                        numbers|digits)
+                            chars="${chars//[$chars_digits]/}"
+                            shift
+                            ;;
+                        letters)
+                            chars="${chars//[$chars_lower$chars_upper]/}"
+                            shift
+                            ;;
                         *) break ;;
                     esac
+                done
+                ;;
+            string|and|password)
+                shift
+                ;;
+            numbers)
+                chars="$chars_digits"
+                shift
+                ;;
+            letters)
+                chars="$chars_lower$chars_upper"
+                shift
+                ;;
+            alphanumeric)
+                chars="$chars_lower$chars_upper$chars_digits"
+                shift
+                ;;
+            lowercase)
+                chars="$chars_lower"
+                shift
+                ;;
+            uppercase)
+                chars="$chars_upper"
+                shift
+                ;;
+            alpha)
+                chars="$chars_lower$chars_upper"
+                shift
+                ;;
+            *)
+                if [[ "$arg" =~ ^[0-9]+$ ]]; then
+                    length="$arg"
                     shift
-                done ;;
-            --length) length=$2; shift ;;
-            *) echo "Invalid argument: $1"; return 1 ;;
+                else
+                    unprocessed_args+=("$arg")
+                    shift
+                fi
+                ;;
         esac
-        shift
     done
 
-    [[ -n $custom_symbols ]] && chars_symbols="$custom_symbols"
-    chars="$([[ $use_lowercase == true ]] && echo -n "$chars_lower")$([[ $use_uppercase == true ]] && echo -n "$chars_upper")$([[ $use_digits == true ]] && echo -n "$chars_digits")$([[ $use_symbols == true ]] && echo -n "$chars_symbols")"
-    [[ -z $chars ]] && echo "Character set is empty. Cannot generate random string." && return 1
-    total_required=$(( min_lowercase + min_uppercase + min_digits + min_symbols ))
-    (( total_required > length )) && echo "Total required characters exceed the desired length." && return 1
+    # Adjust character set based on include/exclude options
+    [[ $include_symbols == true ]] && chars+="$chars_symbols"
+    [[ $exclude_symbols == true ]] && chars="${chars//[$chars_symbols]/}"
+
+    [[ -z $chars ]] && echo "Character set is empty. Cannot generate random string." >&2 && return 1
 
     get_random_chars() {
         local count=$1
         local char_set=$2
         local output=""
         local char_set_len=${#char_set}
-        [[ $char_set_len -eq 0 ]] && echo "Character set is empty in get_random_chars." && return 1
+        [[ $char_set_len -eq 0 ]] && echo "Character set is empty in get_random_chars." >&2 && return 1
         for _ in $(seq 1 "$count"); do
             output+=${char_set:RANDOM%char_set_len:1}
         done
         echo "$output"
     }
 
-    password=""
-    (( min_lowercase )) && password+=$(get_random_chars "$min_lowercase" "$chars_lower") && length=$(( length - min_lowercase ))
-    (( min_uppercase )) && password+=$(get_random_chars "$min_uppercase" "$chars_upper") && length=$(( length - min_uppercase ))
-    (( min_digits )) && password+=$(get_random_chars "$min_digits" "$chars_digits") && length=$(( length - min_digits ))
-    (( min_symbols )) && password+=$(get_random_chars "$min_symbols" "$chars_symbols") && length=$(( length - min_symbols ))
-    (( length > 0 )) && password+=$(get_random_chars "$length" "$chars")
-    echo "$password" | fold -w1 | shuf | tr -d '\n'; echo
-    
+    # Build required_chars by including at least two characters from each included set
+    if [[ $include_symbols == true ]]; then
+        required_chars+=$(get_random_chars 2 "$chars_symbols")
+        required_length=$((required_length + 2))
+    fi
+    if [[ $include_numbers == true ]]; then
+        required_chars+=$(get_random_chars 2 "$chars_digits")
+        required_length=$((required_length + 2))
+    fi
+    if [[ $include_letters == true ]]; then
+        required_chars+=$(get_random_chars 2 "$chars_lower$chars_upper")
+        required_length=$((required_length + 2))
+    fi
+
+    length_remaining=$((length - required_length))
+
+    if (( length_remaining < 0 )); then
+        echo "Length is too short to include required characters." >&2
+        return 1
+    fi
+
+    # Generate remaining random characters
+    remaining_chars=$(get_random_chars "$length_remaining" "$chars")
+
+    # Combine required_chars and remaining_chars
+    all_chars="$required_chars$remaining_chars"
+
+    # Shuffle the combined characters
+    password=$(echo "$all_chars" | fold -w1 | shuf | tr -d '\n')
+
+    echo "$password"
 }
 
 
@@ -4941,7 +4992,7 @@ filesize() { bare.sh examine "$@" -p size ; return 0 ; }
 
 lowercase() { bare.sh transform "$@" --lowercase ; return 0 ; }
 
-password() { random --length 16 "$@"; return 0; }
+password() { random 16 "$@"; return 0; }
 
 round() { math round "$@" ; return 0 ; }
 
