@@ -4971,7 +4971,7 @@ case $1 in
 			echo ""
 			# if sudo password is needed
 			[[ ! -w "$(which bare.sh)" ]] && echo "   Please enter your password to continue."
-			curl -sL "https://raw.githubusercontent.com/matthewlarkin/bare.sh/refs/heads/root/bare.sh" > "$(which bare.sh)"
+			curl -sL "https://raw.githubusercontent.com/matthewlarkin/bare.sh/refs/heads/root/bare.sh" | sudo tee "$(which bare.sh)" > /dev/null
 			echo ""
 			echo "   ✅ bare.sh has been upgraded to the latest version!"
 			echo ""
