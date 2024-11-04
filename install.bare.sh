@@ -14,7 +14,14 @@ if ! [[ $random_number =~ ^[0-9]+$ ]]; then
 fi
 
 # if random number is a number, then install was successful
-echo "✅ Successfully installed bare.sh"
-echo "✅ You can now run 'bare.sh' from the command line."
-echo "☑️ Visit samples.bare.sh for sample usage."
-echo "☑️ If future updates are available, you can run 'bare.sh --upgrade' to upgrade to the latest version."
+echo ""
+echo "  - - - "
+echo ""
+echo "  ✅ Successfully installed bare.sh"
+echo "  ✅ You can now run 'bare.sh' from the command line."
+echo ""
+echo "  ☑️  Visit samples.bare.sh for sample usage."
+echo "  ☑️  If future updates are available, you can run 'bare.sh --upgrade' to upgrade to the latest version."
+echo ""
+echo "  - - - "
+echo ""
