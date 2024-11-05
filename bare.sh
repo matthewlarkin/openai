@@ -1968,6 +1968,50 @@ math() {
 
 
 
+meeting() {
+
+	local args format expires screensharing password notes privacy name participants knocking
+
+	privacy='private'
+	door='locked'
+	participants='2'
+	
+	name=$(random 16)
+
+	args=()
+	while [[ $# -gt 0 ]]; do
+		case $1 in
+			--format|-f) format="$2" && shift 2 ;;
+			--expires|-e) expires="$2" && shift 2 ;;
+			--screensharing|-s) screensharing="$2" && shift 2 ;;
+			--password|-P) password="$2" && shift 2 ;;
+			--notes|-N) notes="$2" && shift 2 ;;
+			--privacy|-v) privacy="$2" && shift 2 ;;
+			--name|-n) name="$2" && shift 2 ;;
+			--participants|-p) participants="$2" && shift 2 ;;
+			--knocking|-k) knocking="$2" && shift 2 ;;
+			*) args+=("$1") && shift ;;
+		esac
+	done
+	set -- "${args[@]}"
+
+	# debug everything:
+	echo "format: $format"
+	echo "expires: $expires"
+	echo "screensharing: $screensharing"
+	echo "password: $password"
+	echo "notes: $notes"
+	echo "privacy: $privacy"
+	echo "name: $name"
+	echo "participants: $participants"
+	echo "knocking: $knocking"
+
+	return 0
+
+}
+
+
+
 media() {
 
 	local command input args tmp_dir cover_image_path metadata title album artist output year track cover remove_original ffmpeg_command
