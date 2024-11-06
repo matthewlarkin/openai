@@ -1897,6 +1897,402 @@ image() {
 
 
 
+lexorank() {
+
+    local command input use_buckets=false
+
+    [[ -p /dev/stdin ]] && input=$(cat)
+
+    # Function to check if a LexoRank value is valid
+    isValidLexValue() {
+        local value="$1"
+        if [[ "$value" =~ ^[0-9a-z]*[1-9a-z]$ ]]; then
+            return 0  # valid
+        else
+            return 1  # invalid
+        fi
+    }
+
+    # Function to parse a LexoRank string
+    parseLexoRank() {
+        local lex="$1"
+        if [[ "$lex" =~ ^([0-2])\|([0-9a-z]*[1-9a-z])$ ]]; then
+            use_buckets=true
+            bucket="${BASH_REMATCH[1]}"
+            value="${BASH_REMATCH[2]}"
+            return 0
+        elif [[ "$lex" =~ ^([0-9a-z]*[1-9a-z])$ ]]; then
+            use_buckets=false
+            value="${BASH_REMATCH[1]}"
+            return 0
+        else
+            echo "Invalid lex string: $lex" >&2
+            return 1
+        fi
+    }
+
+    # Function to increment a character
+    incrementChar() {
+        local char="$1"
+        if [[ "$char" == "z" ]]; then
+            echo "-1"
+        elif [[ "$char" == "9" ]]; then
+            echo "a"
+        else
+            local ord
+            ord=$(printf "%d" "'$char")
+            local new_ord=$(( ord + 1 ))
+            printf "\\$(printf '%03o' "$new_ord")"
+        fi
+    }
+
+    # Function to decrement a character
+    decrementChar() {
+        local char="$1"
+        if [[ "$char" == "1" ]]; then
+            echo "-1"
+        elif [[ "$char" == "a" ]]; then
+            echo "9"
+        else
+            local ord
+            ord=$(printf "%d" "'$char")
+            local new_ord=$(( ord - 1 ))
+            printf "\\$(printf '%03o' "$new_ord")"
+        fi
+    }
+
+    # Function to increment a LexoRank value
+    lexoRankIncrement() {
+        local lex="$1"
+        parseLexoRank "$lex" || return 1
+
+        local idx=$(( ${#value} - 1 ))
+        while [[ $idx -ge 0 ]]; do
+            local char="${value:$idx:1}"
+            if [[ "$char" == "z" ]]; then
+                (( idx-- ))
+                continue
+            fi
+            local prefix="${value:0:$idx}"
+            local new_char
+            new_char=$(incrementChar "$char")
+            if [[ "$new_char" == "-1" ]]; then
+                (( idx-- ))
+                continue
+            fi
+            local newVal="$prefix$new_char"
+            if $use_buckets; then
+                echo "$bucket|$newVal"
+            else
+                echo "$newVal"
+            fi
+            return 0
+        done
+        local newVal="${value}1"
+        if $use_buckets; then
+            echo "$bucket|$newVal"
+        else
+            echo "$newVal"
+        fi
+    }
+
+    # Function to decrement a LexoRank value
+    lexoRankDecrement() {
+        local lex="$1"
+        parseLexoRank "$lex" || return 1
+
+        local length=${#value}
+        local char="${value:$((length - 1)):1}"
+
+        if [[ "$char" != "1" ]]; then
+            local prefix="${value:0:$((length - 1))}"
+            local new_char
+            new_char=$(decrementChar "$char")
+            local newVal="$prefix$new_char"
+            if $use_buckets; then
+                echo "$bucket|$newVal"
+            else
+                echo "$newVal"
+            fi
+            return 0
+        fi
+
+        if [[ $length -gt 1 && ! "${value:0:$((length - 1))}" =~ ^0+$ ]]; then
+            local newVal
+            newVal=$(cleanTrailingZeros "${value:0:$((length - 1))}")
+            if $use_buckets; then
+                echo "$bucket|$newVal"
+            else
+                echo "$newVal"
+            fi
+            return 0
+        fi
+
+        local newVal="0$value"
+        if $use_buckets; then
+            echo "$bucket|$newVal"
+        else
+            echo "$newVal"
+        fi
+    }
+
+    # Function to clean trailing zeros
+    cleanTrailingZeros() {
+        local str="$1"
+        if [[ "$str" =~ ^([0-9a-z]*[1-9a-z])0*$ ]]; then
+            echo "${BASH_REMATCH[1]}"
+        else
+            echo "Invalid lex string: $str" >&2
+            return 1
+        fi
+    }
+
+    # Function to compare two LexoRank values
+    lexoRankLessThan() {
+        local lex1="$1"
+        local lex2="$2"
+
+        parseLexoRank "$lex1" || return 1
+        local value1="$value"
+
+        parseLexoRank "$lex2" || return 1
+        local value2="$value"
+
+        local len1=${#value1}
+        local len2=${#value2}
+        local len=$(( len1 > len2 ? len1 : len2 ))
+
+        for (( idx=0; idx<len; idx++ )); do
+            local charA="${value1:$idx:1}"
+            local charB="${value2:$idx:1}"
+
+            if [[ -z "$charB" ]]; then
+                echo "false"
+                return 0
+            fi
+            if [[ -z "$charA" ]]; then
+                echo "true"
+                return 0
+            fi
+            if [[ "$charA" < "$charB" ]]; then
+                echo "true"
+                return 0
+            elif [[ "$charA" > "$charB" ]]; then
+                echo "false"
+                return 0
+            fi
+        done
+
+        echo "false"
+    }
+
+    # Function to find a LexoRank between two LexoRank values
+    lexoRankBetween() {
+        local lexBefore="$1"
+        local lexAfter="$2"
+
+        if [[ -z "$lexBefore" && -z "$lexAfter" ]]; then
+            echo "Only one argument may be null" >&2
+            return 1
+        fi
+
+        if [[ -z "$lexAfter" ]]; then
+            lexoRankIncrement "$lexBefore"
+            return $?
+        fi
+
+        if [[ -z "$lexBefore" ]]; then
+            lexoRankDecrement "$lexAfter"
+            return $?
+        fi
+
+        parseLexoRank "$lexBefore" || return 1
+        local before_value="$value"
+        local before_bucket="$bucket"
+
+        parseLexoRank "$lexAfter" || return 1
+        local after_value="$value"
+        local after_bucket="$bucket"
+
+        if $use_buckets && [[ "$before_bucket" != "$after_bucket" ]]; then
+            echo "Lex buckets must be the same" >&2
+            return 1
+        fi
+
+        local less
+        less=$(lexoRankLessThan "$lexBefore" "$lexAfter") || return 1
+        if [[ "$less" != "true" ]]; then
+            echo "${before_value} is not less than ${after_value}" >&2
+            return 1
+        fi
+
+        local incremented
+        incremented=$(lexoRankIncrement "$lexBefore") || return 1
+        less=$(lexoRankLessThan "$incremented" "$lexAfter") || return 1
+        if [[ "$less" == "true" ]]; then
+            echo "$incremented"
+            return 0
+        fi
+
+        local plus1
+        if $use_buckets; then
+            plus1="${before_bucket}|${before_value}1"
+        else
+            plus1="${before_value}1"
+        fi
+        less=$(lexoRankLessThan "$plus1" "$lexAfter") || return 1
+        if [[ "$less" == "true" ]]; then
+            echo "$plus1"
+            return 0
+        fi
+
+        local pre='0'
+        while true; do
+            local plus
+            if $use_buckets; then
+                plus="${before_bucket}|${before_value}${pre}1"
+            else
+                plus="${before_value}${pre}1"
+            fi
+            less=$(lexoRankLessThan "$plus" "$lexAfter") || return 1
+            if [[ "$less" == "true" ]]; then
+                echo "$plus"
+                return 0
+            fi
+            pre="${pre}0"
+        done
+    }
+
+    case "$1" in
+        --init|init)
+            if [[ "$2" == "--no-buckets" ]]; then
+                echo "mmmm"
+            else
+                echo "0|mmmm"
+            fi
+            ;;
+        increment)
+            lex="$2"
+            lexoRankIncrement "$lex"
+            ;;
+        decrement)
+            lex="$2"
+            lexoRankDecrement "$lex"
+            ;;
+        lessThan)
+            lex1="$2"
+            lex2="$3"
+            lexoRankLessThan "$lex1" "$lex2"
+            ;;
+        between)
+            lexBefore="$2"
+            lexAfter="$3"
+            [[ "$lexBefore" == "null" ]] && lexBefore=""
+            [[ "$lexAfter" == "null" ]] && lexAfter=""
+            lexoRankBetween "$lexBefore" "$lexAfter"
+            ;;
+
+		spot)
+
+			# given two lexorank lists, find out what moved
+			# returns "<moved_item> <prev_item> <next_item>"
+
+			while [[ $# -gt 0 ]]; do
+				case $2 in
+					change|between|in) shift ;;
+					*) break ;;
+				esac
+			done
+
+			local orig_array mod_array N j moved_item prev_item next_item
+		
+			read -a orig_array <<< "$2"
+			read -a mod_array <<< "$3"
+			N=${#orig_array[@]}
+		
+			# Check if the two lists contain the same items
+			if [[ $(echo "${orig_array[@]}" | tr ' ' '\n' | sort) != $(echo "${mod_array[@]}" | tr ' ' '\n' | sort) ]]; then
+				echo "Error: The two lists do not contain the same items." >&2
+				return 1
+			fi
+		
+			j=0
+			moved_item=""
+			prev_item=""
+			next_item=""
+		
+			for ((i=0; i<N; i++)); do
+				if [ "$j" -lt "$N" ] && [ "${mod_array[i]}" == "${orig_array[j]}" ]; then
+					((j++))
+				else
+					moved_item="${mod_array[i]}"
+					if [ $i -gt 0 ]; then
+						prev_item="${mod_array[i-1]}"
+					fi
+					if [ $i -lt $((N-1)) ]; then
+						next_item="${mod_array[i+1]}"
+					fi
+					break
+				fi
+			done
+		
+			echo "$moved_item $prev_item $next_item"
+			
+			;;
+        --help)
+            echo "Usage: $0 {increment|decrement|lessThan|between} args..."
+            echo ""
+            echo "Commands:"
+            echo "  increment <lex_value>           Increment the LexoRank value"
+            echo "  decrement <lex_value>           Decrement the LexoRank value"
+            echo "  lessThan <lex1> <lex2>          Compare two LexoRank values"
+            echo "  between <lexBefore> <lexAfter>  Find a LexoRank between two values"
+            echo "                                  Use 'null' for one of the values if needed"
+            echo "  init [--no-buckets]             Initialize a LexoRank value"
+            exit 1
+            ;;
+        *)
+            if [ $# -gt 0 ]; then
+                echo "$@" | tr ' ' '\n' | sort
+            # if no arguments given, read from stdin
+            else
+                echo "$input" | tr ' ' '\n' | sort
+            fi
+            ;;
+    esac
+
+    unset -f isValidLexValue
+    unset -f parseLexoRank
+    unset -f incrementChar
+    unset -f decrementChar
+    unset -f lexoRankIncrement
+    unset -f lexoRankDecrement
+    unset -f cleanTrailingZeros
+    unset -f lexoRankLessThan
+    unset -f lexoRankBetween
+
+}
+
+
+
+list() { # alias for `bare.sh records select ...`
+
+	# capture $input
+	if [[ -p /dev/stdin ]]; then input=$(cat); else { input=$1 && shift; } fi
+
+	# require $input
+	[[ -z $input ]] && echo "Error: no input provided" && return 1
+
+	# coalesce $input
+	[[ -f "$input" ]] && input=$(cat "$input")
+	[[ -f "records/$input" ]] && input=$(cat "records/$input")
+
+	echo "$input" | records select "$@"
+
+}
+
+
+
 math() {
 
 	local operation
@@ -2755,14 +3151,16 @@ recmove() {
 			[[ -n $entity ]] && args+=("-t" "$entity")
 
 			# get record rank of records
-			ranks=()
-			mapfile -t ranks < <(recsel "$dataset" "${args[@]}" -e "$primary_key = '${records[0]}'" -P "$rank_column")
-			mapfile -t ranks < <(recsel "$dataset" "${args[@]}" -e "$primary_key = '${records[1]}'" -P "$rank_column")
+			local records ranks new_rank recsel_output
+			for record in "${records[@]}"; do
+				recsel_output=$(recsel "$dataset" -e "$primary_key = '$record'" -P "$rank_column")
+				ranks+=("$recsel_output")
+			done
 
 			new_rank=$(bare.sh lexorank between "${ranks[@]}")
 
 			# update primary record with new rank
-			recset "$dataset" "${args[@]}" -e "$primary_key = '$primary_value'" -f "$rank_column" -s "$new_rank"
+			recset "$dataset" -e "$primary_key = '$primary_value'" -f "$rank_column" -s "$new_rank"
 
 			;;
 
@@ -3086,354 +3484,6 @@ routines() {
 
 	unset -f add_or_update_cron
 	unset -f remove_cron
-
-}
-
-
-
-lexorank() {
-
-    local command input use_buckets=false
-
-    [[ -p /dev/stdin ]] && input=$(cat)
-
-    # Function to check if a LexoRank value is valid
-    isValidLexValue() {
-        local value="$1"
-        if [[ "$value" =~ ^[0-9a-z]*[1-9a-z]$ ]]; then
-            return 0  # valid
-        else
-            return 1  # invalid
-        fi
-    }
-
-    # Function to parse a LexoRank string
-    parseLexoRank() {
-        local lex="$1"
-        if [[ "$lex" =~ ^([0-2])\|([0-9a-z]*[1-9a-z])$ ]]; then
-            use_buckets=true
-            bucket="${BASH_REMATCH[1]}"
-            value="${BASH_REMATCH[2]}"
-            return 0
-        elif [[ "$lex" =~ ^([0-9a-z]*[1-9a-z])$ ]]; then
-            use_buckets=false
-            value="${BASH_REMATCH[1]}"
-            return 0
-        else
-            echo "Invalid lex string: $lex" >&2
-            return 1
-        fi
-    }
-
-    # Function to increment a character
-    incrementChar() {
-        local char="$1"
-        if [[ "$char" == "z" ]]; then
-            echo "-1"
-        elif [[ "$char" == "9" ]]; then
-            echo "a"
-        else
-            local ord
-            ord=$(printf "%d" "'$char")
-            local new_ord=$(( ord + 1 ))
-            printf "\\$(printf '%03o' "$new_ord")"
-        fi
-    }
-
-    # Function to decrement a character
-    decrementChar() {
-        local char="$1"
-        if [[ "$char" == "1" ]]; then
-            echo "-1"
-        elif [[ "$char" == "a" ]]; then
-            echo "9"
-        else
-            local ord
-            ord=$(printf "%d" "'$char")
-            local new_ord=$(( ord - 1 ))
-            printf "\\$(printf '%03o' "$new_ord")"
-        fi
-    }
-
-    # Function to increment a LexoRank value
-    lexoRankIncrement() {
-        local lex="$1"
-        parseLexoRank "$lex" || return 1
-
-        local idx=$(( ${#value} - 1 ))
-        while [[ $idx -ge 0 ]]; do
-            local char="${value:$idx:1}"
-            if [[ "$char" == "z" ]]; then
-                (( idx-- ))
-                continue
-            fi
-            local prefix="${value:0:$idx}"
-            local new_char
-            new_char=$(incrementChar "$char")
-            if [[ "$new_char" == "-1" ]]; then
-                (( idx-- ))
-                continue
-            fi
-            local newVal="$prefix$new_char"
-            if $use_buckets; then
-                echo "$bucket|$newVal"
-            else
-                echo "$newVal"
-            fi
-            return 0
-        done
-        local newVal="${value}1"
-        if $use_buckets; then
-            echo "$bucket|$newVal"
-        else
-            echo "$newVal"
-        fi
-    }
-
-    # Function to decrement a LexoRank value
-    lexoRankDecrement() {
-        local lex="$1"
-        parseLexoRank "$lex" || return 1
-
-        local length=${#value}
-        local char="${value:$((length - 1)):1}"
-
-        if [[ "$char" != "1" ]]; then
-            local prefix="${value:0:$((length - 1))}"
-            local new_char
-            new_char=$(decrementChar "$char")
-            local newVal="$prefix$new_char"
-            if $use_buckets; then
-                echo "$bucket|$newVal"
-            else
-                echo "$newVal"
-            fi
-            return 0
-        fi
-
-        if [[ $length -gt 1 && ! "${value:0:$((length - 1))}" =~ ^0+$ ]]; then
-            local newVal
-            newVal=$(cleanTrailingZeros "${value:0:$((length - 1))}")
-            if $use_buckets; then
-                echo "$bucket|$newVal"
-            else
-                echo "$newVal"
-            fi
-            return 0
-        fi
-
-        local newVal="0$value"
-        if $use_buckets; then
-            echo "$bucket|$newVal"
-        else
-            echo "$newVal"
-        fi
-    }
-
-    # Function to clean trailing zeros
-    cleanTrailingZeros() {
-        local str="$1"
-        if [[ "$str" =~ ^([0-9a-z]*[1-9a-z])0*$ ]]; then
-            echo "${BASH_REMATCH[1]}"
-        else
-            echo "Invalid lex string: $str" >&2
-            return 1
-        fi
-    }
-
-    # Function to compare two LexoRank values
-    lexoRankLessThan() {
-        local lex1="$1"
-        local lex2="$2"
-
-        parseLexoRank "$lex1" || return 1
-        local value1="$value"
-
-        parseLexoRank "$lex2" || return 1
-        local value2="$value"
-
-        local len1=${#value1}
-        local len2=${#value2}
-        local len=$(( len1 > len2 ? len1 : len2 ))
-
-        for (( idx=0; idx<len; idx++ )); do
-            local charA="${value1:$idx:1}"
-            local charB="${value2:$idx:1}"
-
-            if [[ -z "$charB" ]]; then
-                echo "false"
-                return 0
-            fi
-            if [[ -z "$charA" ]]; then
-                echo "true"
-                return 0
-            fi
-            if [[ "$charA" < "$charB" ]]; then
-                echo "true"
-                return 0
-            elif [[ "$charA" > "$charB" ]]; then
-                echo "false"
-                return 0
-            fi
-        done
-
-        echo "false"
-    }
-
-    # Function to find a LexoRank between two LexoRank values
-    lexoRankBetween() {
-        local lexBefore="$1"
-        local lexAfter="$2"
-
-        if [[ -z "$lexBefore" && -z "$lexAfter" ]]; then
-            echo "Only one argument may be null" >&2
-            return 1
-        fi
-
-        if [[ -z "$lexAfter" ]]; then
-            lexoRankIncrement "$lexBefore"
-            return $?
-        fi
-
-        if [[ -z "$lexBefore" ]]; then
-            lexoRankDecrement "$lexAfter"
-            return $?
-        fi
-
-        parseLexoRank "$lexBefore" || return 1
-        local before_value="$value"
-        local before_bucket="$bucket"
-
-        parseLexoRank "$lexAfter" || return 1
-        local after_value="$value"
-        local after_bucket="$bucket"
-
-        if $use_buckets && [[ "$before_bucket" != "$after_bucket" ]]; then
-            echo "Lex buckets must be the same" >&2
-            return 1
-        fi
-
-        local less
-        less=$(lexoRankLessThan "$lexBefore" "$lexAfter") || return 1
-        if [[ "$less" != "true" ]]; then
-            echo "${before_value} is not less than ${after_value}" >&2
-            return 1
-        fi
-
-        local incremented
-        incremented=$(lexoRankIncrement "$lexBefore") || return 1
-        less=$(lexoRankLessThan "$incremented" "$lexAfter") || return 1
-        if [[ "$less" == "true" ]]; then
-            echo "$incremented"
-            return 0
-        fi
-
-        local plus1
-        if $use_buckets; then
-            plus1="${before_bucket}|${before_value}1"
-        else
-            plus1="${before_value}1"
-        fi
-        less=$(lexoRankLessThan "$plus1" "$lexAfter") || return 1
-        if [[ "$less" == "true" ]]; then
-            echo "$plus1"
-            return 0
-        fi
-
-        local pre='0'
-        while true; do
-            local plus
-            if $use_buckets; then
-                plus="${before_bucket}|${before_value}${pre}1"
-            else
-                plus="${before_value}${pre}1"
-            fi
-            less=$(lexoRankLessThan "$plus" "$lexAfter") || return 1
-            if [[ "$less" == "true" ]]; then
-                echo "$plus"
-                return 0
-            fi
-            pre="${pre}0"
-        done
-    }
-
-    case "$1" in
-        --init|init)
-            if [[ "$2" == "--no-buckets" ]]; then
-                echo "mmmm"
-            else
-                echo "0|mmmm"
-            fi
-            ;;
-        increment)
-            lex="$2"
-            lexoRankIncrement "$lex"
-            ;;
-        decrement)
-            lex="$2"
-            lexoRankDecrement "$lex"
-            ;;
-        lessThan)
-            lex1="$2"
-            lex2="$3"
-            lexoRankLessThan "$lex1" "$lex2"
-            ;;
-        between)
-            lexBefore="$2"
-            lexAfter="$3"
-            [[ "$lexBefore" == "null" ]] && lexBefore=""
-            [[ "$lexAfter" == "null" ]] && lexAfter=""
-            lexoRankBetween "$lexBefore" "$lexAfter"
-            ;;
-        --help)
-            echo "Usage: $0 {increment|decrement|lessThan|between} args..."
-            echo ""
-            echo "Commands:"
-            echo "  increment <lex_value>           Increment the LexoRank value"
-            echo "  decrement <lex_value>           Decrement the LexoRank value"
-            echo "  lessThan <lex1> <lex2>          Compare two LexoRank values"
-            echo "  between <lexBefore> <lexAfter>  Find a LexoRank between two values"
-            echo "                                  Use 'null' for one of the values if needed"
-            echo "  init [--no-buckets]             Initialize a LexoRank value"
-            exit 1
-            ;;
-        *)
-            if [ $# -gt 0 ]; then
-                echo "$@" | tr ' ' '\n' | sort
-            # if no arguments given, read from stdin
-            else
-                echo "$input" | tr ' ' '\n' | sort
-            fi
-            ;;
-    esac
-
-    unset -f isValidLexValue
-    unset -f parseLexoRank
-    unset -f incrementChar
-    unset -f decrementChar
-    unset -f lexoRankIncrement
-    unset -f lexoRankDecrement
-    unset -f cleanTrailingZeros
-    unset -f lexoRankLessThan
-    unset -f lexoRankBetween
-
-}
-
-
-
-list() { # alias for `bare.sh records select ...`
-
-	# capture $input
-	if [[ -p /dev/stdin ]]; then input=$(cat); else { input=$1 && shift; } fi
-
-	# require $input
-	[[ -z $input ]] && echo "Error: no input provided" && return 1
-
-	# coalesce $input
-	[[ -f "$input" ]] && input=$(cat "$input")
-	[[ -f "records/$input" ]] && input=$(cat "records/$input")
-
-	echo "$input" | records select "$@"
 
 }
 
