@@ -111,6 +111,8 @@ __bareStartUp() {
 	# shellcheck disable=SC1091
 	[[ -f "$HOME/.barerc" ]] && source "$HOME/.barerc"
 
+	return 0
+
 }
 
 
@@ -1534,8 +1536,6 @@ geo() {
 
 	__deps curl jq
 
-	touch "$BARE_DIR/.bare/cache/geo.txt"
-
 	format_location() {
 		local loc="$1"
 
@@ -1568,20 +1568,11 @@ geo() {
 	location=$(format_location "$location")
 	[[ $location =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] && type="ip" || type="city"
 
-	# Check if the location is in the geo.txt file
-	if grep -q "^$location " "$BARE_DIR/.bare/cache/geo.txt"; then
-		# If the location is in the file, get the coordinates from the file
-		coordinates=$(grep "^$location " "$BARE_DIR/.bare/cache/geo.txt" | cut -d ' ' -f 2)
+	# If the location is not in the file, fetch the coordinates from the API
+	if [[ "$type" == "city" ]]; then
+		coordinates=$(curl -s "https://nominatim.openstreetmap.org/search?format=json&q=$location" | jq -r '.[0].lat + "," + .[0].lon' | awk -F, '{printf "%.6f,%.6f\n", $1, $2}')
 	else
-		# If the location is not in the file, fetch the coordinates from the API
-		if [[ "$type" == "city" ]]; then
-			coordinates=$(curl -s "https://nominatim.openstreetmap.org/search?format=json&q=$location" | jq -r '.[0].lat + "," + .[0].lon' | awk -F, '{printf "%.6f,%.6f\n", $1, $2}')
-		else
-			coordinates=$(curl -s "https://ipinfo.io/$location" | jq -r '.loc' | awk -F, '{printf "%.6f,%.6f\n", $1, $2}')
-		fi
-
-		# Add the location and coordinates to the geo.txt file
-		echo "$location $coordinates" >> "$BARE_DIR/.bare/cache/geo.txt"
+		coordinates=$(curl -s "https://ipinfo.io/$location" | jq -r '.loc' | awk -F, '{printf "%.6f,%.6f\n", $1, $2}')
 	fi
 
 	# Format the coordinates to the requested number of decimal places
@@ -4722,8 +4713,6 @@ weather() {
         location=$(geo "$input")
     fi
 
-    cache_path="$BARE_DIR/.bare/cache/weather/$(codec text.filesafe "$location")"
-
     [[ $BARE_COLOR == '0' ]] && color='0' || color='1'
 
     remaining_args=() && while [[ $# -gt 0 ]]; do
@@ -4746,22 +4735,7 @@ weather() {
 
     [[ $json_requested == '1' ]] && {
 
-        cacheJSON() {
-            json=$(curl -sL "wttr.in/$location?format=j1")
-            mkdir -p "$BARE_DIR/.bare/cache/weather"
-            echo "$json" > "$cache_path.json"
-        }
-
-        # check cache for json
-        if [[ ! -f "$cache_path.json" ]]; then
-            cacheJSON;
-        else
-            cache_age=$(age "$cache_path.json" --hours)
-            if (( $(echo "$cache_age > 1" | bc -l) )); then
-                cacheJSON;
-            fi
-        fi
-        json=$(< "$cache_path.json")
+		json=$(curl -sL "wttr.in/$location?format=j1")
 
         [[ $concise == '1' ]] && {
             echo "$json" | jq -r '.current_condition[0].weatherDesc[0].value'
@@ -4798,38 +4772,16 @@ weather() {
     case $1 in
         today|--today)
             response=$(curl -sL "wttr.in/${location}?uQ${color_code}F1" | sed -n '/┌─────────────┐/,/└─────────────┘/p')
-            cache_append=".today"
             ;;
         tomorrow|--tomorrow)
             response=$(curl -sL "wttr.in/${location}?uQ${color_code}F2" | sed -n '/┌─────────────┐/,/└─────────────┘/p' | tail -n 10)
-            cache_append=".tomorrow"
             ;;
         forecast|--forecast)
             response=$(curl -sL "wttr.in/${location}?uQ${color_code}F3" | sed -n '/┌─────────────┐/,/└─────────────┘/p')
-            cache_append=".forecast"
             ;;
         * )
             response=$(curl -sL "wttr.in/${location}?uQ${color_code}F" | head -n 5)
-            cache_append=".now"
     esac
-
-    # if simple request, cache and respond now
-    [[ -n $response ]] && {
-        if [[ ! -f "${cache_path}${cache_append}" ]]; then
-            mkdir -p "$BARE_DIR/.bare/cache/weather"
-            echo "$response" > "${cache_path}${cache_append}"
-        fi
-        echo "$response"
-        exit 0
-    }
-
-    # if no response, check cache
-    [[ -z $response ]] && {
-        if [[ -f "${cache_path}${cache_append}" ]]; then
-            cat "${cache_path}${cache_append}"
-            exit 0
-        fi
-    }
 
     echo "$response"
 
