@@ -2192,17 +2192,20 @@ lexorank() {
             lexoRankBetween "$lexBefore" "$lexAfter"
             ;;
 
-		spot)
+		spot|show|detect)
 
-			# given two lexorank lists, find out what moved
-			# returns "<moved_item> <prev_item> <next_item>"
-
+			local verbose
+			args=()
 			while [[ $# -gt 0 ]]; do
-				case $2 in
+				case $1 in
 					change|between|in) shift ;;
-					*) break ;;
+					-v|--verbose) verbose=true && shift ;;
+					*) args+=("$1") && shift ;;
 				esac
 			done
+			set -- "${args[@]}"
+
+			[[ $# -ne 3 ]] && echo "Error: Invalid number of arguments" >&2 && return 1
 
 			local orig_array mod_array N j moved_item prev_item next_item
 		
@@ -2236,6 +2239,7 @@ lexorank() {
 				fi
 			done
 		
+			[[ -n $verbose ]] && echo "moved $moved_item between $prev_item and $next_item" && return 0
 			echo "$moved_item $prev_item $next_item"
 			
 			;;
