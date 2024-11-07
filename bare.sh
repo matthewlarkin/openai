@@ -109,7 +109,7 @@ __bareStartUp() {
 	__getOS
 
 	# shellcheck disable=SC1091
-	source "$HOME/.barerc"
+	[[ -f "$HOME/.barerc" ]] && source "$HOME/.barerc"
 
 }
 
