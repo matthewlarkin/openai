@@ -2916,7 +2916,7 @@ random() {
             string|and|password)
                 shift
                 ;;
-            numbers)
+            number|numbers)
                 chars="$chars_digits"
                 shift
                 ;;
