@@ -421,192 +421,44 @@ airtable() {
 
 
 
-cloud() {
+clipboard() {
 
-	getCloudProvider() {
+	# if mac, use pbcopy and pbpaste, if linux, use xclip
 
-		[[ -n "$HETZNER_API_KEY" ]] && echo "hetzner" && exit 0
-		[[ -n "$DIGITALOCEAN_API_KEY" ]] && echo "digitalocean" && exit 0
-		[[ -n "$LINODE_API_KEY" ]] && echo "linode" && exit 0
-		[[ -n "$VULTR_API_KEY" ]] && echo "vultr" && exit 0
-		{
-			echo "Error: no cloud provider set."
-			echo ""
-			echo "Requires one of:"
-			echo -e "  - HETZNER_API_KEY\n  - DIGITALOCEAN_API_KEY\n  - LINODE_API_KEY\n  - VULTR_API_KEY"
-		} >&2
+	local input command
 
-	}
+	if [[ -p /dev/stdin ]]; then input=$(cat); fi
 
-	# shellcheck disable=SC2317
-	hetzner_info() {
-		
-		local json
-		json=$(curl -sL -H "Authorization: Bearer $HETZNER_API_KEY" \
-		https://api.hetzner.cloud/v1/servers | jq '[.servers[] | {
-			status,
-			ip: .public_net.ipv4.ip,
-			description: .server_type.description,
-			cores: .server_type.cores,
-			memory: (.server_type.memory | tostring + " GB"),
-			disk: (.server_type.disk | tostring + " GB"),
-			location: .datacenter.location.name,
-			city: .datacenter.location.city,
-			os: .image.description
-		}]')
-		echo "$json" | jq | rec from
+	command='copy'
 
-	}
-
-	# shellcheck disable=SC2317
-	hetzner_createSSH() {
-
-		local public_key name response
-
-		public_key=${1-""}
-		name=${2-"$(random string)"}
-
-		if [[ -z $public_key ]]; then
-			echo "Error: public_key is required." >&2
-		fi
-
-		response=$(curl -sL -X POST \
-			-H "Authorization: Bearer $HETZNER_API_KEY" \
-			-H "Content-Type: application/json" \
-			-d '{
-				"name": "'"$name"'",
-				"public_key": "'"$public_key"'"
-			}' "https://api.hetzner.cloud/v1/ssh_keys")
-
-		if [[ $(echo "$response" | jq -r '.error') == "null" ]]; then
-			echo "$response" | jq -r '.ssh_key.id'
-		else
-			echo "Error: $(echo "$response" | jq -r '.error.message')."
-		fi
-
-	}
-
-	# shellcheck disable=SC2317
-	hetzner_listSSH() {
-		# only return: .ssh_keys[], and .id, .public_key
-		curl -sL -H "Authorization: Bearer $HETZNER_API_KEY" \
-			"https://api.hetzner.cloud/v1/ssh_keys" | jq '[.ssh_keys[] | {id: .id, name: .name, pub: .public_key}]' | rec from
-	}
-
-	# shellcheck disable=SC2317
-	hetzner_createFirewall() {
-
-		local name rules response
-
-		name=$1
-		rules=$2
-
-		response=$(
-			curl -sL -X POST \
-				-H "Authorization: Bearer $HETZNER_API_KEY" \
-				-H "Content-Type: application/json" \
-				-d '{
-					"name": "'"$name"'",
-					"rules": '"$rules"'
-				}' "https://api.hetzner.cloud/v1/firewalls"
-		)
-
-		if [[ $(echo "$response" | jq -r '.error') != "null" ]]; then
-			echo "Error: $(echo "$response" | jq -r '.error.message')"
-		fi
-
-		echo "$response" | jq '.firewall | {id, name, rules: .rules[].direction + " " + .rules[].protocol + " " + .rules[].port + " " + .rules[].source_ips}' | rec from
-
-	}
-
-	# shellcheck disable=SC2317
-	hetzner_listFirewalls() {
-		:
-	}
-
-	# shellcheck disable=SC2317
-	hetzner_createServer() {
-
-		local name key response
-
-		name=$1
-		key=$2
-
-		response=$(
-			curl -sL -X POST \
-				-H "Authorization: Bearer $HETZNER_API_KEY" \
-				-H "Content-Type: application/json" \
-				-d '{
-					"image" : "ubuntu-22.04",
-					"location" : "ash",
-					"name" : "'"$name"'",
-					"server_type" : "cpx11",
-					"ssh_keys" : [ '"$key"' ],
-					"start_after_create" : true
-				}' "https://api.hetzner.cloud/v1/servers"
-		)
-
-		if [[ $(echo "$response" | jq -r '.error') != "null" ]]; then
-			echo "Error: $(echo "$response" | jq -r '.error.message')"
-		fi
-
-		# return only the vital details about server as recfile
-		echo "$response" | jq '.server | {
-			id,
-			name,
-			ip: .public_net.ipv4.ip,
-			type: .server_type.description,
-			location: .datacenter.location.name,
-			city: .datacenter.location.city,
-			os: .image.description
-		}' | rec from
-
-	}
-
-	local cloud_provider command name key
-
-	cloud_provider=$(getCloudProvider)
-	command=$1
-	shift
+	[[ $# -eq 1 ]] && command=$1
+	[[ $# -eq 2 ]] && { command=$1; input=$2; }
 
 	case $command in
-		info) "${cloud_provider}_info" ;;
-		create)
-			while [[ $# -gt 0 ]]; do
-				case $1 in
-					--name|-N) name="$2" && shift 2 ;;
-					--key|-K)
-						if [[ $(validate integer "$2") == 'true' ]]; then
-							key="$2" && shift 2
-						else
-							echo "Error: invalid key ID (not an integer)"
-						fi
-						;;
-					*) echo "Invalid argument: $1" ;;
-				esac
-			done
-			"${cloud_provider}_createServer" "$name" "$key"
-			;;
-		ssh)
-			case $1 in
-				create) "${cloud_provider}_createSSH" "${@:2}" ;;
-				list) "${cloud_provider}_listSSH" ;;
-				*) echo "Invalid argument: $1" ;;
+
+		copy)
+
+			case $OS in
+				macOS) echo "$input" | pbcopy ;;
+				Linux) echo "$input" | xclip -selection clipboard ;;
+				*) echo "Error: clipboard operations are not supported on this OS." && return 1 ;;
 			esac
+
+			;;
+
+		paste)
+
+			case $OS in
+				macOS) pbpaste ;;
+				Linux) xclip -selection clipboard -o ;;
+				*) echo "Error: clipboard operations are not supported on this OS." && return 1 ;;
+			esac
+
+			;;
 
 	esac
 
-	# Unset private functions
-	unset -f getCloudProvider
-	unset -f hetzner_info
-	unset -f hetzner_createSSH
-	unset -f hetzner_listSSH
-	unset -f hetzner_createFirewall
-	unset -f hetzner_listFirewalls
-	unset -f hetzner_createServer
-
 }
-
 
 
 
@@ -619,6 +471,83 @@ codec() {
 	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1 && shift; fi
 
 	case $command in
+
+		superscript)
+		
+			# Convert input to superscript text (including letters where possible)
+			sed 's/0/⁰/g; s/1/¹/g; s/2/²/g; s/3/³/g; s/4/⁴/g;
+				 s/5/⁵/g; s/6/⁶/g; s/7/⁷/g; s/8/⁸/g; s/9/⁹/g;
+				 s/a/ᵃ/g; s/b/ᵇ/g; s/c/ᶜ/g; s/d/ᵈ/g; s/e/ᵉ/g;
+				 s/f/ᶠ/g; s/g/ᵍ/g; s/h/ʰ/g; s/i/ⁱ/g; s/j/ʲ/g;
+				 s/k/ᵏ/g; s/l/ˡ/g; s/m/ᵐ/g; s/n/ⁿ/g; s/o/ᵒ/g;
+				 s/p/ᵖ/g; s/r/ʳ/g; s/s/ˢ/g; s/t/ᵗ/g; s/u/ᵘ/g;
+				 s/v/ᵛ/g; s/w/ʷ/g; s/x/ˣ/g; s/y/ʸ/g; s/z/ᶻ/g;
+				 s/A/ᴬ/g; s/B/ᴮ/g; s/C/ᶜ/g; s/D/ᴰ/g; s/E/ᴱ/g;
+				 s/G/ᴳ/g; s/H/ᴴ/g; s/I/ᴵ/g; s/J/ᴶ/g; s/K/ᴷ/g;
+				 s/L/ᴸ/g; s/M/ᴹ/g; s/N/ᴺ/g; s/O/ᴼ/g; s/P/ᴾ/g;
+				 s/R/ᴿ/g; s/T/ᵀ/g; s/U/ᵁ/g; s/V/ⱽ/g; s/W/ᵂ/g;
+				 s/+/⁺/g; s/-/⁻/g; s/=/⁼/g; s/(/⁽/g; s/)/⁾/g;
+				 ' <<< "$input"
+
+			;;
+
+		subscript)
+
+			# Convert input to subscript text (including letters where possible)
+			sed 's/0/₀/g; s/1/₁/g; s/2/₂/g; s/3/₃/g; s/4/₄/g;
+				 s/5/₅/g; s/6/₆/g; s/7/₇/g; s/8/₈/g; s/9/₉/g;
+				 s/a/ₐ/g; s/e/ₑ/g; s/h/ₕ/g; s/i/ᵢ/g; s/j/ⱼ/g;
+				 s/k/ₖ/g; s/l/ₗ/g; s/m/ₘ/g; s/n/ₙ/g; s/o/ₒ/g;
+				 s/p/ₚ/g; s/r/ᵣ/g; s/s/ₛ/g; s/t/ₜ/g; s/u/ᵤ/g;
+				 s/v/ᵥ/g; s/x/ₓ/g;
+				 s/A/ₐ/g; s/E/ₑ/g; s/H/ₕ/g; s/I/ᵢ/g; s/J/ⱼ/g;
+				 s/K/ₖ/g; s/L/ₗ/g; s/M/ₘ/g; s/N/ₙ/g; s/O/ₒ/g;
+				 s/P/ₚ/g; s/R/ᵣ/g; s/S/ₛ/g; s/T/ₜ/g; s/U/ᵤ/g;
+				 s/V/ᵥ/g; s/X/ₓ/g;
+				 s/+/₊/g; s/-/₋/g; s/=/₌/g; s/(/₍/g; s/)/₎/g;
+				 ' <<< "$input"
+
+			;;
+
+		copyright)
+
+			echo "©"
+
+			;;
+
+		degrees)
+
+			echo "°"
+
+			;;
+
+		trademark)
+
+			echo "™"
+
+			;;
+
+		registered)
+
+			echo "®"
+
+			;;
+
+		arrow)
+
+			case $input in
+				up|north) echo "↑" ;;
+				down|south) echo "↓" ;;
+				left|west) echo "←" ;;
+				right|east) echo "→" ;;
+				upright|northeast) echo "↗" ;;
+				upleft|northwest) echo "↖" ;;
+				downright|southeast) echo "↘" ;;
+				downleft|southwest) echo "↙" ;;
+				*) echo -n "Invalid input: $input" ;;
+			esac
+
+			;;
 
 		encrypt)
 
