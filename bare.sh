@@ -34,7 +34,7 @@ __getOS() {
 	OS="Other"
 	case $(uname) in
 		Linux) grep -q 'Ubuntu' /etc/os-release && OS="Ubuntu" ;;
-		Darwin) OS="macOS";;
+		Darwin) OS="macOS" ;;
 	esac
 	export OS
 
