@@ -3358,6 +3358,100 @@ render() {
 
 
 
+report() {
+    __deps csvlook
+
+    local input args title=""
+    local -A notes_map
+    local note_counter=1
+
+    [[ -p /dev/stdin ]] && input=$(cat) || input="$1"
+    [[ -z "$input" ]] && echo "Error: no input provided" && return 1
+    [[ -f "$input" ]] && input=$(cat "$input")
+
+    args=()
+    notes=()
+
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+			with|and) shift ;; # permits lyrical command syntax
+            note)
+                # Require two args: column name and note text
+                [[ $# -lt 3 ]] && echo "Error: not enough arguments for note" && return 1
+                local col_name="$2"
+                local note_text="$3"
+                notes_map["$col_name"]="$note_text"
+                shift 3
+                ;;
+            title)
+                # Require one arg: title text
+                [[ $# -lt 2 ]] && echo "Error: not enough arguments for title" && return 1
+                title="$2"
+                shift 2
+                ;;
+            *) args+=("$1") && shift ;;
+        esac
+    done
+
+    set -- "${args[@]}"
+
+    # Read the CSV header
+    IFS= read -r header_line <<< "$input"
+    IFS=',' read -ra headers <<< "$header_line"
+
+    # Function to convert a number to superscript
+    to_superscript() {
+        local num="$1"
+        local superscript_digits=("⁰" "¹" "²" "³" "⁴" "⁵" "⁶" "⁷" "⁸" "⁹")
+        local result=""
+        local digit
+        for (( i=0; i<${#num}; i++ )); do
+            digit="${num:$i:1}"
+            result+="${superscript_digits[$digit]}"
+        done
+        echo -n "$result"
+    }
+
+    # Map notes to columns and modify headers
+    for i in "${!headers[@]}"; do
+        col="${headers[i]}"
+        # Remove quotes from header
+        col_cleaned="${col%\"}"
+        col_cleaned="${col_cleaned#\"}"
+        if [[ -n "${notes_map[$col_cleaned]}" ]]; then
+            superscript=$(to_superscript "$note_counter")
+            headers[i]="${col}${superscript}"
+            notes+=("${superscript} ${notes_map[$col_cleaned]}")
+            ((note_counter++))
+        fi
+    done
+
+    # Reconstruct the modified header line
+    modified_header=$(IFS=,; echo "${headers[*]}")
+
+    # Combine modified header with the rest of the input
+    output="$modified_header"$'\n'"$(tail -n +2 <<< "$input")"
+
+    # Display the title if set
+    if [[ -n "$title" ]]; then
+        echo "## $title"
+        echo
+    fi
+
+    # Display the table
+    echo "$output" | csvlook -I
+
+    # Display the notes
+    if [[ ${#notes[@]} -gt 0 ]]; then
+        echo
+        for note in "${notes[@]}"; do
+            echo "$note"
+        done
+    fi
+}
+
+
+
 request() {
 
 	local url
