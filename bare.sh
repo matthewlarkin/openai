@@ -1228,6 +1228,36 @@ date() {
 
 
 
+datecalc() {
+
+	local base_date modifiers result date_cmd
+
+	# Input validation: must have at least two arguments
+	if [ "$#" -lt 2 ]; then
+		echo "Usage: datecalc <date> <modifiers...>"
+		return 1
+	fi
+
+	date_cmd="date"
+	[[ "$OS" == "macOS" ]] && date_cmd="gdate"
+
+	# First argument is the date in YYYY-MM-DD format
+	base_date="$1"
+	shift  # Remove the first argument, now "$@" contains the time modifiers
+
+	# Combine base date with the modifiers (e.g., +7 days, -8 hours, etc.)
+	modifiers="${*}"
+
+	# Use gdate to calculate the new date with the modifiers
+	result=$(gdate -d "$base_date $modifiers" '+%Y-%m-%d %H:%M:%S')
+
+	# Output the result
+	echo "$result"
+
+}
+
+
+
 download() {
 
 	__deps curl
