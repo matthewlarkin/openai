@@ -439,8 +439,8 @@ clipboard() {
 		copy)
 
 			case $OS in
-				macOS) echo "$input" | pbcopy ;;
-				Linux) echo "$input" | xclip -selection clipboard ;;
+				macOS) echo -n "$input" | pbcopy ;;
+				Linux) echo -n "$input" | xclip -selection clipboard ;;
 				*) echo "Error: clipboard operations are not supported on this OS." && return 1 ;;
 			esac
 
@@ -909,62 +909,33 @@ END
 
 color() {
 
-    local input hue saturation=100 lightness=50 output_format output_style
+    local input output_format output_style show args output R G B H S L adjust_H adjust_S adjust_L
 
-    # Capture input
+    # Capture input from stdin if available
     [[ -p /dev/stdin ]] && input=$(cat)
 
     # Parse arguments
-	args=() && while [[ $# -gt 0 ]]; do
+    args=() && while [[ $# -gt 0 ]]; do
         case $1 in
-            --hue|-h) hue=$2; shift 2 ;;
-            --saturation|-s) saturation=$2; shift 2 ;;
-            --lightness|-l) lightness=$2; shift 2 ;;
-            --hsl) output_format="hsl"; shift ;;
-            --hex) output_format="hex"; shift ;;
-            --rgb) output_format="rgb"; shift ;;
-            --raw) output_style="raw"; shift ;;
-			*) args+=("$1") && shift ;;
+            show) show='true'; shift ;;
+            as) shift ;;
+            --hsl|hsl) output_format="hsl"; shift ;;
+            --hex|hex) output_format="hex"; shift ;;
+            --rgb|rgb) output_format="rgb"; shift ;;
+            --raw|raw) output_style="raw"; shift ;;
+            -h|--hue) adjust_H="$2"; shift 2 ;;
+            -s|--saturation) adjust_S="$2"; shift 2 ;;
+            -l|--lightness) adjust_L="$2"; shift 2 ;;
+            *) args+=("$1"); shift ;;
         esac
     done
-	set -- "${args[@]}"
+    set -- "${args[@]}"
 
-	# Use the input if no arguments are provided
-	[[ -z $input ]] && input=$1
+    # Set input color and output format if provided positionally
+    [[ -z $input ]] && input=$1 && shift
+    [[ -z $output_format ]] && output_format=$1 && shift
 
-    # Map color aliases to hue values if hue is not provided and input is not empty
-	case $input in
-		red) hue=0 ;;
-		vermilion) hue=15 ;;
-		orange) hue=30 ;;
-		amber) hue=45 ;;
-		yellow) hue=60 ;;
-		lime) hue=75 ;;
-		chartreuse) hue=90 ;;
-		harlequin ) hue=105 ;;
-		green) hue=120 ;;
-		teal) hue=135 ;;
-		springgreen) hue=150 ;;
-		turquoise) hue=165 ;;
-		cyan) hue=180 ;;
-		skyblue) hue=195 ;;
-		azure) hue=210 ;;
-		blue) hue=235 ;;
-		hanblue) hue=250 ;;
-		indigo) hue=265 ;;
-		violet) hue=280 ;;
-		purple) hue=295 ;;
-		magenta) hue=310 ;;
-		cerise) hue=325 ;;
-		rose) hue=340 ;;
-		white) hue=0; saturation=0; lightness=100 ;;
-		black) hue=0; saturation=0; lightness=0 ;;
-		gray) hue=0; saturation=0; lightness=50 ;;
-		lightgray|silver) hue=0; saturation=0; lightness=75 ;;
-		darkgray|stone|tundora) hue=0; saturation=0; lightness=25 ;;
-	esac
-
-    # Function to convert HSL to RGB using awk
+    # Function to convert HSL to RGB
     hsl_to_rgb() {
         awk -v H="$1" -v S="$2" -v L="$3" '
         function hue2rgb(p, q, t) {
@@ -976,7 +947,7 @@ color() {
             return p
         }
         BEGIN {
-            h = H / 360
+            h = (H % 360) / 360
             s = S / 100
             l = L / 100
 
@@ -1006,26 +977,230 @@ color() {
         fi
     }
 
-    # Output based on the specified format
+    # Function to convert HEX to RGB
+    hex_to_rgb() {
+        local hex="${1#\#}"
+        if [[ ${#hex} -eq 3 ]]; then
+            hex="${hex:0:1}${hex:0:1}${hex:1:1}${hex:1:1}${hex:2:1}${hex:2:1}"
+        fi
+        printf "%d %d %d\n" "0x${hex:0:2}" "0x${hex:2:2}" "0x${hex:4:2}"
+    }
+
+    # Function to convert RGB to HSL
+    rgb_to_hsl() {
+        awk -v R="$1" -v G="$2" -v B="$3" '
+        function max(a,b,c){return (a>b)?((a>c)?a:c):((b>c)?b:c)}
+        function min(a,b,c){return (a<b)?((a<c)?a:c):((b<c)?b:c)}
+        BEGIN {
+            r = R / 255
+            g = G / 255
+            b = B / 255
+
+            maxVal = max(r, g, b)
+            minVal = min(r, g, b)
+            l = (maxVal + minVal) / 2
+
+            if (maxVal == minVal) {
+                h = s = 0
+            } else {
+                d = maxVal - minVal
+                s = l > 0.5 ? d / (2 - maxVal - minVal) : d / (maxVal + minVal)
+                if (maxVal == r) {
+                    h = (g - b) / d + (g < b ? 6 : 0)
+                } else if (maxVal == g) {
+                    h = (b - r) / d + 2
+                } else {
+                    h = (r - g) / d + 4
+                }
+                h *= 60
+            }
+
+            printf "%d %d %d\n", int(h + 0.5), int(s * 100 + 0.5), int(l * 100 + 0.5)
+        }'
+    }
+
+    # Function to parse input color
+    	parse_color_input() {
+		local input="$1"
+		if [[ $input =~ ^\#?([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$ ]]; then
+			# Hex color
+			read -r R G B <<< "$(hex_to_rgb "$input")"
+			read -r H S L <<< "$(rgb_to_hsl "$R" "$G" "$B")"
+		elif [[ $input =~ rgb\(\ *([0-9]+)\ *,\ *([0-9]+)\ *,\ *([0-9]+)\ *\) ]]; then
+			# RGB function format
+			R="${BASH_REMATCH[1]}"
+			G="${BASH_REMATCH[2]}"
+			B="${BASH_REMATCH[3]}"
+			read -r H S L <<< "$(rgb_to_hsl "$R" "$G" "$B")"
+		elif [[ $input =~ ^([0-9]+)\ +([0-9]+)\ +([0-9]+)$ ]]; then
+			# Raw RGB values
+			R="${BASH_REMATCH[1]}"
+			G="${BASH_REMATCH[2]}"
+			B="${BASH_REMATCH[3]}"
+			read -r H S L <<< "$(rgb_to_hsl "$R" "$G" "$B")"
+		elif [[ $input =~ hsl\(\ *([0-9]+)\ *,\ *([0-9]+)%\ *,\ *([0-9]+)%\ *\) ]]; then
+			# HSL function format
+			H="${BASH_REMATCH[1]}"
+			S="${BASH_REMATCH[2]}"
+			L="${BASH_REMATCH[3]}"
+			read -r R G B <<< "$(hsl_to_rgb "$H" "$S" "$L")"
+		elif [[ -n "$H" && -n "$S" && -n "$L" ]]; then
+			# HSL values provided via flags
+			read -r R G B <<< "$(hsl_to_rgb "$H" "$S" "$L")"
+		else
+			# Extended color names
+			case "${input,,}" in
+				maroon) H=0; S=100; L=25 ;;
+				crimson) H=0; S=85; L=40 ;;
+				scarlet) H=10; S=90; L=45 ;;
+				ruby) H=350; S=80; L=50 ;;
+				cherry) H=350; S=90; L=55 ;;
+				bloodred) H=0; S=100; L=30 ;;
+				tomato) H=15; S=85; L=60 ;;
+				salmon) H=15; S=75; L=70 ;;
+				coral) H=15; S=85; L=65 ;;
+				peach) H=30; S=85; L=85 ;;
+				apricot) H=30; S=80; L=75 ;;
+				tangerine) H=35; S=100; L=50 ;;
+				gold) H=45; S=100; L=50 ;;
+				bronze) H=30; S=60; L=40 ;;
+				beige) H=30; S=20; L=80 ;;
+				ivory) H=60; S=5; L=90 ;;
+				ivorywhite) H=60; S=5; L=95 ;;
+				khaki) H=45; S=25; L=70 ;;
+				olive) H=60; S=60; L=40 ;;
+				moss) H=90; S=50; L=45 ;;
+				forestgreen) H=120; S=100; L=30 ;;
+				darkgreen) H=120; S=100; L=25 ;;
+				mint) H=150; S=50; L=75 ;;
+				pistachio) H=90; S=40; L=70 ;;
+				seafoam) H=150; S=50; L=85 ;;
+				aqua) H=180; S=100; L=50 ;;
+				mintcream) H=150; S=20; L=90 ;;
+				jade) H=150; S=50; L=50 ;;
+				turquoisegreen) H=165; S=75; L=55 ;;
+				emerald) H=150; S=100; L=50 ;;
+				peacock) H=180; S=80; L=50 ;;
+				tealblue) H=195; S=60; L=60 ;;
+				cobalt) H=220; S=80; L=50 ;;
+				azureblue) H=210; S=80; L=60 ;;
+				royalblue) H=220; S=100; L=50 ;;
+				navy) H=210; S=100; L=30 ;;
+				midnightblue) H=210; S=100; L=20 ;;
+				slateblue) H=240; S=45; L=60 ;;
+				lavender) H=240; S=40; L=75 ;;
+				periwinkle) H=230; S=40; L=75 ;;
+				electricblue) H=210; S=100; L=65 ;;
+				denim) H=210; S=50; L=55 ;;
+				indianred) H=0; S=60; L=60 ;;
+				rosybrown) H=0; S=20; L=70 ;;
+				wheat) H=40; S=60; L=80 ;;
+				sand) H=40; S=35; L=70 ;;
+				coffee) H=30; S=60; L=45 ;;
+				chocolate) H=30; S=75; L=35 ;;
+				sienna) H=20; S=50; L=40 ;;
+				mahogany) H=0; S=70; L=30 ;;
+				taupe) H=0; S=10; L=60 ;;
+				eggplant) H=270; S=50; L=30 ;;
+				aubergine) H=270; S=60; L=35 ;;
+				plum) H=270; S=45; L=60 ;;
+				lavenderblush) H=340; S=10; L=95 ;;
+				mistyrose) H=5; S=20; L=90 ;;
+				seashell) H=30; S=10; L=95 ;;
+				flamingo) H=10; S=80; L=70 ;;
+				blush) H=350; S=50; L=80 ;;
+				cottoncandy) H=340; S=50; L=90 ;;
+				palegoldenrod) H=45; S=80; L=80 ;;
+				lightyellow) H=60; S=80; L=90 ;;
+				lightcyan) H=180; S=50; L=90 ;;
+				powderblue) H=180; S=30; L=85 ;;
+				lightpink) H=340; S=50; L=85 ;;
+				red) H=0; S=100; L=50 ;;
+				pink) H=340; S=75; L=85 ;;
+				vermilion) H=15; S=85; L=55 ;;
+				orange) H=30; S=85; L=55 ;;
+				amber) H=45; S=100; L=50 ;;
+				yellow) H=60; S=100; L=50 ;;
+				lime) H=75; S=100; L=50 ;;
+				chartreuse) H=90; S=100; L=50 ;;
+				harlequin) H=105; S=90; L=55 ;;
+				green) H=120; S=100; L=50 ;;
+				teal) H=135; S=75; L=50 ;;
+				springgreen) H=150; S=100; L=50 ;;
+				turquoise) H=165; S=75; L=55 ;;
+				cyan) H=180; S=100; L=50 ;;
+				skyblue) H=195; S=75; L=60 ;;
+				azure) H=210; S=75; L=60 ;;
+				blue) H=235; S=100; L=50 ;;
+				hanblue) H=250; S=85; L=55 ;;
+				indigo) H=265; S=85; L=45 ;;
+				violet) H=280; S=85; L=55 ;;
+				purple) H=295; S=85; L=50 ;;
+				magenta) H=310; S=100; L=50 ;;
+				cerise) H=325; S=85; L=60 ;;
+				rose) H=340; S=80; L=75 ;;
+				white) H=0; S=0; L=100 ;;
+				black) H=0; S=0; L=0 ;;
+				gray) H=0; S=0; L=50 ;;
+				lightgray|silver) H=0; S=0; L=75 ;;
+				darkgray|stone|tundora) H=0; S=0; L=25 ;;
+				*)
+					echo "Unknown color: $input" >&2
+					exit 1
+					;;
+			esac
+			# Convert HSL to RGB if not already done
+			if [[ -z "$R" || -z "$G" || -z "$B" ]]; then
+				read -r R G B <<< "$(hsl_to_rgb "$H" "$S" "$L")"
+			fi
+		fi
+	}
+
+    # Parse the input color
+    parse_color_input "$input"
+
+    # Apply HSL adjustments if provided
+    H="${adjust_H:-$H}"
+    S="${adjust_S:-$S}"
+    L="${adjust_L:-$L}"
+    # Ensure H, S, L are within valid ranges
+    H=$(( (H + 360) % 360 ))
+    [[ $S -lt 0 ]] && S=0 || [[ $S -gt 100 ]] && S=100
+    [[ $L -lt 0 ]] && L=0 || [[ $L -gt 100 ]] && L=100
+
+    # Recalculate RGB after adjustments
+    read R G B <<< "$(hsl_to_rgb "$H" "$S" "$L")"
+
+    # Default output format
+    [[ -z $output_format ]] && output_format="hex"
+
+    # Convert and output in the desired format
     if [[ "$output_format" == "hex" ]]; then
-        read -r R G B <<< "$(hsl_to_rgb "$hue" "$saturation" "$lightness")"
-        rgb_to_hex "$R" "$G" "$B"
+        output=$(rgb_to_hex "$R" "$G" "$B")
     elif [[ "$output_format" == "rgb" ]]; then
-        read -r R G B <<< "$(hsl_to_rgb "$hue" "$saturation" "$lightness")"
         if [[ "$output_style" == "raw" ]]; then
-            echo "$R $G $B"
+            output="$R $G $B"
         else
-            echo "rgb($R, $G, $B)"
+            output="rgb($R, $G, $B)"
         fi
     elif [[ "$output_format" == "hsl" ]]; then
         if [[ "$output_style" == "raw" ]]; then
-            echo "$hue $saturation $lightness"
+            output="$H $S $L"
         else
-            echo "hsl($hue, $saturation%, $lightness%)"
+            output="hsl($H, $S%, $L%)"
         fi
+    fi
+
+    # Display color if requested
+    display_color() {
+        local r="$1" g="$2" b="$3"
+        echo -e "\033[48;2;${r};${g};${b}m    \033[0m"
+    }
+
+    if [[ -n $show ]]; then
+        display_color "$R" "$G" "$B"
     else
-        read -r R G B <<< "$(hsl_to_rgb "$hue" "$saturation" "$lightness")"
-        rgb_to_hex "$R" "$G" "$B"
+        echo "$output"
     fi
 }
 
