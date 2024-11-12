@@ -3792,7 +3792,7 @@ storage() {
 
     args=() && while [[ $# -gt 0 ]]; do
         case $1 in
-            --to|-t) to=$2 && shift 2 ;;
+            --to|-t|to) to=$2 && shift 2 ;;
 			--private) privacy='private' && shift ;;
             *) args+=("$1") && shift ;;
         esac
