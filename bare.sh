@@ -923,9 +923,9 @@ color() {
             --hex|hex) output_format="hex"; shift ;;
             --rgb|rgb) output_format="rgb"; shift ;;
             --raw|raw) output_style="raw"; shift ;;
-            -h|--hue) adjust_H="$2"; shift 2 ;;
-            -s|--saturation) adjust_S="$2"; shift 2 ;;
-            -l|--lightness) adjust_L="$2"; shift 2 ;;
+            -h|--hue|h|hue) adjust_H="$2"; shift 2 ;;
+            -s|--saturation|sat|s) adjust_S="$2"; shift 2 ;;
+            -l|--lightness|light|l) adjust_L="$2"; shift 2 ;;
             *) args+=("$1"); shift ;;
         esac
     done
@@ -934,6 +934,13 @@ color() {
     # Set input color and output format if provided positionally
     [[ -z $input ]] && input=$1 && shift
     [[ -z $output_format ]] && output_format=$1 && shift
+
+    # If no input and HSL values provided via flags, set H, S, L
+    if [[ -z "$input" && -n "$adjust_H" && -n "$adjust_S" && -n "$adjust_L" ]]; then
+        H="$adjust_H"
+        S="$adjust_S"
+        L="$adjust_L"
+    fi
 
     # Function to convert HSL to RGB
     hsl_to_rgb() {
@@ -1020,36 +1027,37 @@ color() {
     }
 
     # Function to parse input color
-    	parse_color_input() {
-		local input="$1"
-		if [[ $input =~ ^\#?([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$ ]]; then
-			# Hex color
-			read -r R G B <<< "$(hex_to_rgb "$input")"
-			read -r H S L <<< "$(rgb_to_hsl "$R" "$G" "$B")"
-		elif [[ $input =~ rgb\(\ *([0-9]+)\ *,\ *([0-9]+)\ *,\ *([0-9]+)\ *\) ]]; then
-			# RGB function format
-			R="${BASH_REMATCH[1]}"
-			G="${BASH_REMATCH[2]}"
-			B="${BASH_REMATCH[3]}"
-			read -r H S L <<< "$(rgb_to_hsl "$R" "$G" "$B")"
-		elif [[ $input =~ ^([0-9]+)\ +([0-9]+)\ +([0-9]+)$ ]]; then
-			# Raw RGB values
-			R="${BASH_REMATCH[1]}"
-			G="${BASH_REMATCH[2]}"
-			B="${BASH_REMATCH[3]}"
-			read -r H S L <<< "$(rgb_to_hsl "$R" "$G" "$B")"
-		elif [[ $input =~ hsl\(\ *([0-9]+)\ *,\ *([0-9]+)%\ *,\ *([0-9]+)%\ *\) ]]; then
-			# HSL function format
-			H="${BASH_REMATCH[1]}"
-			S="${BASH_REMATCH[2]}"
-			L="${BASH_REMATCH[3]}"
-			read -r R G B <<< "$(hsl_to_rgb "$H" "$S" "$L")"
-		elif [[ -n "$H" && -n "$S" && -n "$L" ]]; then
-			# HSL values provided via flags
-			read -r R G B <<< "$(hsl_to_rgb "$H" "$S" "$L")"
-		else
-			# Extended color names
-			case "${input,,}" in
+    parse_color_input() {
+        if [[ -n "$H" && -n "$S" && -n "$L" ]]; then
+            read -r R G B <<< "$(hsl_to_rgb "$H" "$S" "$L")"
+            return
+        fi
+        local input="$1"
+        if [[ $input =~ ^\#?([0-9a-fA-F]{6}|[0-9a-fA-F]{3})$ ]]; then
+            # Hex color
+            read -r R G B <<< "$(hex_to_rgb "$input")"
+            read -r H S L <<< "$(rgb_to_hsl "$R" "$G" "$B")"
+        elif [[ $input =~ rgb\(\ *([0-9]+)\ *,\ *([0-9]+)\ *,\ *([0-9]+)\ *\) ]]; then
+            # RGB function format
+            R="${BASH_REMATCH[1]}"
+            G="${BASH_REMATCH[2]}"
+            B="${BASH_REMATCH[3]}"
+            read -r H S L <<< "$(rgb_to_hsl "$R" "$G" "$B")"
+        elif [[ $input =~ ^([0-9]+)\ +([0-9]+)\ +([0-9]+)$ ]]; then
+            # Raw RGB values
+            R="${BASH_REMATCH[1]}"
+            G="${BASH_REMATCH[2]}"
+            B="${BASH_REMATCH[3]}"
+            read -r H S L <<< "$(rgb_to_hsl "$R" "$G" "$B")"
+        elif [[ $input =~ hsl\(\ *([0-9]+)\ *,\ *([0-9]+)%\ *,\ *([0-9]+)%\ *\) ]]; then
+            # HSL function format
+            H="${BASH_REMATCH[1]}"
+            S="${BASH_REMATCH[2]}"
+            L="${BASH_REMATCH[3]}"
+            read -r R G B <<< "$(hsl_to_rgb "$H" "$S" "$L")"
+        else
+            # Extended color names
+            case "${input,,}" in
 				maroon) H=0; S=100; L=25 ;;
 				crimson) H=0; S=85; L=40 ;;
 				scarlet) H=10; S=90; L=45 ;;
@@ -1144,32 +1152,31 @@ color() {
 				gray) H=0; S=0; L=50 ;;
 				lightgray|silver) H=0; S=0; L=75 ;;
 				darkgray|stone|tundora) H=0; S=0; L=25 ;;
-				*)
-					echo "Unknown color: $input" >&2
-					exit 1
-					;;
-			esac
-			# Convert HSL to RGB if not already done
-			if [[ -z "$R" || -z "$G" || -z "$B" ]]; then
-				read -r R G B <<< "$(hsl_to_rgb "$H" "$S" "$L")"
-			fi
-		fi
-	}
+                *)
+                    echo "Unknown color: $input" >&2
+                    exit 1
+                    ;;
+            esac
+            # Convert HSL to RGB
+            read -r R G B <<< "$(hsl_to_rgb "$H" "$S" "$L")"
+        fi
+    }
 
-    # Parse the input color
-    parse_color_input "$input"
+    # Parse the input color if not already done
+    [[ -z "$R" || -z "$G" || -z "$B" ]] && parse_color_input "$input"
 
-    # Apply HSL adjustments if provided
-    H="${adjust_H:-$H}"
-    S="${adjust_S:-$S}"
-    L="${adjust_L:-$L}"
     # Ensure H, S, L are within valid ranges
     H=$(( (H + 360) % 360 ))
     [[ $S -lt 0 ]] && S=0 || [[ $S -gt 100 ]] && S=100
     [[ $L -lt 0 ]] && L=0 || [[ $L -gt 100 ]] && L=100
 
+    # Apply HSL adjustments if provided
+    [[ -n "$adjust_H" ]] && H="$adjust_H"
+    [[ -n "$adjust_S" ]] && S="$adjust_S"
+    [[ -n "$adjust_L" ]] && L="$adjust_L"
+
     # Recalculate RGB after adjustments
-    read R G B <<< "$(hsl_to_rgb "$H" "$S" "$L")"
+    read -r R G B <<< "$(hsl_to_rgb "$H" "$S" "$L")"
 
     # Default output format
     [[ -z $output_format ]] && output_format="hex"
