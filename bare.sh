@@ -2957,17 +2957,31 @@ pretty() {
 
 qr() {
 
-	__deps qrencode
+    __deps qrencode zbarimg
 
-	local link output
+    local action link output
 
-	if [[ -p /dev/stdin ]]; then link=$(cat); else link=$1; fi
+    if [[ -p /dev/stdin ]]; then
+        link=$(cat)
+        action="generate"
+    else
+        action="${1:-generate}"
+        shift
+    fi
 
-	output="$(bare.sh random string 30).png"
-
-	qrencode -o "$output" "$link"
-
-	echo "$output"
+    if [[ "$action" == "scan" ]]; then
+        local image_file="$1"
+        if [[ -z "$image_file" ]]; then
+            echo "Usage: qr scan <image_file>" >&2
+            return 1
+        fi
+        zbarimg --quiet --raw "$image_file"
+    else
+        link="${link:-$action}"
+        output="$(bare.sh random string 30).png"
+        qrencode -o "$output" "$link"
+        echo "$output"
+    fi
 
 }
 
@@ -3603,110 +3617,6 @@ request() {
 	"${curl_cmd[@]}"
 	
 	unset -f split_data_into_form_fields
-
-}
-
-
-
-routines() {
-
-	# Ensure BARE_HOME is set
-	if [[ -z $BARE_HOME ]]; then
-		echo "BARE_HOME is not set"
-		exit 1
-	fi
-
-	# Initialize variables
-	command='list'
-	args=()
-	name=""
-	description=""
-	cron=""
-	input=""
-	bash_path=$(command -v bash)
-
-	# Parse command-line arguments
-	while [[ $# -gt 0 ]]; do
-		case $1 in
-			--name|-n) name=$2 && shift 2 ;;
-			--description|--desc|-d) description=$2 && shift 2 ;;
-			--cron|-c) cron=$2 && shift 2 ;;
-			--add|--create|add|create) command='add' && shift ;;
-			--update|--edit|update|edit) command='update' && shift ;;
-			--remove|remove) command='remove' && shift ;;
-			--list|list) command='list' && shift ;;
-			*) args+=("$1") && shift ;;
-		esac
-	done
-	set -- "${args[@]}"
-
-	if [[ -p /dev/stdin ]]; then
-		input=$(cat)
-	else
-		input=$1
-	fi
-
-	# Define the recfile path
-	RECFILE="$BARE_HOME/recfiles/routines/list.rec"
-
-	# Function to add or update a cron job
-	add_or_update_cron() {
-		[[ -z $name ]] && echo "Error: Name is required" && exit 1
-		[[ -z $cron ]] && echo "Error: Cron is required" && exit 1
-		[[ -z $input ]] && echo "Error: Script is required" && exit 1
-
-		# Remove existing record with the same name (if updating)
-		recdel "$RECFILE" -e "Name = '$name'" 2>/dev/null
-
-		# Insert the new or updated record
-		recins "$RECFILE" -f Name -v "$name" -f Script -v "$bash_path $BARE_DIR/bare.sh $input" -f Description -v "$description" -f Cron -v "$cron"
-
-		# Add to crontab if it doesn't exist
-		if ! (crontab -l 2>/dev/null | grep -q "$cron $bash_path $BARE_DIR/bare.sh $input"); then
-			(crontab -l 2>/dev/null; echo "$cron $bash_path $BARE_DIR/bare.sh $input") | crontab -
-		fi
-
-		echo "success"
-	}
-
-	# Function to remove a cron job
-	remove_cron() {
-		[[ -z $name ]] && echo "Error: Name is required" && exit 1
-
-		# Retrieve the cron timing and script name from the record
-		cron_timing=$(recsel -e "Name = '$name'" -P Cron "$RECFILE")
-		script_name=$(recsel -e "Name = '$name'" -P Script "$RECFILE")
-
-		[[ -z $cron_timing || -z $script_name ]] && echo "Error: Record not found" && exit 1
-
-		# Remove the record from the recfile
-		recdel "$RECFILE" -e "Name = '$name'" 2>/dev/null
-
-		# Remove the crontab entry
-		crontab -l | grep -vF "$cron_timing $script_name" | crontab -
-
-		echo "success"
-	}
-
-	# Execute the command based on the user's input
-	case $command in
-		list)
-			recsel "$RECFILE" -p Name,Description,Cron,Script
-			;;
-		add|update)
-			add_or_update_cron
-			;;
-		remove)
-			remove_cron
-			;;
-		*)
-			echo "Invalid command"
-			exit 1
-			;;
-	esac
-
-	unset -f add_or_update_cron
-	unset -f remove_cron
 
 }
 
@@ -5057,7 +4967,8 @@ youtube() {
 
 	command=$1 && shift
 
-	[[ -t 0 ]] && url="$1" && shift || url=$(cat)
+	[[ -p /dev/stdin ]] && url=$(cat)
+	[[ -z $url ]] && url=$1 && shift
 
 	quality="720" # Default quality for videos
 	thumbnail_quality="0" # Default quality for thumbnails (0 for default hd)
