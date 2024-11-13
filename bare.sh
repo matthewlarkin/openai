@@ -3933,20 +3933,11 @@ stripe() {
 
         case $1 in
 
-			-f|fields)
-				fields="$2"
-				shift 2
-				;;
+			-f|fields) fields="$2" && shift 2 ;;
 
-            -p|pick)
-                pick=$2
-                shift 2
-                ;;
+            -p|pick) pick=$2 && shift 2 ;;
 
-            limit)
-                limit=$2
-                shift 2
-                ;;
+            limit) limit=$2 && shift 2 ;;
 
             where)
                 [[ -z $2 ]] && echo "Error: Field is required" && return 1
@@ -3967,15 +3958,9 @@ stripe() {
                 fi
                 ;;
 
-            like)
-                operator='~'
-                shift
-                ;;
+            like) operator='~' && shift ;;
 
-            !=|isnt)
-                operator='!='
-                shift
-                ;;
+            !=|isnt) operator='!=' && shift ;;
 
 			payments) scope='payment_intents' && shift ;;
 
@@ -3986,15 +3971,9 @@ stripe() {
                 shift
                 ;;
 
-            list|create|update|delete)
-                action=$1
-                shift
-                ;;
+            list|create|update|delete) action=$1 && shift ;;
 
-            *)
-                args+=("$1")
-                shift
-                ;;
+            *) args+=("$1") && shift ;;
 
         esac
 
