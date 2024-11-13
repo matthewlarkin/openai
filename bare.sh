@@ -1551,6 +1551,137 @@ email() {
 
 
 
+form() {
+
+    process_field() {
+        local field_args=("$@")
+        local field_name=""
+        local field_label=""
+        local field_type=""
+        local field_required="optional"
+
+        local i=0
+        while [[ $i -lt ${#field_args[@]} ]]; do
+            case ${field_args[$i]} in
+                as)
+                    ((i++))
+                    field_label=${field_args[$i]}
+                    ;;
+                is)
+                    ;;
+                required)
+                    field_required="required"
+                    ;;
+                *)
+                    if [[ -z "$field_name" ]]; then
+                        field_name=${field_args[$i]}
+                    elif [[ -z "$field_type" ]]; then
+                        field_type=${field_args[$i]}
+                    else
+                        field_type="${field_type} ${field_args[$i]}"
+                    fi
+                    ;;
+            esac
+            ((i++))
+        done
+        if [[ -z "$field_label" ]]; then
+            field_label="$field_name"
+        fi
+        fields+=("${field_name}:${field_label}:${field_type}:${field_required}")
+    }
+
+    local input args
+
+    [[ -p /dev/stdin ]] && input=$(cat)
+
+    fields=()
+    args=()
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            to) action=$2 && shift 2 ;;
+            where|with|is) shift ;;
+            title) title=$2 && shift 2 ;;
+            description) description=$2 && shift 2 ;;
+            *) args+=("$1"); shift ;;
+        esac
+    done
+
+    [[ -z "$title" ]] && title="Form"
+    [[ -z "$description" ]] && description="Please fill out the form below:"
+    [[ -z "$action" ]] && action=""
+
+    field_args=()
+    for arg in "${args[@]}"; do
+        if [[ $arg == "and" ]]; then
+            if [[ ${#field_args[@]} -gt 0 ]]; then
+                process_field "${field_args[@]}"
+            fi
+            field_args=()
+        else
+            field_args+=("$arg")
+        fi
+    done
+    if [[ ${#field_args[@]} -gt 0 ]]; then
+        process_field "${field_args[@]}"
+    fi
+
+    # Generate HTML form
+    echo "<!DOCTYPE html>"
+    echo "<html>"
+    echo "<head>"
+    echo "  <title>${title}</title>"
+	echo "  <meta name='viewport' content='width=device-width, initial-scale=1'>"
+	echo "  <link rel='stylesheet' href='https://cdn.jsdelivr.net/npm/@picocss/pico@2/css/pico.min.css'>"
+    echo "</head>"
+    echo "<body>"
+	echo "<main class='container' style='margin-top: 8vh;'>"
+    echo "  <h1>${title}</h1>"
+    echo "  <p>${description}</p>"
+    if [[ -n "$action" ]]; then
+        echo "  <form method=\"POST\" action=\"${action}\">"
+    else
+        echo "  <form method=\"POST\">"
+    fi
+
+    local first_field=true
+    for field in "${fields[@]}"; do
+        IFS=':' read -r name label type required <<< "$field"
+        echo "    <label for=\"${name}\">${label}:</label>"
+        if [[ $type == "textarea" ]]; then
+            echo -n "    <textarea style='height: 220px;' name=\"${name}\" id=\"${name}\""
+            if [[ $required == "required" ]]; then
+                echo -n " required"
+            fi
+            if $first_field; then
+                echo " autofocus></textarea><br/>"
+                first_field=false
+            else
+                echo "></textarea><br/>"
+            fi
+        else
+            echo -n "    <input type=\"${type}\" name=\"${name}\" id=\"${name}\""
+            if [[ $required == "required" ]]; then
+                echo -n " required"
+            fi
+            if $first_field; then
+                echo " autofocus/><br/>"
+                first_field=false
+            else
+                echo " /><br/>"
+            fi
+        fi
+    done
+    echo "    <input type=\"submit\" value=\"Submit\" />"
+    echo "  </form>"
+	echo "</main>"
+    echo "</body>"
+    echo "</html>"
+
+    unset -f process_field
+}
+
+
+
 examine() {
 
 	__deps jq ffmpeg ffprobe file stat realpath
