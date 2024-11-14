@@ -1865,33 +1865,36 @@ examine() {
         }'
     )
 
-    # Try to extract media metadata if possible
-    ffprobe_output=$(ffprobe -v quiet -print_format json -show_format "$input" 2>/dev/null)
-
-    if [[ -n "$ffprobe_output" ]]; then
-        # Extract metadata fields
-        media_metadata=$(echo "$ffprobe_output" | jq -r '{
-            title: .format.tags.title,
-            artist: .format.tags.artist,
-            album: .format.tags.album,
-            track: .format.tags.track,
-            year: .format.tags.date
-        } | with_entries(select(.value != null and .value != ""))')
-
-        # Merge media metadata into main metadata
-        metadata=$(echo "$metadata" "$media_metadata" | jq -s '.[0] * .[1]')
-
-        # Try to extract cover image
-        tmp_dir=$(mktemp -d)
-        cover_image_path="$tmp_dir/cover.jpg"
-        ffmpeg -i "$input" -an -vcodec copy "$cover_image_path" -y -loglevel quiet
-
-        if [[ -f "$cover_image_path" ]]; then
-            metadata=$(echo "$metadata" | jq --arg cover "$cover_image_path" '. + {cover: $cover}')
-        else
-            rm -rf "$tmp_dir"
-        fi
-    fi
+    # Determine if the file is a media file
+	if [[ "$mime_type" == video/* || "$mime_type" == audio/* ]]; then
+		# Try to extract media metadata if possible
+		ffprobe_output=$(ffprobe -v quiet -print_format json -show_format "$input" 2>/dev/null)
+	
+		if [[ -n "$ffprobe_output" ]]; then
+			# Extract metadata fields
+			media_metadata=$(echo "$ffprobe_output" | jq -r '{
+				title: .format.tags.title,
+				artist: .format.tags.artist,
+				album: .format.tags.album,
+				track: .format.tags.track,
+				year: .format.tags.date
+			} | with_entries(select(.value != null and .value != ""))')
+	
+			# Merge media metadata into main metadata
+			metadata=$(echo "$metadata" "$media_metadata" | jq -s '.[0] * .[1]')
+	
+			# Try to extract cover image
+			tmp_dir=$(mktemp -d)
+			cover_image_path="$tmp_dir/cover.jpg"
+			ffmpeg -i "$input" -an -vcodec copy "$cover_image_path" -y -loglevel quiet
+	
+			if [[ -f "$cover_image_path" ]]; then
+				metadata=$(echo "$metadata" | jq --arg cover "$cover_image_path" '. + {cover: $cover}')
+			else
+				rm -rf "$tmp_dir"
+			fi
+		fi
+	fi
 
 	output=$(echo "$metadata" | jq '.' | rec from)
 
