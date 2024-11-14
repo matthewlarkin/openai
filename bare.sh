@@ -716,19 +716,63 @@ codec() {
 
 		hash)
 
-			# shellcheck disable=2005
-			echo "$(php -r "
-				\$password = '$input';
-				\$hash = password_hash(\$password, PASSWORD_ARGON2ID, ['time_cost' => 3, 'memory_cost' => 65540, 'threads' => 4]);
-				echo \$hash;
-			")"
+			local args algorithm
+
+			algorithm="argon2id"
+
+			args=()
+			while [[ $# -gt 0 ]]; do
+				case $1 in
+					with|and|to|for) shift ;; # permits more lyrical commands
+					--algorithm|-a|algorithm) algorithm=$2; shift 2 ;;
+					bycrypt|argon2|argon2id) algorithm=$1; shift ;;
+					wordpress|couch) algorithm="bcrypt" && shift ;;
+					sqlpage) algorithm="argon2id" && shift ;;
+					*) args+=("$1") && shift ;;
+				esac
+			done
+			set -- "${args[@]}"
+
+			[[ -z $algorithm ]] && echo "Error: --algorithm is required." && return 1
+			[[ -z $input ]] && echo "Error: no input provided." && return 1
+
+			# Generate hash based on selected algorithm
+			if [[ "$algorithm" == "argon2id" ]]; then
+				echo "$(php -r "
+					\$password = '$input';
+					\$hash = password_hash(\$password, PASSWORD_ARGON2ID, ['time_cost' => 3, 'memory_cost' => 65540, 'threads' => 4]);
+					echo \$hash;
+				")"
+			elif [[ "$algorithm" == "bcrypt" ]]; then
+				echo "$(php -r "
+					\$password = '$input';
+					\$hash = password_hash(\$password, PASSWORD_BCRYPT);
+					echo \$hash;
+				")"
+			fi
 			;;
 
 		hash.verify)
 
-			# shellcheck disable=2005
+			local args password
+
+			args=()
+			while [[ $# -gt 0 ]]; do
+				case $1 in
+					with|and|to|for|wordpress|sqlpage|couch) shift ;; # permits more lyrical commands
+					--password|-p|password) password=$2; shift 2 ;;
+					*) args+=("$1") && shift ;;
+				esac
+			done
+			set -- "${args[@]}"
+
+			password=${password:-$1}
+
+			[[ -z $password ]] && echo "Error: --password is required." && return 1
+
+			# Verify hash based on selected algorithm
 			echo "$(php -r "
-				\$password = '$1';
+				\$password = '$password';
 				\$hash = '$input';
 				if (password_verify(\$password, \$hash)) {
 					echo 'true';
@@ -5405,6 +5449,10 @@ filetype() { examine "$@" -p type ; return 0 ; }
 filepath() { examine "$@" -p path ; return 0 ; }
 
 filesize() { examine "$@" -p size ; return 0 ; }
+
+hash() { codec hash "$@"; return 0; }
+
+hash.verify() { codec hash.verify "$@"; return 0; }
 
 lowercase() { transform "$@" --lowercase ; return 0 ; }
 
