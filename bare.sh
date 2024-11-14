@@ -464,13 +464,102 @@ clipboard() {
 
 codec() {
 
-	local input command index json_array output lines line start end reverse_flag
+	local input command index json_array output lines line start end reverse_flag args
 
 	command=$1 && shift
 
 	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1 && shift; fi
 
 	case $command in
+
+		jwt.encode)
+			local expires issued issuer subject role secret_key algorithm args key value
+			declare -A payload_args
+		
+			# Defaults
+			issued=$(date --format "%s")
+			expires=$(datecalc + 2 days | date --format "%s")
+			issuer="bare.sh"
+			algorithm="HS256"
+		
+			args=()
+			while [[ $# -gt 0 ]]; do
+				case $1 in
+					with|and) shift ;; # Permits more lyrical commands
+					--exp|-e|expires) expires="$2"; shift 2 ;;
+					--iat|issued) issued="$2"; shift 2 ;;
+					--iss|issuer) issuer="$2"; shift 2 ;;
+					--sub|subject) subject="$2"; shift 2 ;;
+					--user) payload_args["user"]="$2"; shift 2 ;;
+					--role|-r) role="$2"; shift 2 ;;
+					--secret|-s|secret) secret_key="$2"; shift 2 ;;
+					--alg|-a|algorithm) algorithm="$2"; shift 2 ;;
+					--payload|-p|payload) payload="$2"; shift 2 ;;
+					# Capture custom key-value pairs
+					--*) key="${1#--}"; value="$2"; payload_args["$key"]="$value"; shift 2 ;;
+					*) args+=("$1"); shift ;;
+				esac
+			done
+			set -- "${args[@]}"
+		
+			[[ -z $secret_key ]] && { echo "Error: --secret is required."; return 1; }
+		
+			# Add predefined claims to payload_args
+			payload_args["exp"]="$expires"
+			payload_args["iat"]="$issued"
+			payload_args["iss"]="$issuer"
+			[[ -n $subject ]] && payload_args["sub"]="$subject"
+			[[ -n $role ]] && payload_args["role"]="$role"
+		
+			# Generate the JWT
+			jwt encode --secret "$secret_key" --alg "$algorithm" $(for key in "${!payload_args[@]}"; do echo --payload "$key=${payload_args[$key]}"; done)
+			;;
+
+		jwt.decode)
+			local jwt="$input"
+			local secret_key
+			local header payload signature
+		
+			args=()
+			while [[ $# -gt 0 ]]; do
+				case $1 in
+					with|and) shift ;; # permits more lyrical commands
+					--secret|-s|secret) secret_key=$2; shift 2 ;;
+					*) args+=("$1") && shift ;;
+				esac
+			done
+			set -- "${args[@]}"
+		
+			[[ -z $secret_key ]] && echo "Error: --secret is required." && return 1
+		
+			# Split the JWT into its components
+			IFS='.' read -r header payload signature <<< "$jwt"
+		
+			# Function to decode base64url
+			urlbase64_decode() {
+				local len=$((${#1} % 4))
+				local encoded="$1"
+				if [ "$len" -eq 2 ]; then encoded+="=="
+				elif [ "$len" -eq 3 ]; then encoded+="="
+				fi
+				echo "$encoded" | tr '_-' '/+' | base64 -d 2>/dev/null
+			}
+		
+			# Decode header and payload
+			decoded_payload=$(urlbase64_decode "$payload")
+		
+			# Recreate the signature
+			recreated_signature=$(echo -n "$header.$payload" | openssl dgst -sha256 -hmac "$secret_key" -binary | base64 | tr '+/' '-_' | tr -d '=')
+		
+			# Verify the signature
+			if [[ "$recreated_signature" != "$signature" ]]; then
+				echo "Error: Invalid signature."
+				return 1
+			fi
+		
+			# Output the decoded payload
+			echo "$decoded_payload" | rec
+			;;
 
 		superscript)
 		
@@ -1222,7 +1311,10 @@ color() {
 
 
 date() {
+
     local input args date_cmd date_format input_format custom_format format_parts timezone
+
+	[[ -p /dev/stdin ]] && input=$(cat)
 
     date_cmd="date"
 
@@ -1237,35 +1329,36 @@ date() {
 
     # Timezone abbreviation to full timezone mapping
     declare -A timezone_map=(
-		["GMT"]="GMT"
-		["UTC"]="UTC"
-		["BST"]="Europe/London"
-		["IST"]="Asia/Kolkata"
-		["CET"]="Europe/Paris"
-		["CEST"]="Europe/Paris"
-		["EASTERN"]="America/New_York"
+        ["GMT"]="GMT"
+        ["UTC"]="UTC"
+        ["BST"]="Europe/London"
+        ["IST"]="Asia/Kolkata"
+        ["CET"]="Europe/Paris"
+        ["CEST"]="Europe/Paris"
+        ["EASTERN"]="America/New_York"
         ["EST"]="America/New_York"
         ["EDT"]="America/New_York"
-		["CENTRAL"]="America/Chicago"
+        ["CENTRAL"]="America/Chicago"
         ["CST"]="America/Chicago"
         ["CDT"]="America/Chicago"
-		["MOUNTAIN"]="America/Denver"
+        ["MOUNTAIN"]="America/Denver"
         ["MST"]="America/Denver"
         ["MDT"]="America/Denver"
-		["PACIFIC"]="America/Los_Angeles"
+        ["PACIFIC"]="America/Los_Angeles"
         ["PST"]="America/Los_Angeles"
         ["PDT"]="America/Los_Angeles"
-		["New York"]="America/New_York"
-		["Chicago"]="America/Chicago"
-		["Denver"]="America/Denver"
-		["Los Angeles"]="America/Los_Angeles"
-		["Anchorage"]="America/Anchorage"
-		["Honolulu"]="Pacific/Honolulu"
+        ["New York"]="America/New_York"
+        ["Chicago"]="America/Chicago"
+        ["Denver"]="America/Denver"
+        ["Los Angeles"]="America/Los_Angeles"
+        ["Anchorage"]="America/Anchorage"
+        ["Honolulu"]="Pacific/Honolulu"
     )
 
     # Process arguments
     args=() && while [[ $# -gt 0 ]]; do
         case $1 in
+            unix|U|-U|--unix) custom_format=1 && date_format="%s" && shift ;;
             as|format|-F|--format|--formatted)
                 custom_format=1 && shift
                 read -r -a format_parts <<< "$1"
@@ -1295,10 +1388,10 @@ date() {
             --timezone|-T)
                 shift
                 timezone="$1"
-				timezone_upper=$(echo "$timezone" | tr '[:lower:]' '[:upper:]')
-				if [[ -n "${timezone_map[$timezone_upper]}" ]]; then
-					timezone="${timezone_map[$timezone_upper]}"
-				fi
+                timezone_upper=$(echo "$timezone" | tr '[:lower:]' '[:upper:]')
+                if [[ -n "${timezone_map[$timezone_upper]}" ]]; then
+                    timezone="${timezone_map[$timezone_upper]}"
+                fi
                 shift
                 ;;
             *) args+=("$1") && shift ;;
@@ -1308,7 +1401,7 @@ date() {
     # Set the remaining arguments
     set -- "${args[@]}"
     
-    if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1; fi
+	[[ -z $input ]] && input=$1 && shift
 
     # If no arguments or input, default to today's date
     [[ -z $input && $# -eq 0 ]] && input=$(TZ=$timezone $date_cmd +"%Y-%m-%d %H:%M:%S")
@@ -1335,6 +1428,9 @@ date() {
     # yyyy-mm-ddThh:mm:ssZ
     elif [[ $(validate date "$input" --format 'Y-m-d\Thh:mm:ss\Z') == 'true' ]]; then
         :
+    # Unix timestamp
+    elif [[ "$input" =~ ^[0-9]+$ ]]; then
+        input=$(TZ=$timezone $date_cmd -d "@$input" +"%Y-%m-%d %H:%M:%S")
     fi
 
     # Format and print the date using the specified format, or default to standard
@@ -3308,7 +3404,7 @@ rec() {
 	done
 	set -- "${args[@]}"
 
-	[[ -n $1 ]] && input=$1 && shift
+	[[ -z $input ]] && input=$1 && shift
 
 	[[ -f $input ]] && input=$(cat "$input")
 	[[ -z $input ]] && echo "Error: no input provided" && return 1
@@ -3317,8 +3413,8 @@ rec() {
 	[[ $(validate json "$input") == 'true' ]] && input_format='json'
 	[[ $(validate csv "$input") == 'true' ]] && input_format='csv'
 
-	[[ $input_format == 'json' ]] && output_format='recformat'
 	[[ $input_format == 'csv' ]] && output_format='recformat'
+	[[ $input_format == 'json' ]] && output_format='recformat'
 
 	case $output_format in
 
