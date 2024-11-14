@@ -584,8 +584,9 @@ codec() {
 			;;
 
 		decrypt)
-
-			local pass output_file
+		
+			local pass output_file decrypted status
+		
 			# Parse arguments
 			args=()
 			{
@@ -594,26 +595,33 @@ codec() {
 						with|and|to) shift ;; # permits more lyrical commands
 						--pass|-p|pass|password) pass=$2; shift 2 ;;
 						--output|-o|output) output_file=$2; shift 2 ;;
-						*) args+=("$1") && shift ;;
+						*) args+=("$1"); shift ;;
 					esac
 				done
 			}
 			set -- "${args[@]}"
-
-			# if $input is a file, read the file
+		
+			# If $input is a file, read the file
 			[[ -f $input ]] && input=$(cat "$input")
-
+		
 			[[ -z $pass ]] && echo "Error: --pass is required." && return 1
-
-			# Decode from base64 and decrypt using OpenSSL
-			decrypted=$(echo -n "$input" | base64 -d | openssl enc -d -aes-256-cbc -pbkdf2 -pass pass:"$pass")
-
+		
+			# Suppress error messages and capture output and exit status
+			decrypted=$(echo -n "$input" | base64 -d | openssl enc -d -aes-256-cbc -pbkdf2 -pass pass:"$pass" 2>/dev/null)
+		
+			# Check if decryption was successful
+			if [[ $status -ne 0 || -z "$decrypted" ]]; then
+				echo "Error: invalid password"
+				return 1
+			fi
+		
 			# Output the decrypted data
 			if [[ -n $output_file ]]; then
 				echo "$decrypted" > "$output_file"
 			else
 				echo "$decrypted"
 			fi
+		
 			;;
 
 
@@ -1789,7 +1797,7 @@ examine() {
         fi
     fi
 
-	output=$(echo "$metadata" | jq '.' | bare.sh rec from)
+	output=$(echo "$metadata" | jq '.' | rec from)
 
 	if [[ -n $pick ]]; then
 		echo "$output" | recsel -P "$pick"
@@ -2057,7 +2065,7 @@ image() {
 
 			# if input is a file, upload it to the storage service
 			if [[ -f "$input" ]]; then
-				image_url=$(bare.sh storage upload "$input" --to openai/descriptions/"$image_basename" < /dev/null)
+				image_url=$(storage upload "$input" --to openai/descriptions/"$image_basename" < /dev/null)
 			elif [[ $(validate url "$input") == 'true' ]]; then
 				image_url="$input"
 			else
@@ -2472,8 +2480,8 @@ lexorank() {
 
 			local orig_array mod_array N j moved_item prev_item next_item
 		
-			read -a orig_array <<< "$2"
-			read -a mod_array <<< "$3"
+			read -r -a orig_array <<< "$2"
+			read -r -a mod_array <<< "$3"
 			N=${#orig_array[@]}
 		
 			# Check if the two lists contain the same items
@@ -2492,10 +2500,10 @@ lexorank() {
 					((j++))
 				else
 					moved_item="${mod_array[i]}"
-					if [ $i -gt 0 ]; then
+					if [ "$i" -gt 0 ]; then
 						prev_item="${mod_array[i-1]}"
 					fi
-					if [ $i -lt $((N-1)) ]; then
+					if [ "$i" -lt $((N-1)) ]; then
 						next_item="${mod_array[i+1]}"
 					fi
 					break
@@ -2542,7 +2550,7 @@ lexorank() {
 
 
 
-list() { # alias for `bare.sh records select ...`
+list() { # alias for `records select ...`
 
 	# capture $input
 	if [[ -p /dev/stdin ]]; then input=$(cat); else { input=$1 && shift; } fi
@@ -3116,7 +3124,7 @@ qr() {
         zbarimg --quiet --raw "$image_file"
     else
         link="${link:-$action}"
-        output="$(bare.sh random string 30).png"
+        output="$(random string 30).png"
         qrencode -o "$output" "$link"
         echo "$output"
     fi
@@ -3305,9 +3313,9 @@ rec() {
 	[[ -f $input ]] && input=$(cat "$input")
 	[[ -z $input ]] && echo "Error: no input provided" && return 1
 
-	[[ $(bare.sh validate recformat "$input") == 'true' ]] && input_format='recfile'
-	[[ $(bare.sh validate json "$input") == 'true' ]] && input_format='json'
-	[[ $(bare.sh validate csv "$input") == 'true' ]] && input_format='csv'
+	[[ $(validate recformat "$input") == 'true' ]] && input_format='recfile'
+	[[ $(validate json "$input") == 'true' ]] && input_format='json'
+	[[ $(validate csv "$input") == 'true' ]] && input_format='csv'
 
 	[[ $input_format == 'json' ]] && output_format='recformat'
 	[[ $input_format == 'csv' ]] && output_format='recformat'
@@ -3414,9 +3422,9 @@ recmove() {
 
 	# # #
 
-	is_recfile=$(bare.sh validate recfile "$dataset")
-	is_sqlite=$(bare.sh validate sqlite "$dataset")
-	is_recformat=$(bare.sh validate recformat "$dataset")
+	is_recfile=$(validate recfile "$dataset")
+	is_sqlite=$(validate sqlite "$dataset")
+	is_recformat=$(validate recformat "$dataset")
 
 	format=$(
 		[[ $is_recfile == 'true' ]] && echo recfile
@@ -3438,7 +3446,7 @@ recmove() {
 				ranks+=("$recsel_output")
 			done
 
-			new_rank=$(bare.sh lexorank between "${ranks[@]}")
+			new_rank=$(lexorank between "${ranks[@]}")
 
 			# update primary record with new rank
 			recset "$dataset" -e "$primary_key = '$primary_value'" -f "$rank_column" -s "$new_rank"
@@ -4317,11 +4325,11 @@ stripe() {
     fi
 
 	if [[ -n $fields ]]; then
-		cat "$output_file" | bare.sh rec from | recsel -p "$fields"
+		cat "$output_file" | rec from | recsel -p "$fields"
     elif [[ -n $pick ]]; then
-        cat "$output_file" | bare.sh rec from | recsel -P "$pick"
+        cat "$output_file" | rec from | recsel -P "$pick"
     else
-        cat "$output_file" | bare.sh rec from
+        cat "$output_file" | rec from
     fi
 
     # Cleanup
@@ -4454,7 +4462,8 @@ transform() {
 			esac
 			;;
 		email)
-			echo "$input" | bare.sh lowercase
+			# shellcheck disable=SC2119
+			echo "$input" | lowercase
 			;;
 	esac
 }
@@ -4526,7 +4535,7 @@ translate() {
 
 			runs_remaining=3
 
-			while [ $runs_remaining -gt 0 ]; do
+			while [ "$runs_remaining" -gt 0 ]; do
 
 				message="You are an expert translator. Your task is to translate, reword, or otherwise transform the source material into the requested output format. Respond with one JSON object containing two properties: 'reasoning <string>' and 'translation <string>' where 'reasoning' contains your reasoning for the translation (what choices you made and why you chose to interpret it this way plus any caveats or gotchas) and 'translation' is your translation of the source material.\n- - - \n######\n - - -\n OUTPUT_FORMAT: {{ $output_format }} - - - SOURCE MATERIAL: {{ $input }}\n - - - \n######\n - - -\n Remember, return a raw, one dimensional JSON object, containing only the 'reasoning' and 'translation' properties. DO NOT return a markdown code block."
 
@@ -4541,7 +4550,7 @@ translate() {
 					runs_remaining=0  # Valid response, exit the loop
 				else
 					runs_remaining=$((runs_remaining - 1))  # Invalid response, decrement runs_remaining
-					if [ $runs_remaining -eq 0 ]; then
+					if [ "$runs_remaining" -eq 0 ]; then
 						echo "Sorry, we're having a hard time responding to this request. Maybe try rephrasing."
 					fi
 				fi
@@ -4639,14 +4648,14 @@ validate() {
 				shift
 			done
 			
-			while [ $runs_remaining -gt 0 ]; do
+			while [ "$runs_remaining" -gt 0 ]; do
 				response="$(openai chat "You are an expert validator. I will provide a condition and a source material. Your task is to determine if the source material satisfies the condition. Respond with one JSON object containing two properties: 'reasoning <string>' and 'answer <true/false boolean>' where 'reasoning' contains your reasoning and 'answer' is either true or false, indicating whether the source material satisfies the condition. - - - ###--### - - - CONDITION: $condition - - - SOURCE MATERIAL: $source_material - - - ###--### - - - So... what do you say? True or false; does the source material satisfy the condition? Remember, respond only with a one dimensional JSON object (containing just the 'reasoning' and 'answer' properties)." --model "$model" --json)"
 			
 				if [[ $(echo "$response" | jq 'keys | length') -eq 2 && ( $(echo "$response" | jq -r '.answer') == 'true' || $(echo "$response" | jq -r '.answer') == 'false' ) ]]; then
 					runs_remaining=0
 				else
 					runs_remaining=$((runs_remaining - 1))
-					if [ $runs_remaining -eq 0 ]; then
+					if [ "$runs_remaining" -eq 0 ]; then
 						echo "Sorry, we're having a hard time responding to this request. Maybe try rephrasing."
 					fi
 				fi
@@ -5284,19 +5293,19 @@ recloop() {
 
 ai() { openai "$@" ; return 0 ; }
 
-capitalize() { bare.sh transform "$@" --capitalize; return 0; }
+capitalize() { transform "$@" --capitalize; return 0; }
 
-decrypt() { bare.sh codec decrypt "$@"; return 0; }
+decrypt() { codec decrypt "$@"; return 0; }
 
-encrypt() { bare.sh codec encrypt "$@"; return 0; }
+encrypt() { codec encrypt "$@"; return 0; }
 
-filetype() { bare.sh examine "$@" -p type ; return 0 ; }
+filetype() { examine "$@" -p type ; return 0 ; }
 
-filepath() { bare.sh examine "$@" -p path ; return 0 ; }
+filepath() { examine "$@" -p path ; return 0 ; }
 
-filesize() { bare.sh examine "$@" -p size ; return 0 ; }
+filesize() { examine "$@" -p size ; return 0 ; }
 
-lowercase() { bare.sh transform "$@" --lowercase ; return 0 ; }
+lowercase() { transform "$@" --lowercase ; return 0 ; }
 
 password() { random 16 "$@"; return 0; }
 
@@ -5330,7 +5339,7 @@ case $1 in
 			[[ ! -w "$(which bare.sh)" ]] && echo "   Please enter your password to continue."
 			curl -sL "https://raw.githubusercontent.com/matthewlarkin/bare.sh/refs/heads/root/bare.sh" | sudo tee "$(which bare.sh)" > /dev/null
 			echo ""
-			echo "   ✅ bare.sh has been upgraded to the latest version!"
+			echo "   ✅ has been upgraded to the latest version!"
 			echo ""
 			echo "   - - - "
 			echo ""
