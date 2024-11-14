@@ -5391,6 +5391,8 @@ ai() { openai "$@" ; return 0 ; }
 
 capitalize() { transform "$@" --capitalize; return 0; }
 
+clip() { clipboard "$@" ; return 0 ; }
+
 decrypt() { codec decrypt "$@"; return 0; }
 
 encrypt() { codec encrypt "$@"; return 0; }
