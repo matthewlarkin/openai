@@ -465,15 +465,365 @@ clipboard() {
 
 codec() {
 
-	local input command index json_array output lines line start end reverse_flag args
+	local input command index json_array output lines line start end reverse_flag args PASSWORD_HASH_CLASS
 
 	command=$1 && shift
 
-	if [[ -p /dev/stdin ]]; then input=$(cat); else input=$1 && shift; fi
+	[[ -p /dev/stdin ]] && input=$(cat)
+	[[ -z $input ]] && input=$1 && shift
+
+	# PHP PasswordHash (public domain)
+	# Define the PasswordHash class code without PHP tags
+	PASSWORD_HASH_CLASS=$(cat <<'EOF'
+class PasswordHash {
+	var $itoa64;
+	var $iteration_count_log2;
+	var $portable_hashes;
+	var $random_state;
+
+	function __construct($iteration_count_log2, $portable_hashes)
+	{
+		$this->itoa64 = './0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
+
+		if ($iteration_count_log2 < 4 || $iteration_count_log2 > 31)
+			$iteration_count_log2 = 8;
+		$this->iteration_count_log2 = $iteration_count_log2;
+
+		$this->portable_hashes = $portable_hashes;
+
+		$rand = function_exists('getmypid') ? @getmypid() : uniqid(rand(), true);
+		$this->random_state = microtime() . $rand;
+	}
+
+	function get_random_bytes($count)
+	{
+		$output = '';
+		if (@is_readable('/dev/urandom') &&
+			($fh = @fopen('/dev/urandom', 'rb'))) {
+			$output = fread($fh, $count);
+			fclose($fh);
+		}
+
+		if (strlen($output) < $count) {
+			$output = '';
+			for ($i = 0; $i < $count; $i += 16) {
+				$this->random_state =
+					md5(microtime() . $this->random_state);
+				$output .=
+					pack('H*', md5($this->random_state));
+			}
+			$output = substr($output, 0, $count);
+		}
+
+		return $output;
+	}
+
+	function encode64($input, $count)
+	{
+		$output = '';
+		$i = 0;
+		do {
+			$value = ord($input[$i++]);
+			$output .= $this->itoa64[$value & 0x3f];
+			if ($i < $count)
+				$value |= ord($input[$i]) << 8;
+			$output .= $this->itoa64[($value >> 6) & 0x3f];
+			if ($i++ >= $count)
+				break;
+			if ($i < $count)
+				$value |= ord($input[$i]) << 16;
+			$output .= $this->itoa64[($value >> 12) & 0x3f];
+			if ($i++ >= $count)
+				break;
+			$output .= $this->itoa64[($value >> 18) & 0x3f];
+		} while ($i < $count);
+
+		return $output;
+	}
+
+	function gensalt_private($input)
+	{
+		$output = '$P$';
+		$output .= $this->itoa64[min($this->iteration_count_log2 +
+			((PHP_VERSION >= '5') ? 5 : 3), 30)];
+		$output .= $this->encode64($input, 6);
+
+		return $output;
+	}
+
+	function crypt_private($password, $setting)
+	{
+		$output = '*0';
+		if (substr($setting, 0, 2) == $output)
+			$output = '*1';
+
+		if (substr($setting, 0, 3) != '$P$')
+			return $output;
+
+		$count_log2 = strpos($this->itoa64, $setting[3]);
+		if ($count_log2 < 7 || $count_log2 > 30)
+			return $output;
+
+		$count = 1 << $count_log2;
+
+		$salt = substr($setting, 4, 8);
+		if (strlen($salt) != 8)
+			return $output;
+
+		# We're kind of forced to use MD5 here since it's the only
+		# cryptographic primitive available in all versions of PHP
+		# currently in use.  To implement our own low-level crypto
+		# in PHP would result in much worse performance and
+		# consequently in lower iteration counts and hashes that are
+		# quicker to crack (by non-PHP code).
+		if (PHP_VERSION >= '5') {
+			$hash = md5($salt . $password, TRUE);
+			do {
+				$hash = md5($hash . $password, TRUE);
+			} while (--$count);
+		} else {
+			$hash = pack('H*', md5($salt . $password));
+			do {
+				$hash = pack('H*', md5($hash . $password));
+			} while (--$count);
+		}
+
+		$output = substr($setting, 0, 12);
+		$output .= $this->encode64($hash, 16);
+
+		return $output;
+	}
+
+	function gensalt_extended($input)
+	{
+		$count_log2 = min($this->iteration_count_log2 + 8, 24);
+		# This should be odd to not reveal weak DES keys, and the
+		# maximum valid value is (2**24 - 1) which is odd anyway.
+		$count = (1 << $count_log2) - 1;
+
+		$output = '_';
+		$output .= $this->itoa64[$count & 0x3f];
+		$output .= $this->itoa64[($count >> 6) & 0x3f];
+		$output .= $this->itoa64[($count >> 12) & 0x3f];
+		$output .= $this->itoa64[($count >> 18) & 0x3f];
+
+		$output .= $this->encode64($input, 3);
+
+		return $output;
+	}
+
+	function gensalt_blowfish($input)
+	{
+		# This one needs to use a different order of characters and a
+		# different encoding scheme from the one in encode64() above.
+		# We care because the last character in our encoded string will
+		# only represent 2 bits.  While two known implementations of
+		# bcrypt will happily accept and correct a salt string which
+		# has the 4 unused bits set to non-zero, we do not want to take
+		# chances and we also do not want to waste an additional byte
+		# of entropy.
+		$itoa64 = './ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+
+		$output = '$2a$';
+		$output .= chr(ord('0') + $this->iteration_count_log2 / 10);
+		$output .= chr(ord('0') + $this->iteration_count_log2 % 10);
+		$output .= '$';
+
+		$i = 0;
+		do {
+			$c1 = ord($input[$i++]);
+			$output .= $itoa64[$c1 >> 2];
+			$c1 = ($c1 & 0x03) << 4;
+			if ($i >= 16) {
+				$output .= $itoa64[$c1];
+				break;
+			}
+
+			$c2 = ord($input[$i++]);
+			$c1 |= $c2 >> 4;
+			$output .= $itoa64[$c1];
+			$c1 = ($c2 & 0x0f) << 2;
+
+			$c2 = ord($input[$i++]);
+			$c1 |= $c2 >> 6;
+			$output .= $itoa64[$c1];
+			$output .= $itoa64[$c2 & 0x3f];
+		} while (1);
+
+		return $output;
+	}
+
+	function HashPassword($password)
+	{
+		if ( strlen( $password ) > 4096 ) {
+			return '*';
+		}
+
+		$random = '';
+
+		if (CRYPT_BLOWFISH == 1 && !$this->portable_hashes) {
+			$random = $this->get_random_bytes(16);
+			$hash =
+				crypt($password, $this->gensalt_blowfish($random));
+			if (strlen($hash) == 60)
+				return $hash;
+		}
+
+		if (CRYPT_EXT_DES == 1 && !$this->portable_hashes) {
+			if (strlen($random) < 3)
+				$random = $this->get_random_bytes(3);
+			$hash =
+				crypt($password, $this->gensalt_extended($random));
+			if (strlen($hash) == 20)
+				return $hash;
+		}
+
+		if (strlen($random) < 6)
+			$random = $this->get_random_bytes(6);
+		$hash =
+			$this->crypt_private($password,
+			$this->gensalt_private($random));
+		if (strlen($hash) == 34)
+			return $hash;
+
+		# Returning '*' on error is safe here, but would _not_ be safe
+		# in a crypt(3)-like function used _both_ for generating new
+		# hashes and for validating passwords against existing hashes.
+		return '*';
+	}
+
+	function CheckPassword($password, $stored_hash)
+	{
+		if ( strlen( $password ) > 4096 ) {
+			return false;
+		}
+
+		$hash = $this->crypt_private($password, $stored_hash);
+		if ($hash[0] == '*')
+			$hash = crypt($password, $stored_hash);
+
+		return $hash === $stored_hash;
+	}
+}
+EOF
+	)
 
 	case $command in
 
-				jwt.encode)
+		hash)
+
+			local args algorithm
+			
+			algorithm="argon2id"
+			
+			args=()
+			while [[ $# -gt 0 ]]; do
+				case $1 in
+					with|and|to|for) shift ;;
+					--algorithm|-a|algorithm) algorithm=$2; shift 2 ;;
+					bcrypt|argon2|argon2id) algorithm=$1; shift ;;
+					wordpress) algorithm="bcrypt"; shift ;;
+					couch|couchcms|CouchCMS) algorithm="couch"; shift ;;
+					sqlpage) algorithm="argon2id"; shift ;;
+					*) args+=("$1"); shift ;;
+				esac
+			done
+			set -- "${args[@]}"
+			
+			[[ -z $algorithm ]] && echo "Error: --algorithm is required." && return 1
+			[[ -z $input ]] && echo "Error: no input provided." && return 1
+			
+			if [[ "$algorithm" == "couch" ]]; then
+				php <<END_PHP
+<?php
+\$password = '$input';
+
+${PASSWORD_HASH_CLASS}
+
+\$hasher = new PasswordHash(8, true);
+\$hash = \$hasher->HashPassword(\$password);
+echo \$hash;
+?>
+END_PHP
+				echo "" # Ensure a newline is printed in CLI
+			elif [[ "$algorithm" == "bcrypt" ]]; then
+				php -r "
+					\$password = '$input';
+					\$hash = password_hash(\$password, PASSWORD_BCRYPT);
+					echo \$hash;
+				"
+			else
+				php -r "
+					\$password = '$input';
+					\$hash = password_hash(\$password, PASSWORD_ARGON2ID);
+					echo \$hash;
+				"
+			fi
+			;;
+		
+		hash.verify)
+			
+			local args password algorithm
+			
+			algorithm="argon2id"
+			
+			args=()
+			while [[ $# -gt 0 ]]; do
+				case $1 in
+					with|and|to|for) shift ;;
+					--password|-p|password) password=$2; shift 2 ;;
+					--algorithm|-a|algorithm) algorithm=$2; shift 2 ;;
+					bcrypt|argon2|argon2id) algorithm=$1; shift ;;
+					wordpress) algorithm="bcrypt"; shift ;;
+					couch) algorithm="couch"; shift ;;
+					sqlpage) algorithm="argon2id"; shift ;;
+					*) args+=("$1"); shift ;;
+				esac
+			done
+			set -- "${args[@]}"
+			
+			password=${password:-$1}
+			
+			[[ -z $password ]] && { echo "Error: --password is required."; return 1; }
+			[[ -z $input ]] && { echo "Error: hash input is required."; return 1; }
+			
+			if [[ "$algorithm" == "couch" ]]; then
+				php <<END_PHP
+<?php
+\$password = '$password';
+\$hash = '$input';
+
+${PASSWORD_HASH_CLASS}
+
+\$hasher = new PasswordHash(8, true);
+if (\$hasher->CheckPassword(\$password, \$hash)) { echo 'true'; } else { echo 'false'; }
+?>
+END_PHP
+				echo "" # Ensure a newline is printed in CLI
+			elif [[ "$algorithm" == "bcrypt" ]]; then
+				php -r "
+					\$password = '$password';
+					\$hash = '$input';
+					if (password_verify(\$password, \$hash)) {
+						echo 'true';
+					} else {
+						echo 'false';
+					}
+				"
+			else
+				php -r "
+					\$password = '$password';
+					\$hash = '$input';
+					if (password_verify(\$password, \$hash)) {
+						echo 'true';
+					} else {
+						echo 'false';
+					}
+				"
+			fi
+			;;
+
+		jwt.encode)
 		
 			# Implement JWT encoding without external 'jwt' tool
 		
@@ -738,75 +1088,6 @@ codec() {
 		
 			;;
 
-
-		hash)
-
-			local args algorithm
-
-			algorithm="argon2id"
-
-			args=()
-			while [[ $# -gt 0 ]]; do
-				case $1 in
-					with|and|to|for) shift ;; # permits more lyrical commands
-					--algorithm|-a|algorithm) algorithm=$2; shift 2 ;;
-					bycrypt|argon2|argon2id) algorithm=$1; shift ;;
-					wordpress|couch) algorithm="bcrypt" && shift ;;
-					sqlpage) algorithm="argon2id" && shift ;;
-					*) args+=("$1") && shift ;;
-				esac
-			done
-			set -- "${args[@]}"
-
-			[[ -z $algorithm ]] && echo "Error: --algorithm is required." && return 1
-			[[ -z $input ]] && echo "Error: no input provided." && return 1
-
-			# Generate hash based on selected algorithm
-			if [[ "$algorithm" == "argon2id" ]]; then
-				echo "$(php -r "
-					\$password = '$input';
-					\$hash = password_hash(\$password, PASSWORD_ARGON2ID, ['time_cost' => 3, 'memory_cost' => 65540, 'threads' => 4]);
-					echo \$hash;
-				")"
-			elif [[ "$algorithm" == "bcrypt" ]]; then
-				echo "$(php -r "
-					\$password = '$input';
-					\$hash = password_hash(\$password, PASSWORD_BCRYPT);
-					echo \$hash;
-				")"
-			fi
-			;;
-
-		hash.verify)
-
-			local args password
-
-			args=()
-			while [[ $# -gt 0 ]]; do
-				case $1 in
-					with|and|to|for|wordpress|sqlpage|couch) shift ;; # permits more lyrical commands
-					--password|-p|password) password=$2; shift 2 ;;
-					*) args+=("$1") && shift ;;
-				esac
-			done
-			set -- "${args[@]}"
-
-			password=${password:-$1}
-
-			[[ -z $password ]] && echo "Error: --password is required." && return 1
-
-			# Verify hash based on selected algorithm
-			echo "$(php -r "
-				\$password = '$password';
-				\$hash = '$input';
-				if (password_verify(\$password, \$hash)) {
-					echo 'true';
-				} else {
-					echo 'false';
-				}
-			")"
-			;;
-
 		lines.json)
 		
 			# Function to convert a list of items into a JSON array
@@ -844,7 +1125,6 @@ codec() {
 			else
 				local indices array_length
 				IFS=',' read -ra indices <<< "$index"
-				array_length=$(echo -n "$json_array" | jq 'length')
 
 				for idx in "${indices[@]}"; do
 					reverse_flag=false
@@ -1548,7 +1828,12 @@ download() {
 
 	local url args output
 
-	[[  -p /dev/stdin ]] && url=$(cat) || { url=$1 && shift; }
+	[[  -p /dev/stdin ]] && url=$(cat)
+	[[ -z $url ]] && url=$1 && shift
+
+	[[ -z $url ]] && echo "No URL provided" && return 1
+
+	[[ $(validate url "$url") == 'false' ]] && echo "Invalid URL" && return 1
 
 	output=$(random)
 
@@ -1559,10 +1844,6 @@ download() {
 		esac
 	done
 	set -- "${args[@]}"
-
-	[[ -z $url ]] && echo "No URL provided" && return 1
-
-	[[ $(validate url "$url") == 'false' ]] && echo "Invalid URL" && return 1
 
 	curl -sL "$url" > "$output"
 
