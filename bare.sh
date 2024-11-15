@@ -23,6 +23,7 @@ __deps() {
 				printf '%s, ' "$dep"
 			fi
 		done && echo "."
+		exit 1
 	fi
 
 }
@@ -472,13 +473,16 @@ codec() {
 
 	case $command in
 
-		jwt.encode)
+				jwt.encode)
+		
+			# Implement JWT encoding without external 'jwt' tool
+		
 			local expires issued issuer subject role secret_key algorithm args key value
 			declare -A payload_args
 		
 			# Defaults
-			issued=$(date --format "%s")
-			expires=$(datecalc + 2 days | date --format "%s")
+			issued=$(date U)
+			expires=$(datecalc today "+2 days" | date U)
 			issuer="bare.sh"
 			algorithm="HS256"
 		
@@ -511,12 +515,31 @@ codec() {
 			[[ -n $subject ]] && payload_args["sub"]="$subject"
 			[[ -n $role ]] && payload_args["role"]="$role"
 		
-			# Generate the JWT
-			jwt encode --secret "$secret_key" --alg "$algorithm" $(for key in "${!payload_args[@]}"; do echo --payload "$key=${payload_args[$key]}"; done)
+			# Build header
+			header='{"alg":"'"$algorithm"'","typ":"JWT"}'
+			header_base64=$(echo -n "$header" | openssl base64 -e -A | tr '+/' '-_' | tr -d '=')
+		
+			# Build payload
+			payload_json="{"
+			for key in "${!payload_args[@]}"; do
+				payload_json+="\"$key\":\"${payload_args[$key]}\","
+			done
+			payload_json=${payload_json%,} # Remove trailing comma
+			payload_json+="}"
+			payload_base64=$(echo -n "$payload_json" | openssl base64 -e -A | tr '+/' '-_' | tr -d '=')
+		
+			# Create signature
+			unsigned_token="$header_base64.$payload_base64"
+			signature=$(echo -n "$unsigned_token" | openssl dgst -sha256 -hmac "$secret_key" -binary | openssl base64 -e -A | tr '+/' '-_' | tr -d '=')
+		
+			# Output the JWT
+			echo "$unsigned_token.$signature"
 			;;
-
+		
 		jwt.decode)
-			local jwt="$input"
+		
+			# Implement JWT decoding without external 'jwt' tool
+		
 			local secret_key
 			local header payload signature
 		
@@ -524,41 +547,43 @@ codec() {
 			while [[ $# -gt 0 ]]; do
 				case $1 in
 					with|and) shift ;; # permits more lyrical commands
-					--secret|-s|secret) secret_key=$2; shift 2 ;;
-					*) args+=("$1") && shift ;;
+					--secret|-s|secret) secret_key="$2"; shift 2 ;;
+					*) input="$1"; shift ;;
 				esac
 			done
-			set -- "${args[@]}"
 		
-			[[ -z $secret_key ]] && echo "Error: --secret is required." && return 1
+			[[ -z $secret_key ]] && { echo "Error: --secret is required."; return 1; }
+			[[ -z $input ]] && { echo "Error: JWT is required."; return 1; }
 		
 			# Split the JWT into its components
-			IFS='.' read -r header payload signature <<< "$jwt"
+			IFS='.' read -r header_base64 payload_base64 signature_provided <<< "$input"
 		
-			# Function to decode base64url
-			urlbase64_decode() {
+			# Function to add padding for base64 decoding
+			base64url_decode() {
 				local len=$((${#1} % 4))
-				local encoded="$1"
-				if [ "$len" -eq 2 ]; then encoded+="=="
-				elif [ "$len" -eq 3 ]; then encoded+="="
+				local result="$1"
+				if [ "$len" -eq 2 ]; then result="$1"'=='
+				elif [ "$len" -eq 3 ]; then result="$1"'='
 				fi
-				echo "$encoded" | tr '_-' '/+' | base64 -d 2>/dev/null
+				echo -n "$result" | tr '_-' '/+' | openssl base64 -d -A
 			}
 		
 			# Decode header and payload
-			decoded_payload=$(urlbase64_decode "$payload")
+			header=$(base64url_decode "$header_base64")
+			payload=$(base64url_decode "$payload_base64")
 		
 			# Recreate the signature
-			recreated_signature=$(echo -n "$header.$payload" | openssl dgst -sha256 -hmac "$secret_key" -binary | base64 | tr '+/' '-_' | tr -d '=')
+			unsigned_token="$header_base64.$payload_base64"
+			signature_expected=$(echo -n "$unsigned_token" | openssl dgst -sha256 -hmac "$secret_key" -binary | openssl base64 -e -A | tr '+/' '-_' | tr -d '=')
 		
 			# Verify the signature
-			if [[ "$recreated_signature" != "$signature" ]]; then
+			if [[ "$signature_provided" != "$signature_expected" ]]; then
 				echo "Error: Invalid signature."
 				return 1
 			fi
 		
 			# Output the decoded payload
-			echo "$decoded_payload" | rec
+			echo "$payload"
 			;;
 
 		superscript)
@@ -5196,171 +5221,141 @@ weather() {
 
 
 
-write() {
-
-	local contents args file
-
-	# Read from stdin if not a terminal
-	[[ -p /dev/stdin ]] && contents=$(cat)
-
-	# Parse arguments
-	args=() && while [[ $# -gt 0 ]]; do
-		case $1 in
-			--to|to|--file|-f|file) file="$2" && shift 2 ;;
-			--into|into) [[ $2 == 'file' ]] && file="$3" && shift 3 || file="$2" && shift 2 ;;
-			--contents|contents|content) contents="$2" && shift 2 ;;
-			with|and) shift ;; # permits more lyrical language
-			*) args+=("$1") && shift ;;
-		esac
-	done
-	set -- "${args[@]}"
-
-
-	[[ -z $contents ]] && contents=$1
-	[[ -z $contents ]] && echo "Error: Missing contents" >&2 && return 1
-	[[ -z $file ]] && echo "Error: Missing file" >&2 && return 1
-
-	# Clean carriage return characters from contents
-	contents=$(echo "$contents" | tr -d '\r')
-
-	# Write contents to the specified file
-	echo "$contents" > "$file"
-
-}
-
-
-
 youtube() {
 
-	local command quality thumbnail_quality url
+    local command quality thumbnail_quality url
 
-	command=$1 && shift
+    command=$1 && shift
 
-	[[ -p /dev/stdin ]] && url=$(cat)
-	[[ -z $url ]] && url=$1 && shift
+    [[ -p /dev/stdin ]] && url=$(cat)
+    [[ -z $url ]] && url=$1 && shift
 
-	quality="720" # Default quality for videos
-	thumbnail_quality="0" # Default quality for thumbnails (0 for default hd)
+    quality="1080" # Default quality for videos
+    thumbnail_quality="0" # Default quality for thumbnails (0 for default hd)
 
-	if [[ ! "$url" =~ ^(https?://)?(www\.)?(m\.)?(youtube\.com|youtu\.be|youtube-nocookie\.com) ]]; then
-		echo "Invalid YouTube URL"
-	fi
+    if [[ ! "$url" =~ ^(https?://)?(www\.)?(m\.)?(youtube\.com|youtu\.be|youtube-nocookie\.com) ]]; then
+        echo "Invalid YouTube URL"
+    fi
 
-	# Function to download video
-	download_video() {
+    # Function to download video
+    download_video() {
 
-		local output_path
-		local final_output
-		
-		output_path=$(random string 32)
-		
-		# build args
-		args=()
-		args+=("--no-warnings")
-		[[ "$format" == 'mp3' ]] && args+=("--extract-audio" "--audio-format" "mp3")
-		args+=("--output" "$output_path.%(ext)s")
-		args+=("$url")
-		
-		# execute command silently and capture exit status
-		yt-dlp "${args[@]}" >/dev/null 2>&1 && final_output="0" || final_output="1"
-		
-		# Output the relative path if successful
-		if [ "$final_output" -eq "0" ]; then
-			echo "${output_path}.mp3"
-		else
-			echo "Error: Failed to download video" >&2
-		fi
-		
-	}
+        local output_path
+        local final_output
+        local output_file
+        
+        output_path=$(random string 32)
+        
+        # build args
+        args=()
+        args+=("--no-warnings")
+        [[ "$format" == 'mp3' ]] && args+=("--extract-audio" "--audio-format" "mp3")
+        args+=("--output" "$output_path.%(ext)s")
+        args+=("--format" "bestvideo[height<=$quality]+bestaudio/best[height<=$quality]")
+        args+=("$url")
+        
+        # execute command silently and capture exit status
+        yt-dlp "${args[@]}" >/dev/null 2>&1 && final_output="0" || final_output="1"
+        
+        # Output the relative path if successful
+        if [ "$final_output" -eq "0" ]; then
+            # Find the downloaded file
+            output_file=$(ls "$output_path".*)
+            echo "$output_file"
+        else
+            echo "Error: Failed to download video" >&2
+        fi
+        
+    }
 
-	# Function to extract YouTube video ID
-	extract_id() {
+    # Function to extract YouTube video ID
+    extract_id() {
 
-		local url
+        local url
 
-		url=$1
+        url=$1
 
-		echo "$url" | awk -F'[?&/=]' '{
-			for(i=1;i<=NF;i++) {
-				if ($i == "v") {
-					print $(i+1);
-					exit
-				}
-				if ($i == "embed" || $i == "shorts" || $i == "youtu.be") {
-					print $(i+1);
-					exit
-				}
-			}
-		}'
+        echo "$url" | awk -F'[?&/=]' '{
+            for(i=1;i<=NF;i++) {
+                if ($i == "v") {
+                    print $(i+1);
+                    exit
+                }
+                if ($i == "embed" || $i == "shorts" || $i == "youtu.be") {
+                    print $(i+1);
+                    exit
+                }
+            }
+        }'
 
-	}
+    }
 
-	# Function to download thumbnail
-	download_thumbnail() {
+    # Function to download thumbnail
+    download_thumbnail() {
 
-		local url
-		local video_id
-		local thumbnail_url
-		local random_filename
-		local output
+        local url
+        local video_id
+        local thumbnail_url
+        local random_filename
+        local output
 
-		video_id=$(extract_id "$url")
+        video_id=$(extract_id "$url")
 
-		case "$thumbnail_quality" in
-			"md") thumbnail_url="https://i.ytimg.com/vi/${video_id}/mqdefault.jpg" ;;
-			"max") thumbnail_url="https://i.ytimg.com/vi/${video_id}/maxresdefault.jpg" ;;
-			*) thumbnail_url="https://i.ytimg.com/vi/${video_id}/hqdefault.jpg" ;;
-		esac
+        case "$thumbnail_quality" in
+            "md") thumbnail_url="https://i.ytimg.com/vi/${video_id}/mqdefault.jpg" ;;
+            "max") thumbnail_url="https://i.ytimg.com/vi/${video_id}/maxresdefault.jpg" ;;
+            *) thumbnail_url="https://i.ytimg.com/vi/${video_id}/hqdefault.jpg" ;;
+        esac
 
-		random_filename=$(random string 32).jpg
-		output_path="$BARE_HOME/downloads/$random_filename"
-		curl -sL "$thumbnail_url" -o "$output_path"
-		echo "$output_path"
+        random_filename=$(random string 32).jpg
+        output_path="$BARE_HOME/downloads/$random_filename"
+        curl -sL "$thumbnail_url" -o "$output_path"
+        echo "$output_path"
 
-	}
+    }
 
-	case $command in
-		download)
-			while [[ $# -gt 0 ]]; do
-				case $1 in
-					--quality) quality=$2 && shift 2 ;;
-					--mp3) format="mp3" && shift ;;
-					--thumbnail|--thumb)
-						shift && while [[ $# -gt 0 ]]; do
-							case $1 in
-								--md) thumbnail_quality="md" && shift ;;
-								--max) thumbnail_quality="max" && shift ;;
-								# *) echo "Unknown option: $1" >&2 ;;
-							esac
-						done && download_thumbnail "$url"
-						;;
-					# *) echo "Unknown option: $1" >&2 ;;
-				esac
-			done
-			download_video
-			;;
+    case $command in
+        download)
+            while [[ $# -gt 0 ]]; do
+                case $1 in
+                    --quality) quality=$2 && shift 2 ;;
+                    --mp3) format="mp3" && shift ;;
+                    --thumbnail|--thumb)
+                        shift && while [[ $# -gt 0 ]]; do
+                            case $1 in
+                                --md) thumbnail_quality="md" && shift ;;
+                                --max) thumbnail_quality="max" && shift ;;
+                                # *) echo "Unknown option: $1" >&2 ;;
+                            esac
+                        done && download_thumbnail "$url"
+                        ;;
+                    # *) echo "Unknown option: $1" >&2 ;;
+                esac
+            done
+            download_video
+            ;;
 
-		id) extract_id ;;
+        id) extract_id ;;
 
-		thumbnail)
-			shift 2 # Remove the first two arguments
-			while [[ $# -gt 0 ]]; do
-				case $1 in
-					--md) thumbnail_quality="md" && shift ;;
-					--max) thumbnail_quality="max" && shift ;;
-					# *) echo "Unknown option: $1" >&2 ;;
-				esac
-			done
-			download_thumbnail
-			;;
+        thumbnail)
+            shift 2 # Remove the first two arguments
+            while [[ $# -gt 0 ]]; do
+                case $1 in
+                    --md) thumbnail_quality="md" && shift ;;
+                    --max) thumbnail_quality="max" && shift ;;
+                    # *) echo "Unknown option: $1" >&2 ;;
+                esac
+            done
+            download_thumbnail
+            ;;
 
-		*) echo "Unknown command: $command" >&2 ;;
-		
-	esac
+        *) echo "Unknown command: $command" >&2 ;;
+        
+    esac
 
-	unset -f download_video
-	unset -f extract_id
-	unset -f download_thumbnail
+    unset -f download_video
+    unset -f extract_id
+    unset -f download_thumbnail
 
 }
 
@@ -5368,28 +5363,22 @@ youtube() {
 
 recloop() {
 
-	local recordset script record field value
+    local input script record field value args=()
 
-	# Function to set variables dynamically
 	set_variables() {
-		local key
 		for key in "${!record[@]}"; do
 			export "$key"="${record[$key]}"
 		done
 	}
 
-	# Function to unset variables dynamically
 	unset_variables() {
-		local key
 		for key in "${!record[@]}"; do
 			unset "$key"
 		done
 	}
 
-	# Function to process each record
 	process_record() {
 		set_variables
-		# Execute the passed script
 		if [[ -f "$script" ]]; then
 			source "$script"
 		else
@@ -5398,35 +5387,51 @@ recloop() {
 		unset_variables
 	}
 
-	# Read the arguments
-	recordset="$1" && shift
-	script="$1" && shift
+    # Read arguments
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            with|in) shift ;;
+            --recordset|over) input=$2; shift 2 ;;
+            --script|script) script=$2; shift 2 ;;
+            *) args+=("$1"); shift ;;
+        esac
+    done
+    set -- "${args[@]}"
+    [[ -z $script ]] && script=$1 && shift
+    [[ -z $input ]] && input=$(cat)
 
-	# Declare an associative array
-	declare -A record
+    [[ -z $script ]] && { echo "Error: missing script"; return 1; }
 
-	# Read the file line by line
-	while IFS= read -r line; do
-		# Check if the line is empty, indicating the end of a record
-		if [[ -z $line ]]; then
-			# Process the current record and reset the array
-			process_record
-			record=()
-		else
-			# Extract the field name and value
-			if [[ $line =~ ^([^:]+):\ (.*) ]]; then
-				field="${BASH_REMATCH[1]}"
-				value="${BASH_REMATCH[2]}"
-				# Store the field and value in the array
-				record["$field"]="$value"
-			fi
-		fi
-	done <<< "$(recsel "$recordset" "$@")"
+    # Determine if input is CSV and convert if necessary
+    if [[ $(validate csv "$input") == 'true' ]]; then
+        rec_data=$(csv2rec "$input")
+    else
+        rec_data=$(cat "$input")
+    fi
 
-	# Process the last record if the file does not end with an empty line
-	if [[ ${#record[@]} -gt 0 ]]; then
-		process_record
-	fi
+    # Declare an associative array
+    declare -A record
+
+    # Read and process records
+    while IFS= read -r line || [[ -n $line ]]; do
+        if [[ -z $line ]]; then
+            process_record
+            record=()
+        else
+            if [[ $line =~ ^([^:]+):\ (.*) ]]; then
+                field="${BASH_REMATCH[1]}"
+                value="${BASH_REMATCH[2]}"
+                record["$field"]="$value"
+            fi
+        fi
+    done <<< "$(echo "$rec_data" | recsel "$@")"
+
+    # Process the last record
+    [[ ${#record[@]} -gt 0 ]] && process_record
+
+	unset -f set_variables
+	unset -f unset_variables
+	unset -f process_record
 
 }
 
