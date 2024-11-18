@@ -3563,6 +3563,71 @@ pretty() {
 
 
 
+pick() {
+    local args mode separator separator1 separator2 input
+
+    # Read input from stdin or first argument
+    [[ -p /dev/stdin ]] && input=$(cat)
+
+    args=()
+    while [[ $# -gt 0 ]]; do
+        case "$1" in
+			in|from) input="$2" && shift 2 ;;
+            after)
+                mode="after"
+                separator="$2"
+                shift 2
+                ;;
+			before)
+				mode="before"
+				separator="$2"
+				shift 2
+				;;
+            between)
+                mode="between"
+                separator1="$2"
+                if [[ "$3" == "and" ]]; then
+                    separator2="$4"
+                    shift 4
+                else
+                    separator2="$2"
+                    shift 2
+                fi
+                ;;
+            *) args+=("$1") && shift ;;
+        esac
+    done
+	set -- "${args[@]}"
+
+    [[ -z $input ]] && input=$1 && shift
+    [[ -z $input ]] && echo "Error: no input provided" && return 1
+	[[ -f "$input" ]] && input=$(cat "$input")
+
+    case "$mode" in
+		after)
+			trimmed="${input#*"${separator}"}"
+			trimmed="${trimmed#"${trimmed%%[![:space:]]*}"}"
+			echo "$trimmed"
+			;;
+		before)
+			trimmed="${input%"${separator}"*}"
+			trimmed="${trimmed#"${trimmed%%[![:space:]]*}"}"
+			echo "$trimmed"
+			;;
+		between)
+			trimmed="${input#*"${separator1}"}"
+			trimmed="${trimmed%"${trimmed#*${separator2}}"}"
+			trimmed="${trimmed#"${trimmed%%[![:space:]]*}"}"
+			echo "$trimmed"
+			;;
+        *)
+            echo "$input"
+            ;;
+    esac
+}
+
+
+
 qr() {
 
     __deps qrencode zbarimg
