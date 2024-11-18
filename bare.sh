@@ -1154,6 +1154,26 @@ END_PHP
 			fi
 			;;
 
+		matrix.index)
+
+			local line_index item_index
+
+			line_index=$1
+			item_index=$2
+
+			# Read the input from the file or stdin
+			[[ -f $input ]] && input=$(cat "$input")
+
+			# get the line at the specified index, given the lines of input
+			line=$(echo "$input" | sed -n "$((line_index + 1))p")
+
+			# get the item at the specified index, given the line
+			item=$(echo "$line" | awk -v idx="$((item_index + 1))" '{print $idx}')
+
+			echo "$item"
+			
+			;;
+
 		lines.index)
 
 			index=$1
