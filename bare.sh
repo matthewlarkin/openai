@@ -15,14 +15,7 @@ __deps() {
 	# if there are any missing dependencies, print them
 	if [ ${#missing_deps[@]} -gt 0 ]; then
 		echo "ERROR >> The following dependencies are missing and need to be installed: "
-		for i in "${!missing_deps[@]}"; do
-			dep=${missing_deps[$i]}
-			if (( i == ${#missing_deps[@]}-1 )); then
-				printf '%s' "$dep"
-			else
-				printf '%s, ' "$dep"
-			fi
-		done && echo "."
+		printf '%s\n' "${missing_deps[*]}"
 		exit 1
 	fi
 
