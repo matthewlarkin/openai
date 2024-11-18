@@ -3763,12 +3763,43 @@ rec() {
 	args=()
 	while [[ $# -gt 0 ]]; do
 		case $1 in
+			merge) command="merge" && shift ;;
 			to) output_format="$2" && shift 2 ;;
 			from) [[ $# -gt 1 ]] && input="$2" && shift 2 || shift ;;
 			*) args+=("$1") && shift ;;
 		esac
 	done
 	set -- "${args[@]}"
+
+	case $command in
+
+		merge)
+
+			# takes any number of recfiles, validates them, and outputs them separated by empty lines
+			if [[ $# -lt 1 ]]; then
+				echo "Error: At least one recfile must be provided"
+				return 1
+			fi
+
+			for recfile in "$@"; do
+				if [[ $(validate recfile "$recfile") == 'false' ]]; then
+					echo "Error: Invalid input format (expected recfile): $recfile"
+					return 1
+				fi
+			done
+
+			for recfile in "$@"; do
+				recsel "$recfile" -d
+				echo ""
+			done
+			return 0
+
+				;;
+
+		*) : ;;
+
+
+	esac
 
 	[[ -z $input ]] && input=$1 && shift
 
