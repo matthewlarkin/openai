@@ -3616,7 +3616,7 @@ pick() {
 			;;
 		between)
 			trimmed="${input#*"${separator1}"}"
-			trimmed="${trimmed%"${trimmed#*${separator2}}"}"
+			trimmed="${trimmed%"${separator2}"*}"
 			trimmed="${trimmed#"${trimmed%%[![:space:]]*}"}"
 			echo "$trimmed"
 			;;
