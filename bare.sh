@@ -3360,18 +3360,18 @@ openai() {
 
 	args=() && for arg in "$@"; do
 		case $arg in
-			chat|voice|listen|transcribe) command=$arg && shift ;;
+			chat|voice|listen|transcribe|image) command=$arg && shift ;;
 			*) args+=("$arg") && shift ;;
 		esac
 	done
 	set -- "${args[@]}"
 
-	[[ -z "$input" ]] && input=$1 && shift
-	if [[ -z "$input" ]]; then echo "Error: no input provided" >&2 && return 1; fi
-
 	case $command in 
 
 		chat )
+
+			[[ -z "$input" ]] && input=$1 && shift
+			if [[ -z "$input" ]]; then echo "Error: no input provided" >&2 && return 1; fi
 
 			local model system_prompt thread_title payload response
 
@@ -3382,15 +3382,10 @@ openai() {
 				model=${OPENAI_DEFAULT_MODEL:-'gpt-4o-mini'}
 			fi
 			system_prompt="$assistant_prompt"
-			
-			# Parse command-line arguments
-			while [[ "$#" -gt 0 ]]; do
-				case $1 in
-					--model) model="$2" && shift 2 ;;
-					--system_prompt|--instructions) system_prompt="$2" && shift 2 ;;
-					*) echo "Invalid option: $1" >&2 ;;
-				esac
-			done
+
+			[[ $1 == '--model' ]] && model="$2" && shift 2
+			[[ $1 == '--system-prompt' ]] && system_prompt="$2" && shift 2
+			[[ $1 == '--instructions' ]] && system_prompt="$2" && shift 2
 
 			[[ -n $json_mode ]] && system_prompt="$system_prompt. Return as a raw JSON object (not a json code block). If the user does not specify a property to put the response in, put the response in a property named 'response'. IMPORTANT: DO NOT RETURN A MARKDOWN CODE BLOCK; RETURN A VALID JSON STRING."
 			
@@ -3429,6 +3424,9 @@ openai() {
 
 
 		voice )
+
+			[[ -z "$input" ]] && input=$1 && shift
+			if [[ -z "$input" ]]; then echo "Error: no input provided" >&2 && return 1; fi
 			
 			local model voice response_format speed output
 
@@ -3488,6 +3486,9 @@ openai() {
 
 		transcribe )
 
+			[[ -z "$input" ]] && input=$1 && shift
+			if [[ -z "$input" ]]; then echo "Error: no input provided" >&2 && return 1; fi
+
 			local language model prompt response_format temperature timestamp_granularities file max_size file_size response
 
 			model='whisper-1'
@@ -3542,6 +3543,92 @@ openai() {
 			
 			# Extract the text property from the JSON response and print it
 			echo "$response" | jq -r '.text'
+			;;
+
+		image )
+		
+			local model input assistant_prompt payload response image_file content image_data mime_type image_url
+
+			image_file=$1 && shift
+
+			model="gpt-4o-mini"
+		
+			# Parse command-line arguments
+			while [[ "$#" -gt 0 ]]; do
+				case $1 in
+					--model) model="$2"; shift 2 ;;
+					--prompt) input="$2"; shift 2 ;;
+					*) input="$1"; shift ;;
+				esac
+			done
+		
+			if [[ -z "$input" ]]; then
+				echo "Error: No prompt provided" >&2
+				return 1
+			fi
+		
+			if [[ -z "$image_file" ]]; then
+				echo "Error: No image file provided. Use --image <image_file>" >&2
+				return 1
+			fi
+		
+			if [[ ! -f "$image_file" ]]; then
+				echo "Error: Image file '$image_file' not found" >&2
+				return 1
+			fi
+		
+			# Encode the image in base64
+			image_data="$(base64 -i "$image_file" | tr -d '\n')"
+			mime_type="$(file --mime-type -b "$image_file")"
+			image_url="data:$mime_type;base64,$image_data"
+		
+			# Construct the message content as an array
+			content=$(jq -n \
+				--arg text "$input" \
+				--arg image_url "$image_url" \
+				'[
+					{
+						type: "text",
+						text: $text
+					},
+					{
+						type: "image_url",
+						image_url: {
+							url: $image_url
+						}
+					}
+				]')
+		
+			# Construct the payload
+			payload=$(jq -n \
+				--arg model "$model" \
+				--argjson content "$content" \
+				'{
+					model: $model,
+					messages: [
+						{
+							role: "user",
+							content: $content
+						}
+					],
+					temperature: 1,
+					max_tokens: 2048,
+					top_p: 1,
+					frequency_penalty: 0,
+					presence_penalty: 0,
+					response_format: {
+						type: "text"
+					}
+				}')
+		
+			# Make the API request
+			response=$(curl -s -X POST "https://api.openai.com/v1/chat/completions" \
+				-H "Authorization: Bearer $OPENAI_API_KEY" \
+				-H "Content-Type: application/json" \
+				-d "$payload" | jq -r '.choices[0].message.content')
+		
+			echo "$response"
+		
 			;;
 
 		* ) echo "Invalid command" ;;
@@ -4211,6 +4298,12 @@ report() {
                 title="$2"
                 shift 2
                 ;;
+			description|desc)
+				# Require one arg: description text
+				[[ $# -lt 2 ]] && echo "Error: not enough arguments for description" && return 1
+				description="$2"
+				shift 2
+				;;
             *) args+=("$1") && shift ;;
         esac
     done
@@ -4259,6 +4352,12 @@ report() {
         echo "## $title"
         echo
     fi
+
+	# Display the description if set
+	if [[ -n "$description" ]]; then
+		echo "$description"
+		echo
+	fi
 
     # Display the table
     echo "$output" | csvlook -I
@@ -5770,7 +5869,7 @@ recloop() {
 	process_record() {
 		set_variables
 		if [[ -f "$script" ]]; then
-			source "$script"
+			bash "$script" < /dev/null
 		else
 			eval "$script"
 		fi
@@ -5871,6 +5970,12 @@ uppercase() { transform "$@" --uppercase ; return 0 ; }
 
 case $1 in
 
+	--location)
+
+		echo "$0"
+
+		;;
+
 	--upgrade)
 
 		[[ -f "$(which bare.sh)" ]] && {
@@ -5895,5 +6000,3 @@ case $1 in
 	*) __isBareCommand "$1" && __bareStartUp && "$@" && exit 0 ;;
 
 esac
-
-exit 1
