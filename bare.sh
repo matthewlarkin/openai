@@ -1672,6 +1672,85 @@ color() {
 
 
 
+csv2json() {
+    local input minified=false
+
+    if [[ -p /dev/stdin ]]; then
+        input=$(cat)
+    elif [[ -f $1 ]]; then
+        input=$(cat "$1")
+        shift
+    else
+        input=$1
+        shift
+    fi
+
+    [[ -z $input ]] && echo "Error: no input provided." && return 1
+
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --minified)
+                minified=true
+                shift
+                ;;
+            *)
+                shift
+                ;;
+        esac
+    done
+
+    parse() {
+        awk '
+        function escape(s) {
+            gsub(/\\/,"\\\\",s)
+            gsub(/"/,"\\\"",s)
+            gsub(/\t/,"\\t",s)
+            gsub(/\r/,"\\r",s)
+            gsub(/\n/,"\\n",s)
+            return s
+        }
+        function unquote(s) {
+            if (s ~ /^".*"$/) {
+                return substr(s, 2, length(s) - 2)
+            } else {
+                return s
+            }
+        }
+        BEGIN {
+            FS=","; OFS="";
+            print "["
+        }
+        NR==1 {
+            for (i=1; i<=NF; i++) {
+                header[i]=escape(unquote($i))
+            }
+            next
+        }
+        {
+            printf "%s{", (NR>2?",":"")
+            for (i=1; i<=NF; i++) {
+                printf "%s\"%s\":\"%s\"", (i>1?",":""), header[i], escape(unquote($i))
+            }
+            printf "}"
+        }
+        END {
+            print "\n]"
+        }' <<< "$1"
+    }
+
+    json_output=$(parse "$input")
+
+    if $minified; then
+        echo "$json_output" | jq -cM .
+    else
+        echo "$json_output" | jq .
+    fi
+
+    unset -f parse
+}
+
+
+
 date() {
 
     local input args date_cmd date_format input_format custom_format format_parts timezone
@@ -2157,60 +2236,35 @@ form() {
 
 
 examine() {
+    local args input pick tmp_cover ffprobe_output
+    local filepath filename basename extension mime_type file_size file_size_human
+    local metadata
 
-	__deps jq ffmpeg ffprobe file stat realpath
+    [[ -p /dev/stdin ]] && read -r input
 
-    local args input tmp_dir cover_image_path mime_type file_size_human metadata pick ffprobe_output
-    local filepath filename basename extension file_size
+    args=()
+    while [[ $# -gt 0 ]]; do
+        case $1 in
+            --json) args+=("$1"); shift ;;
+            --pick|-p) pick=$2; shift 2 ;;
+            *) input=${1:-$input}; shift ;;
+        esac
+    done
+    set -- "${args[@]}"
 
-	[[ -p /dev/stdin ]] && input=$(cat)
+    [[ -z "$input" ]] && echo "No input file provided" >&2 && return 1
+    [[ ! -f "$input" ]] && echo "File not found: $input" >&2 && return 1
 
-	args=() && while [[ $# -gt 0 ]]; do
-		case $1 in
-			--json) args+=("$1") && shift ;;
-			--pick|-p) pick=$2 && shift 2 ;;
-			*) input=$1 && shift ;;
-		esac
-	done
-	set -- "${args[@]}"
-
-	[[ -z "$input" ]] && input=$1
-	[[ -z "$input" ]] && echo "No input file provided" && return 1
-	[[ ! -f "$input" ]] && echo "File not found: $input" && return 1
-
-    # Get basic file information
-    filepath=$(realpath "$input")
-    filename=$(basename "$input")
-    extension="${filename##*.}"
-    basename="${filename%.*}"
-
-    # Get the MIME type of the file
+    # Get file information
+    filepath=$(readlink -f "$input")
+    filename=${filepath##*/}
+    basename=${filename%.*}
+    extension=${filename##*.}
     mime_type=$(file --mime-type -b "$input")
+    file_size=$(stat -c%s "$input" 2>/dev/null || stat -f%z "$input")
+    file_size_human=$(numfmt --to=iec --suffix=B "$file_size" 2>/dev/null || echo "$file_size B")
 
-    # Get the file size in bytes
-    if [[ "$OSTYPE" == "darwin"* ]]; then
-        file_size=$(stat -f%z "$input")
-    else
-        file_size=$(stat -c%s "$input")
-    fi
-
-    # Convert file size to a human-readable format
-    human_readable_size() {
-        local size=$1
-        local units=("B" "KB" "MB" "GB" "TB")
-        local unit_index=0
-
-        while (( size >= 1024 && unit_index < ${#units[@]} - 1 )); do
-            size=$(( size / 1024 ))
-            unit_index=$(( unit_index + 1 ))
-        done
-
-        echo "$size ${units[$unit_index]}"
-    }
-
-    file_size_human=$(human_readable_size "$file_size")
-
-    # Initialize metadata JSON object
+    # Build metadata JSON
     metadata=$(jq -n \
         --arg filepath "$filepath" \
         --arg filename "$filename" \
@@ -2228,48 +2282,35 @@ examine() {
         }'
     )
 
-    # Determine if the file is a media file
-	if [[ "$mime_type" == video/* || "$mime_type" == audio/* ]]; then
-		# Try to extract media metadata if possible
-		ffprobe_output=$(ffprobe -v quiet -print_format json -show_format "$input" 2>/dev/null)
-	
-		if [[ -n "$ffprobe_output" ]]; then
-			# Extract metadata fields
-			media_metadata=$(echo "$ffprobe_output" | jq -r '{
-				title: .format.tags.title,
-				artist: .format.tags.artist,
-				album: .format.tags.album,
-				track: .format.tags.track,
-				year: .format.tags.date
-			} | with_entries(select(.value != null and .value != ""))')
-	
-			# Merge media metadata into main metadata
-			metadata=$(echo "$metadata" "$media_metadata" | jq -s '.[0] * .[1]')
-	
-			# Try to extract cover image
-			tmp_dir=$(mktemp -d)
-			cover_image_path="$tmp_dir/cover.jpg"
-			ffmpeg -i "$input" -an -vcodec copy "$cover_image_path" -y -loglevel quiet
-	
-			if [[ -f "$cover_image_path" ]]; then
-				metadata=$(echo "$metadata" | jq --arg cover "$cover_image_path" '. + {cover: $cover}')
-			else
-				rm -rf "$tmp_dir"
-			fi
-		fi
-	fi
+    # Extract media metadata if applicable
+    if [[ "$mime_type" == video/* || "$mime_type" == audio/* ]]; then
+        ffprobe_output=$(ffprobe -v quiet -print_format json -show_format "$input" 2>/dev/null)
+        if [[ -n "$ffprobe_output" ]]; then
+            media_metadata=$(echo "$ffprobe_output" | jq '{
+                title: .format.tags.title,
+                artist: .format.tags.artist,
+                album: .format.tags.album,
+                track: .format.tags.track,
+                year: .format.tags.date
+            } | del(.[] | nulls)')
+            metadata=$(jq -s 'add' <(echo "$metadata") <(echo "$media_metadata"))
+            # Extract cover image
+            tmp_cover=$(mktemp --suffix=.jpg)
+            ffmpeg -v quiet -y -i "$input" -an -vcodec copy "$tmp_cover"
+            if [[ -s "$tmp_cover" ]]; then
+                metadata=$(echo "$metadata" | jq --arg cover "$tmp_cover" '. + {cover: $cover}')
+            else
+                rm -f "$tmp_cover"
+            fi
+        fi
+    fi
 
-	output=$(echo "$metadata" | jq '.' | rec from)
-
-	if [[ -n $pick ]]; then
-		echo "$output" | recsel -P "$pick"
-	else
-		echo "$output"
-	fi
-
-    # Clean up temporary directory if it exists
-    [[ -d "$tmp_dir" ]] && rm -rf "$tmp_dir"
-
+    # Output
+    if [[ -n $pick ]]; then
+        echo "$metadata" | jq -r ".$pick"
+    else
+        echo "$metadata" | rec from
+    fi
 }
 
 
@@ -2294,7 +2335,7 @@ geo() {
 
 	args=() && while [[ $# -gt 0 ]]; do
 		case $1 in
-			--decimals) decimals="$2"; shift 2 ;;
+			--decimals|--digits|--places) decimals="$2"; shift 2 ;;
 			--type) type="$2"; shift 2 ;;
 			--location) location="$2"; shift 2 ;;
 			*) args+=("$1"); shift ;;
@@ -2625,6 +2666,42 @@ image() {
 		* ) echo "Invalid command: $command" ;;
 
 	esac
+
+}
+
+
+
+json2csv() {
+
+    local input
+
+    [[ -p /dev/stdin ]] && input=$(cat)
+    [[ -z $input ]] && input=$1
+
+    [[ -z $input ]] && echo "No input provided" && return 1
+
+    [[ -f $input ]] && input=$(cat "$input")
+
+    [[ $(validate json "$input") == 'false' ]] && echo "Invalid JSON input" && return 1
+
+    # Verify that JSON is an array of objects
+    if ! echo "$input" | jq -e 'type == "array"' >/dev/null 2>&1; then
+        echo "Error: JSON input must be an array of objects." >&2
+        return 1
+    fi
+
+    # Check for nested objects
+    if echo "$input" | jq -e 'map(select(type == "object" and (.[] | type == "object"))) | length > 0' >/dev/null 2>&1; then
+        echo "Error: Nested objects found in JSON. Only two-dimensional JSON is supported." >&2
+        return 1
+    fi
+
+    # Convert JSON to CSV
+    echo "$input" | jq -r '
+        (map(keys) | add | unique) as $keys |
+        ($keys | @csv),
+        (.[] | [ $keys[] as $k | .[$k] // empty ] | @csv)
+    '
 
 }
 
